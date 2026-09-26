@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   precision, and symbol tokens.
 - Ion text reader and writer covering primitives, containers, annotations,
   comments, long strings, and blobs/clobs.
+- Four parsing APIs over a concrete syntax tree (CST) and the AST: a lossless
+  tokenizer and `parse_cst`, the `IonValue` DOM, an `IonVisitor`, an `IonFold`
+  with `Continue`/`SkipChildren`/`Stop` flow control, and a SAX-style
+  `IonReader`/`IonHandler` event stream.
 - Ion binary type-descriptor model and version marker.
 - Ion Schema constraint model, loader, and validator for a focused ISL 2.0
   subset; unsupported constructs raise `IonError::Unsupported`.

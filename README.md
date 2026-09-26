@@ -89,6 +89,28 @@ moonx moonrockz/ion print data.ion
 moonx moonrockz/ion validate schema.isl person data.ion
 ```
 
+## Parsing APIs
+
+Like the moonrockz `gherkin` project, Ion offers four ways to consume a
+document, over both a **CST** (concrete syntax) and an **AST** (the `IonValue`
+data model):
+
+| API | Entry points | Description |
+| --- | --- | --- |
+| CST | `@text.tokenize`, `@text.parse_cst` | A lossless token stream, and a syntax tree that keeps tokens and source spans |
+| DOM (AST) | `@text.read_ion`, `@text.read_ion_datagram` | Build the `IonValue` tree for random access |
+| Visitor | `@ion.IonVisitor` + `IonValue::accept` | Depth-first traversal; override only what you need |
+| Fold | `@ion.IonFold` + `IonValue::fold` | Thread an accumulator with `Continue` / `SkipChildren` / `Stop` |
+| SAX | `@text.IonReader` (pull) and `@text.IonHandler` + `@text.parse_with_handler` (push) | A flat `IonEvent` stream without building the DOM |
+
+```moonbit skip nocheck
+let value = @text.read_ion!("{a: 1}")               // DOM / AST
+value.accept(visitor)                               // visitor
+let total = value.fold(0, @ion.IonFold::default())  // fold
+let tokens = @text.tokenize!("int32::12")           // CST tokens
+@text.parse_with_handler!("1 2 3", handler)         // SAX (push)
+```
+
 ## Design notes
 
 - **Annotations live on the value.** Every `IonValue` carries an ordered
