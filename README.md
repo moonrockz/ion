@@ -152,6 +152,7 @@ mise run test:all    # check + test
 mise run build:native
 moon fmt             # format
 moon info            # regenerate package interfaces (*.mbti)
+moon test --update   # refresh the golden fixtures' recorded output
 ```
 
 ## License
