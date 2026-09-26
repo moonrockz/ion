@@ -80,8 +80,8 @@ pub(all) enum Constraint {
   Not(Constraint)
   /// `nothing`: a constraint that no value satisfies.
   Nothing
-  /// `contains: [ ... ]`: every listed constraint matches at least one element.
-  Contains(Array[Constraint])
+  /// `contains: [ ... ]`: the container holds every listed value.
+  Contains(Array[@ion.IonValue])
 } derive(Debug)
 
 ///|

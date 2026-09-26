@@ -52,11 +52,11 @@ test "any_of and nothing express propositional logic" {
 }
 
 ///|
-test "contains requires a matching element" {
+test "contains requires a matching value" {
   let schema = cookbook_text()
-  // (contains A) -> (contains B), where A is int and B is string
+  // (contains A) -> (contains B), for the symbol values A and B
   assert_true(accepts(schema, "contains_a_implies_contains_b", "[]"))
-  assert_true(accepts(schema, "contains_a_implies_contains_b", "[\"s\"]"))
-  assert_true(!accepts(schema, "contains_a_implies_contains_b", "[1]"))
-  assert_true(accepts(schema, "contains_a_implies_contains_b", "[1, \"s\"]"))
+  assert_true(accepts(schema, "contains_a_implies_contains_b", "[B]"))
+  assert_true(!accepts(schema, "contains_a_implies_contains_b", "[A]"))
+  assert_true(accepts(schema, "contains_a_implies_contains_b", "[A, B]"))
 }

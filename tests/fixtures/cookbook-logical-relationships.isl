@@ -17,16 +17,6 @@ type::{
 }
 
 type::{
-  name: A,
-  type: int,
-}
-
-type::{
-  name: B,
-  type: string,
-}
-
-type::{
   name: a_or_b,
   type: struct,
   any_of: [

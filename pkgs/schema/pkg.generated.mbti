@@ -25,7 +25,7 @@ pub(all) enum Constraint {
   OneOf(Array[Constraint])
   Not(Constraint)
   Nothing
-  Contains(Array[Constraint])
+  Contains(Array[@ion.IonValue])
 } derive(@debug.Debug)
 pub fn Constraint::any() -> Self
 pub fn Constraint::to_repr(Self) -> @debug.Repr

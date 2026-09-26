@@ -92,10 +92,13 @@ test "Ion Hash conformance: identity serialization" {
   let cases = ion_hash_cases()
   let failures : Array[String] = []
   let mut checked = 0
+  let mut with_source = 0
+  let mut no_digest = 0
   let mut skipped = 0
   for index, case in cases {
     match field_value(case, "ion") {
-      Some(source) =>
+      Some(source) => {
+        with_source += 1
         match field_value(case, "expect") {
           Some(expectation) =>
             match expected_digest(expectation) {
@@ -108,10 +111,11 @@ test "Ion Hash conformance: identity serialization" {
                   )
                 }
               }
-              None => ()
+              None => no_digest += 1
             }
-          None => ()
+          None => no_digest += 1
         }
+      }
       None => skipped += 1
     }
   }
@@ -123,6 +127,15 @@ test "Ion Hash conformance: identity serialization" {
     }
     fail(shown.join("\n"))
   }
+  // Every `ion`-bearing case must be checked or explicitly counted as lacking
+  // an identity digest, so a fixture that loses its expectations fails loudly
+  // instead of being skipped past.
+  assert_true(
+    checked + no_digest == with_source,
+    msg="\{with_source} cases carry an 'ion' field, but \{checked} were checked and \{no_digest} had no identity digest",
+  )
   assert_true(checked > 100, msg="expected many text cases, checked \{checked}")
-  println("Ion Hash conformance: checked \{checked}, skipped \{skipped}")
+  println(
+    "Ion Hash conformance: checked \{checked} of \{with_source}, no identity digest \{no_digest}, skipped \{skipped}",
+  )
 }

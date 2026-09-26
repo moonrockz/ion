@@ -153,7 +153,7 @@ fn load_constraint(
     "any_of" => AnyOf(load_constraint_list(value))
     "all_of" => AllOf(load_constraint_list(value))
     "not" => Not(load_inline_type(value))
-    "contains" => Contains(load_constraint_list(value))
+    "contains" => Contains(as_list(value))
     _ =>
       raise @ion.IonError::Unsupported(
         "unsupported Ion Schema constraint: " + key,

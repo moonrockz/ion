@@ -131,3 +131,15 @@ test "valid_values compares structs without field order" {
   let schema = "type::{ name: t, valid_values: [{ a: 1, b: 2 }] }"
   assert_true(accepts(schema, "t", "{ b: 2, a: 1 }"))
 }
+
+///|
+test "contains matches values in a list, sexp, or struct" {
+  let schema = "type::{ name: has_high, contains: [high] }"
+  assert_true(accepts(schema, "has_high", "[low, high]"))
+  assert_true(!accepts(schema, "has_high", "[low]"))
+  assert_true(accepts(schema, "has_high", "(low high)"))
+  assert_true(accepts(schema, "has_high", "{a: 1, b: high}"))
+  assert_true(!accepts(schema, "has_high", "{a: 1}"))
+  // A non-container cannot contain a value.
+  assert_true(!accepts(schema, "has_high", "high"))
+}
