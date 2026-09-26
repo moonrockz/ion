@@ -1,0 +1,11 @@
+// The `ion` command-line tool.
+
+import {
+  "moonrockz/ion/schema",
+  "moonrockz/ion/text",
+  "moonbitlang/core/env",
+  "moonbitlang/x/fs",
+  "moonbitlang/x/sys",
+}
+
+pkgtype(kind: "executable")
