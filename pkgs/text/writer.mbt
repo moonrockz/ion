@@ -266,33 +266,21 @@ fn is_reserved_symbol(text : String) -> Bool {
 
 ///|
 /// Whether `text` is a bare S-expression operator: one or more operator
-/// characters, and not the start of a comment.
+/// characters, and no `//` or `/*` inside. A comment start ends an operator
+/// when it is read back, so such a symbol must be quoted to keep its text.
 fn is_operator_symbol(text : String) -> Bool {
-  if text.is_empty() || text.has_prefix("//") || text.has_prefix("/*") {
+  if text.is_empty() {
     return false
   }
-  for c in text {
-    match c {
-      '!'
-      | '#'
-      | '%'
-      | '&'
-      | '*'
-      | '+'
-      | '-'
-      | '.'
-      | '/'
-      | ';'
-      | '<'
-      | '='
-      | '>'
-      | '?'
-      | '@'
-      | '^'
-      | '`'
-      | '|'
-      | '~' => ()
-      _ => return false
+  for index in 0..<text.length() {
+    let c = text[index]
+    if !is_operator_char(c) {
+      return false
+    }
+    if c == '/' &&
+      index + 1 < text.length() &&
+      (text[index + 1] == '/' || text[index + 1] == '*') {
+      return false
     }
   }
   true
