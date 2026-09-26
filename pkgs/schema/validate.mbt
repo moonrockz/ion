@@ -204,6 +204,20 @@ fn check_constraint(
       if satisfies(schema, inner, value) {
         out.push({ path, message: "value satisfies a 'not' constraint", })
       }
+    Nothing =>
+      out.push({ path, message: "no value satisfies a 'nothing' constraint", })
+    Contains(required) =>
+      match value.kind() {
+        @ion.IonValueKind::List(items) =>
+          check_contains(schema, required, items, path, out)
+        @ion.IonValueKind::Sexp(items) =>
+          check_contains(schema, required, items, path, out)
+        _ =>
+          out.push({
+            path,
+            message: "a contains constraint requires a list or sexp",
+          })
+      }
   }
 }
 
@@ -304,3 +318,25 @@ fn describe_types(types : Array[@ion.IonType]) -> String {
 
 ///|
 pub extend Violation with @debug.Debug::{to_repr}
+
+///|
+/// Check that every `required` constraint matches at least one element.
+fn check_contains(
+  schema : Schema,
+  required : Array[Constraint],
+  items : Array[@ion.IonValue],
+  path : String,
+  out : Array[Violation],
+) -> Unit {
+  for index in 0..<required.length() {
+    let mut found = false
+    for item in items {
+      if satisfies(schema, required[index], item) {
+        found = true
+      }
+    }
+    if !found {
+      out.push({ path, message: "no element satisfies contains[\{index}]", })
+    }
+  }
+}

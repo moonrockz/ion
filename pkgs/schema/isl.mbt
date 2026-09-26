@@ -78,6 +78,10 @@ pub(all) enum Constraint {
   OneOf(Array[Constraint])
   /// The nested constraint does not hold.
   Not(Constraint)
+  /// `nothing`: a constraint that no value satisfies.
+  Nothing
+  /// `contains: [ ... ]`: every listed constraint matches at least one element.
+  Contains(Array[Constraint])
 } derive(Debug)
 
 ///|

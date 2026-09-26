@@ -164,7 +164,12 @@ cases are skipped, pending the Ion binary codec.
 - Ion binary wire codec, including local symbol tables and the annotation
   wrapper.
 - Ion Schema: `ordered_elements`, `annotations`, `timestamp_precision`,
-  `regex`, `closed::` fields, imports, and open content.
+  `regex`, `closed::` fields, imports, open content, and the decimal
+  `precision`/`exponent` constraints. The
+  [Cookbook](https://amazon-ion.github.io/ion-schema/docs/cookbook/)'s
+  `logical-relationships` page is already covered by
+  `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
+  the constraints above.
 - Streaming readers over byte and character sources.
 - JSON interoperability (`IonValue` ⇄ `Json`).
 

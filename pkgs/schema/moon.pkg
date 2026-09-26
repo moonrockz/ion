@@ -10,4 +10,5 @@ import {
 import {
   "moonrockz/ion/ion",
   "moonrockz/ion/text",
+  "moonbitlang/x/fs",
 } for "test"
