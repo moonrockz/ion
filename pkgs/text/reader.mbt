@@ -1075,25 +1075,8 @@ fn resolve_symbol_id(word : String) -> @ion.SymbolToken? {
 /// text, and IDs beyond the system range stay text-less for a local symbol
 /// table to resolve later.
 fn system_symbol_token(sid : Int) -> @ion.SymbolToken {
-  match system_symbol_text(sid) {
+  match @ion.system_symbol_text(sid) {
     Some(text) => @ion.SymbolToken::new(text)
     None => @ion.SymbolToken::from_sid(sid)
-  }
-}
-
-///|
-/// The text of an Ion 1.0 system symbol ID (1..9), or `None` outside that range.
-fn system_symbol_text(sid : Int) -> String? {
-  match sid {
-    1 => Some("$ion")
-    2 => Some("$ion_1_0")
-    3 => Some("$ion_symbol_table")
-    4 => Some("name")
-    5 => Some("version")
-    6 => Some("imports")
-    7 => Some("symbols")
-    8 => Some("max_id")
-    9 => Some("$ion_shared_symbol_table")
-    _ => None
   }
 }

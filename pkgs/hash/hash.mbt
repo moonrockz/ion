@@ -84,12 +84,26 @@ fn serialize_with(
 }
 
 ///|
-/// `TQ || escape(representation)` for a symbol. A symbol with known text uses
-/// Q=0 and its UTF-8 text; symbol ID zero uses Q=1 and no representation. Any
-/// other textless symbol is an error, because its text cannot be recovered.
+/// A symbol's text: its own, or the Ion 1.0 system text for its symbol ID.
+fn symbol_text(token : @ion.SymbolToken) -> String? {
+  match token.text() {
+    Some(text) => Some(text)
+    None =>
+      match token.sid() {
+        Some(sid) => @ion.system_symbol_text(sid)
+        None => None
+      }
+  }
+}
+
+///|
+/// `TQ || escape(representation)` for a symbol. Text — the symbol's own, or a
+/// resolved system symbol ID — uses Q=0; symbol ID zero uses Q=1 and no
+/// representation. Any other textless symbol is an error, because its text
+/// cannot be recovered.
 fn symbol_body(token : @ion.SymbolToken) -> Array[Byte] raise @ion.IonError {
   let out : Array[Byte] = []
-  match token.text() {
+  match symbol_text(token) {
     Some(text) => {
       out.push(0x70)
       append_escaped(out, utf8_bytes(text))

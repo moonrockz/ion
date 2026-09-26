@@ -14,6 +14,8 @@ pub fn[A, N] continuing((A, N) -> A) -> (A, N) -> FoldAction[A]
 
 pub fn[A] fold_values(Array[IonValue], A, IonFold[A]) -> A
 
+pub fn system_symbol_text(Int) -> String?
+
 // Errors
 pub(all) suberror IonError {
   Syntax(String)

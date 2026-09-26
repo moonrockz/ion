@@ -89,3 +89,28 @@ test "timestamps normalize to UTC across date boundaries" {
     ),
   )
 }
+
+///|
+/// Whether hashing `value` raises.
+fn hashing_fails(value : @ion.IonValue) -> Bool {
+  ignore(@hash.ion_hash(value) catch { _ => return true })
+  false
+}
+
+///|
+/// A value built from a system symbol ID alone hashes as that ID's text.
+test "a system symbol ID resolves to its text when hashed directly" {
+  assert_eq(
+    @hash.ion_hash_hex(
+      @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(5)),
+    ),
+    @hash.ion_hash_hex(@ion.IonValue::symbol("version")),
+  )
+}
+
+///|
+/// A symbol ID with no text and no system meaning cannot be hashed.
+test "an unresolvable symbol ID is rejected" {
+  let value = @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(10))
+  assert_true(hashing_fails(value))
+}

@@ -54,3 +54,23 @@ pub fn SymbolToken::require_text(self : SymbolToken) -> String raise IonError {
       )
   }
 }
+
+///|
+/// The text of an Ion 1.0 system symbol ID (1..9), or `None` outside that
+/// range. The system symbol table is the initial symbol table shared by every
+/// Ion stream; IDs `0` and `10` and above have no text without a local symbol
+/// table.
+pub fn system_symbol_text(sid : Int) -> String? {
+  match sid {
+    1 => Some("$ion")
+    2 => Some("$ion_1_0")
+    3 => Some("$ion_symbol_table")
+    4 => Some("name")
+    5 => Some("version")
+    6 => Some("imports")
+    7 => Some("symbols")
+    8 => Some("max_id")
+    9 => Some("$ion_shared_symbol_table")
+    _ => None
+  }
+}
