@@ -1,0 +1,12 @@
+// The Ion text encoding: reading and writing the textual notation.
+
+import {
+  "moonrockz/ion/ion",
+  "moonbitlang/core/double",
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/string",
+}
+
+import {
+  "moonrockz/ion/ion",
+} for "test"

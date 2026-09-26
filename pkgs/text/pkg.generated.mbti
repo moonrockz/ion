@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/text"
+
+import {
+  "moonrockz/ion/ion",
+}
+
+// Values
+pub fn read_ion(StringView) -> @ion.IonValue raise @ion.IonError
+
+pub fn read_ion_datagram(StringView) -> Array[@ion.IonValue] raise @ion.IonError
+
+pub fn write_all(Array[@ion.IonValue]) -> String raise @ion.IonError
+
+pub fn write_all_pretty(Array[@ion.IonValue]) -> String raise @ion.IonError
+
+pub fn write_ion(@ion.IonValue) -> String raise @ion.IonError
+
+pub fn write_ion_pretty(@ion.IonValue) -> String raise @ion.IonError
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
