@@ -11,5 +11,6 @@ import {
 
 import {
   "moonrockz/ion/ion",
+  "moonbitlang/core/quickcheck",
   "moonbitlang/x/fs",
 } for "test"

@@ -180,13 +180,18 @@ Tooling is configured with [mise](https://mise.jdx.dev):
 ```bash
 moon update          # install dependencies
 mise run test:check  # moon check
-mise run test:unit   # moon test
+mise run test:unit   # moon test (unit, snapshot, and QuickCheck properties)
 mise run test:all    # check + test
 mise run build:native
 moon fmt             # format
 moon info            # regenerate package interfaces (*.mbti)
 moon test --update   # refresh the golden fixtures' recorded output
 ```
+
+Besides the example and snapshot tests, several packages carry property tests
+(`property_test.mbt`) using the built-in QuickCheck: text round-trips, decimal
+and timestamp rendering, binary type descriptors, and Ion Hash invariances are
+checked over generated inputs, with counterexamples shrunk to a minimal case.
 
 ## License
 
