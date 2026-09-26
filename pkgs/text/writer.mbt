@@ -69,7 +69,7 @@ fn write_value(
   in_sexp : Bool,
 ) -> Unit raise @ion.IonError {
   for annotation in value.annotations() {
-    buffer.write_string(quote_symbol(annotation.require_text()))
+    write_symbol(buffer, annotation, false)
     buffer.write_string("::")
   }
   match value.kind() {
@@ -83,14 +83,7 @@ fn write_value(
       buffer.write_string(value.to_ion_string())
     @ion.IonValueKind::Timestamp(value) =>
       buffer.write_string(value.to_ion_string())
-    @ion.IonValueKind::Symbol(token) => {
-      let text = token.require_text()
-      if in_sexp && is_operator_symbol(text) {
-        buffer.write_string(text)
-      } else {
-        buffer.write_string(quote_symbol(text))
-      }
-    }
+    @ion.IonValueKind::Symbol(token) => write_symbol(buffer, token, in_sexp)
     @ion.IonValueKind::String(value) => {
       buffer.write_string("\"")
       buffer.write_string(escape_ion(value, '"'))
@@ -195,7 +188,7 @@ fn write_struct(
       buffer.write_string(", ")
     }
     let field = fields[index]
-    buffer.write_string(quote_symbol(field.name().require_text()))
+    write_symbol(buffer, field.name(), false)
     buffer.write_string(": ")
     write_value(buffer, field.value(), depth + 1, pretty, false)
     if pretty && index + 1 < fields.length() {
@@ -377,4 +370,28 @@ fn escape_clob(bytes : Bytes) -> String {
   }
   sb.write_string("\"")
   sb.to_string()
+}
+
+///|
+/// Render a symbol token. Known text is quoted as needed, and left bare when it
+/// is an operator inside an S-expression; a token known only by ID is written as
+/// `$id`, which reads back to the same token.
+fn write_symbol(
+  buffer : StringBuilder,
+  token : @ion.SymbolToken,
+  bare_operators : Bool,
+) -> Unit raise @ion.IonError {
+  match token.text() {
+    Some(text) =>
+      if bare_operators && is_operator_symbol(text) {
+        buffer.write_string(text)
+      } else {
+        buffer.write_string(quote_symbol(text))
+      }
+    None =>
+      match token.sid() {
+        Some(sid) => buffer.write_string("$" + sid.to_string())
+        None => raise @ion.IonError::DataModel("symbol has neither text nor ID")
+      }
+  }
 }

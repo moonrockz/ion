@@ -212,7 +212,13 @@ fn Parser::parse_annotations(
     let token : @ion.SymbolToken? = if c == '\'' {
       Some(self.parse_quoted_symbol())
     } else if is_identifier_start(c) {
-      Some(@ion.SymbolToken::new(self.parse_identifier()))
+      let word = self.parse_identifier()
+      Some(
+        match resolve_symbol_id(word) {
+          Some(token) => token
+          None => @ion.SymbolToken::new(word)
+        },
+      )
     } else {
       None
     }
@@ -297,6 +303,10 @@ fn Parser::parse_unquoted(self : Parser) -> @ion.IonValue raise @ion.IonError {
 /// `true`, `false`, and `nan`; everything else is a symbol.
 fn Parser::parse_word(self : Parser) -> @ion.IonValue raise @ion.IonError {
   let word = self.parse_identifier()
+  match resolve_symbol_id(word) {
+    Some(token) => return @ion.IonValue::symbol_token(token)
+    None => ()
+  }
   match word {
     "null" =>
       if self.peek_at(0) == Some('.') {
@@ -981,7 +991,11 @@ fn Parser::parse_field_name(
   } else if c == '\'' {
     self.parse_quoted_symbol()
   } else if is_identifier_start(c) {
-    @ion.SymbolToken::new(self.parse_identifier())
+    let word = self.parse_identifier()
+    match resolve_symbol_id(word) {
+      Some(token) => token
+      None => @ion.SymbolToken::new(word)
+    }
   } else {
     raise @ion.IonError::Syntax("invalid struct field name")
   }
@@ -1037,4 +1051,49 @@ fn Parser::parse_sexp(self : Parser) -> @ion.IonValue raise @ion.IonError {
   }
   self.pos += 1
   @ion.IonValue::sexp(items)
+}
+
+///|
+/// Resolve an unquoted symbol word: `$` followed by digits alone is a symbol-ID
+/// reference, resolved against the Ion 1.0 system symbol table. Anything else is
+/// an ordinary symbol (including `$` followed by non-digits).
+fn resolve_symbol_id(word : String) -> @ion.SymbolToken? {
+  if word.length() < 2 || word[0] != '$' {
+    return None
+  }
+  for index in 1..<word.length() {
+    if !is_digit(word[index]) {
+      return None
+    }
+  }
+  let sid : Int = @string.from_str(word[1:]) catch { _ => return None }
+  Some(system_symbol_token(sid))
+}
+
+///|
+/// The token for a symbol ID: a system ID resolves to its text, ID 0 carries no
+/// text, and IDs beyond the system range stay text-less for a local symbol
+/// table to resolve later.
+fn system_symbol_token(sid : Int) -> @ion.SymbolToken {
+  match system_symbol_text(sid) {
+    Some(text) => @ion.SymbolToken::new(text)
+    None => @ion.SymbolToken::from_sid(sid)
+  }
+}
+
+///|
+/// The text of an Ion 1.0 system symbol ID (1..9), or `None` outside that range.
+fn system_symbol_text(sid : Int) -> String? {
+  match sid {
+    1 => Some("$ion")
+    2 => Some("$ion_1_0")
+    3 => Some("$ion_symbol_table")
+    4 => Some("name")
+    5 => Some("version")
+    6 => Some("imports")
+    7 => Some("symbols")
+    8 => Some("max_id")
+    9 => Some("$ion_shared_symbol_table")
+    _ => None
+  }
 }
