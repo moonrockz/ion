@@ -1,6 +1,7 @@
 // The `ion` command-line tool.
 
 import {
+  "moonrockz/ion/hash",
   "moonrockz/ion/schema",
   "moonrockz/ion/text",
   "moonbitlang/core/env",

@@ -5,9 +5,10 @@ A [MoonBit](https://www.moonbitlang.com) implementation of Amazon
 hierarchical data serialization format — and
 [Ion Schema](https://amazon-ion.github.io/ion-schema/).
 
-> **Status:** early. The core data model, the Ion **text** encoding, and a
-> focused Ion Schema validation subset are implemented and tested. The Ion
-> **binary** wire codec is the next milestone.
+> **Status:** early. The core data model, the Ion **text** encoding, **Ion
+> Hash** (Ion Hash 1.0 over SHA-256), and a focused Ion Schema validation subset
+> are implemented and tested. The Ion **binary** wire codec is the next
+> milestone.
 
 ## Installation
 
@@ -21,9 +22,10 @@ moon add moonrockz/ion
 | ------------- | ------------- | ---------------------- | ------- |
 | `@ion` (core) | `pkgs/ion`    | `moonrockz/ion/ion`    | Core data model: Ion types, values, annotations, decimals, timestamps, symbol tokens |
 | `@text`       | `pkgs/text`   | `moonrockz/ion/text`   | Ion text reader and writer                              |
+| `@hash`       | `pkgs/hash`   | `moonrockz/ion/hash`   | Ion Hash 1.0: an encoding-independent hash of an Ion value |
 | `@binary`     | `pkgs/binary` | `moonrockz/ion/binary` | Ion binary type descriptors and version marker          |
 | `@schema`     | `pkgs/schema` | `moonrockz/ion/schema` | Ion Schema model, loader, and validator                 |
-| `ion` CLI     | `pkgs`        | `moonrockz/ion`        | `ion print`, `ion validate` — the module root package is the executable |
+| `ion` CLI     | `pkgs`        | `moonrockz/ion`        | `ion print`, `ion hash`, `ion validate` — the module root package is the executable |
 
 ## Repository layout
 
@@ -34,8 +36,8 @@ so the repository root holds only module metadata, tooling, and tests.
   executable** — so the published package is runnable at the short coordinate
   `moonx moonrockz/ion`;
 - `pkgs/ion/` is the `@ion` core data model (`moonrockz/ion/ion`);
-- `pkgs/text`, `pkgs/binary`, and `pkgs/schema` are the remaining library
-  packages.
+- `pkgs/text`, `pkgs/hash`, `pkgs/binary`, and `pkgs/schema` are the remaining
+  library packages.
 
 The executable owns the module root (instead of living in a `cmd/` package) so
 that `moonx` can run it as `moonrockz/ion`; library users import the core model
@@ -78,6 +80,7 @@ Command line (from the repository root; the CLI is the module root package):
 
 ```bash
 moon run pkgs -- print data.ion
+moon run pkgs -- hash data.ion
 moon run pkgs -- validate schema.isl person data.ion
 ```
 
@@ -86,6 +89,7 @@ Once published, the same commands run through `moonx` at the short coordinate:
 ```bash
 moonx moonrockz/ion version
 moonx moonrockz/ion print data.ion
+moonx moonrockz/ion hash data.ion
 moonx moonrockz/ion validate schema.isl person data.ion
 ```
 
@@ -110,6 +114,30 @@ let total = value.fold(0, @ion.IonFold::default())  // fold
 let tokens = @text.tokenize!("int32::12")           // CST tokens
 @text.parse_with_handler!("1 2 3", handler)         // SAX (push)
 ```
+
+## Ion Hash
+
+`@hash` implements [Ion Hash 1.0](https://amazon-ion.github.io/ion-hash/docs/spec.html)
+over SHA-256: a value is serialized to a canonical byte sequence that does not
+depend on the encoding or on symbol IDs, then hashed. Struct fields are
+unordered, so their hashes are sorted, and timestamps are normalized to UTC.
+
+```moonbit skip nocheck
+let value = @text.read_ion!("{ name: \"ion\", tags: [a, b] }")
+let digest = @hash.ion_hash_hex!(value) // lowercase SHA-256
+let bytes = @hash.ion_hash!(value)      // 32 raw bytes
+```
+
+The digest function is pluggable, as the specification requires:
+`@hash.ion_hash_with(value, h)` accepts any `h : (Array[Byte]) -> Array[Byte]`
+for both the final digest and the struct field hashes. Passing the identity
+function yields the serialization `s(value)` itself.
+
+The implementation is checked against the official
+[conformance suite](https://github.com/amazon-ion/ion-hash-test):
+`pkgs/hash/conformance_test.mbt` replays `tests/fixtures/ion_hash_tests.ion`
+and compares the serialization byte for byte. Only the 8 binary-only (`10n`)
+cases are skipped, pending the Ion binary codec.
 
 ## Design notes
 

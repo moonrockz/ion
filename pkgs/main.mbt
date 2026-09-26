@@ -1,7 +1,8 @@
-// The `ion` CLI: read and re-emit Ion text, and validate Ion values against an
-// Ion Schema.
+// The `ion` CLI: read and re-emit Ion text, hash values, and validate Ion
+// values against an Ion Schema.
 //
 //   ion print [file|-]
+//   ion hash [file|-]
 //   ion validate <schema-file> <type-name> [file|-]
 
 ///|
@@ -13,6 +14,7 @@ fn version() -> String {
 fn usage() -> String {
   "usage: ion <command> [args]\n" +
   "  ion print [file|-]\n" +
+  "  ion hash [file|-]\n" +
   "  ion validate <schema-file> <type-name> [file|-]"
 }
 
@@ -50,6 +52,29 @@ fn do_print(path : String) -> Result[Unit, String] {
     }
   }
   println(outcome)
+  Ok(())
+}
+
+///|
+/// Print the SHA-256 Ion Hash of every value in a document, one per line.
+fn do_hash(path : String) -> Result[Unit, String] {
+  let text = read_input(path) catch {
+    @fs.IOError(message) => return Err(message)
+    _ => return Err("failed to read " + path)
+  }
+  let values = @text.read_ion_datagram(text) catch {
+    error => return Err(error.message())
+  }
+  let hashes : Array[String] = []
+  for value in values {
+    let digest = @hash.ion_hash_hex(value) catch {
+      error => return Err(error.message())
+    }
+    hashes.push(digest)
+  }
+  if !hashes.is_empty() {
+    println(hashes.join("\n"))
+  }
   Ok(())
 }
 
@@ -98,6 +123,8 @@ fn run(args : Array[String]) -> Result[Unit, String] {
     [_] => do_print("-")
     [_, "print", path, ..] => do_print(path)
     [_, "print"] => do_print("-")
+    [_, "hash", path, ..] => do_hash(path)
+    [_, "hash"] => do_hash("-")
     [_, "validate", schema_path, type_name, input, ..] =>
       do_validate(schema_path, type_name, input)
     [_, "validate", schema_path, type_name] =>
