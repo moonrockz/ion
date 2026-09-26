@@ -8,6 +8,14 @@ import {
 }
 
 // Values
+pub fn dispatch_event(IonEvent, &IonHandler) -> Unit
+
+pub fn dispatch_value(@ion.IonValue, &IonHandler) -> Unit
+
+pub fn dispatch_values(Array[@ion.IonValue], &IonHandler) -> Unit
+
+pub fn parse_with_handler(StringView, &IonHandler) -> Unit raise @ion.IonError
+
 pub fn read_ion(StringView) -> @ion.IonValue raise @ion.IonError
 
 pub fn read_ion_datagram(StringView) -> Array[@ion.IonValue] raise @ion.IonError
@@ -25,6 +33,33 @@ pub fn write_ion_pretty(@ion.IonValue) -> String raise @ion.IonError
 // Errors
 
 // Types and methods
+pub(all) enum IonEvent {
+  DocumentStart
+  DocumentEnd
+  Annotation(@ion.SymbolToken)
+  FieldName(@ion.SymbolToken)
+  ListStart
+  ListEnd
+  SexpStart
+  SexpEnd
+  StructStart
+  StructEnd
+  Scalar(@ion.IonValue)
+} derive(@debug.Debug)
+pub fn IonEvent::to_repr(Self) -> @debug.Repr
+pub fn IonEvent::to_text(Self) -> String
+
+pub struct IonReader {
+  events : Array[IonEvent]
+  mut index : Int
+}
+pub fn IonReader::feed(Self, &IonHandler) -> Unit
+pub fn IonReader::from_text(StringView) -> Self raise @ion.IonError
+pub fn IonReader::from_value(@ion.IonValue) -> Self
+pub fn IonReader::from_values(Array[@ion.IonValue]) -> Self
+pub fn IonReader::next(Self) -> IonEvent?
+pub fn IonReader::remaining(Self) -> Array[IonEvent]
+
 pub struct IonToken {
   kind : IonTokenKind
   start : Int
@@ -69,3 +104,16 @@ pub fn IonTokenKind::to_text(Self) -> String
 // Type aliases
 
 // Traits
+pub(open) trait IonHandler {
+  fn on_document_start(Self) -> Unit = _
+  fn on_document_end(Self) -> Unit = _
+  fn on_annotation(Self, @ion.SymbolToken) -> Unit = _
+  fn on_field_name(Self, @ion.SymbolToken) -> Unit = _
+  fn on_list_start(Self) -> Unit = _
+  fn on_list_end(Self) -> Unit = _
+  fn on_sexp_start(Self) -> Unit = _
+  fn on_sexp_end(Self) -> Unit = _
+  fn on_struct_start(Self) -> Unit = _
+  fn on_struct_end(Self) -> Unit = _
+  fn on_scalar(Self, @ion.IonValue) -> Unit = _
+}
