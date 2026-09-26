@@ -566,8 +566,7 @@ fn Parser::parse_double_quoted_string(
         sb.write_char(char_from_code(code))
       }
     } else {
-      sb.write_view(char_view(self.input, self.pos))
-      self.pos += 1
+      self.copy_code_point(sb)
     }
   }
   sb.to_string()
@@ -622,8 +621,7 @@ fn Parser::parse_long_string_body(
         sb.write_char(char_from_code(code))
       }
     } else {
-      sb.write_view(char_view(self.input, self.pos))
-      self.pos += 1
+      self.copy_code_point(sb)
     }
   }
 }
@@ -650,8 +648,7 @@ fn Parser::parse_quoted_symbol(
         sb.write_char(char_from_code(code))
       }
     } else {
-      sb.write_view(char_view(self.input, self.pos))
-      self.pos += 1
+      self.copy_code_point(sb)
     }
   }
   @ion.SymbolToken::new(sb.to_string())
@@ -1058,13 +1055,8 @@ fn Parser::parse_sexp(self : Parser) -> @ion.IonValue raise @ion.IonError {
 /// reference, resolved against the Ion 1.0 system symbol table. Anything else is
 /// an ordinary symbol (including `$` followed by non-digits).
 fn resolve_symbol_id(word : String) -> @ion.SymbolToken? {
-  if word.length() < 2 || word[0] != '$' {
+  if !is_symbol_id_literal(word) {
     return None
-  }
-  for index in 1..<word.length() {
-    if !is_digit(word[index]) {
-      return None
-    }
   }
   let sid : Int = @string.from_str(word[1:]) catch { _ => return None }
   Some(system_symbol_token(sid))
@@ -1078,5 +1070,31 @@ fn system_symbol_token(sid : Int) -> @ion.SymbolToken {
   match @ion.system_symbol_text(sid) {
     Some(text) => @ion.SymbolToken::new(text)
     None => @ion.SymbolToken::from_sid(sid)
+  }
+}
+
+///|
+/// Append the code point at the cursor to `sb`, advancing past it. A
+/// supplementary character is a UTF-16 surrogate pair, and appending its halves
+/// separately would drop them, so a pair is copied as one slice. An unpaired
+/// surrogate is rejected rather than silently discarded.
+fn Parser::copy_code_point(
+  self : Parser,
+  sb : StringBuilder,
+) -> Unit raise @ion.IonError {
+  let c = self.input[self.pos]
+  if c >= 0xD800 && c <= 0xDBFF {
+    match self.peek_at(1) {
+      Some(low) if low >= 0xDC00 && low <= 0xDFFF => {
+        sb.write_view(self.input[self.pos:self.pos + 2])
+        self.pos += 2
+      }
+      _ => raise @ion.IonError::Syntax("unpaired high surrogate")
+    }
+  } else if c >= 0xDC00 && c <= 0xDFFF {
+    raise @ion.IonError::Syntax("unpaired low surrogate")
+  } else {
+    sb.write_view(self.input[self.pos:self.pos + 1])
+    self.pos += 1
   }
 }

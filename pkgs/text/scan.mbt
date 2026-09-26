@@ -30,3 +30,19 @@ fn is_identifier_start(c : UInt16) -> Bool {
 fn is_identifier_part(c : UInt16) -> Bool {
   is_identifier_start(c) || is_digit(c)
 }
+
+///|
+/// Whether `word` is an unquoted Ion symbol-ID literal: a `$` followed by one
+/// or more digits. Such a word denotes the symbol with that ID, not a symbol
+/// whose text is the word itself, so a writer must quote it to keep the text.
+fn is_symbol_id_literal(word : String) -> Bool {
+  if word.length() < 2 || word[0] != '$' {
+    return false
+  }
+  for index in 1..<word.length() {
+    if !is_digit(word[index]) {
+      return false
+    }
+  }
+  true
+}
