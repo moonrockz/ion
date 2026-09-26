@@ -14,6 +14,8 @@ pub fn dispatch_value(@ion.IonValue, &IonHandler) -> Unit
 
 pub fn dispatch_values(Array[@ion.IonValue], &IonHandler) -> Unit
 
+pub fn parse_cst(StringView) -> CstDocument raise @ion.IonError
+
 pub fn parse_with_handler(StringView, &IonHandler) -> Unit raise @ion.IonError
 
 pub fn read_ion(StringView) -> @ion.IonValue raise @ion.IonError
@@ -33,6 +35,36 @@ pub fn write_ion_pretty(@ion.IonValue) -> String raise @ion.IonError
 // Errors
 
 // Types and methods
+pub(all) enum CstContent {
+  Scalar(IonToken)
+  List(Array[CstValue])
+  Sexp(Array[CstValue])
+  Struct(Array[CstValue])
+} derive(@debug.Debug)
+pub fn CstContent::to_repr(Self) -> @debug.Repr
+
+pub struct CstDocument {
+  values : Array[CstValue]
+} derive(@debug.Debug)
+pub fn CstDocument::to_repr(Self) -> @debug.Repr
+pub fn CstDocument::values(Self) -> Array[CstValue]
+
+pub struct CstValue {
+  annotations : Array[IonToken]
+  field_name : IonToken?
+  start : Int
+  end : Int
+  content : CstContent
+} derive(@debug.Debug)
+pub fn CstValue::annotations(Self) -> Array[IonToken]
+pub fn CstValue::content(Self) -> CstContent
+pub fn CstValue::elements(Self) -> Array[Self]?
+pub fn CstValue::end(Self) -> Int
+pub fn CstValue::field_name(Self) -> IonToken?
+pub fn CstValue::slice(Self, StringView) -> StringView
+pub fn CstValue::start(Self) -> Int
+pub fn CstValue::to_repr(Self) -> @debug.Repr
+
 pub(all) enum IonEvent {
   DocumentStart
   DocumentEnd
