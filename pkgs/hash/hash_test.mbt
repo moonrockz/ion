@@ -49,3 +49,43 @@ test "Ion Hash golden digests" {
     ),
   )
 }
+
+///|
+/// The serialization `s(value)` of a value written in Ion text, as hex.
+fn serialization_hex(text : String) -> String raise @ion.IonError {
+  to_hex(@hash.ion_hash_with(@text.read_ion(text), bytes => bytes))
+}
+
+///|
+/// Timestamps are stored in UTC, so a local offset can shift the date across a
+/// day, a month, or a year boundary while the fractional second is preserved.
+test "timestamps normalize to UTC across date boundaries" {
+  // A positive offset rolls the time back into the previous day.
+  inspect(
+    serialization_hex("2001-01-01T00:00:00+01:00"),
+    content=(
+      #|0b60bc0fd08c9f9780800e
+    ),
+  )
+  // ... across a leap day (2000 is a leap year) ...
+  inspect(
+    serialization_hex("2000-03-01T00:30:00+01:00"),
+    content=(
+      #|0b60bc0fd0829d979e800e
+    ),
+  )
+  // ... and a negative offset rolls forward across a year boundary.
+  inspect(
+    serialization_hex("2001-12-31T23:30:00-01:00"),
+    content=(
+      #|0b60fc0fd28181809e800e
+    ),
+  )
+  // The fractional second survives the shift.
+  inspect(
+    serialization_hex("2000-01-01T00:00:00.5+01:00"),
+    content=(
+      #|0b60bc0fcf8c9f978080c1050e
+    ),
+  )
+}
