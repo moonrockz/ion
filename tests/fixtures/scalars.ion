@@ -1,0 +1,29 @@
+null
+null.int
+null.string
+true
+false
+0
+-17
+0xFF
+0b1010
+1_000_000
+1.5
+-0.0
+1d3
+1.5e0
+nan
++inf
+-inf
+2007T
+2007-02-23
+2007-02-23T12:14:33.079-08:00
+symbol
+'quoted symbol'
+"string\ttab"
+'''long
+string'''
+int32::12
+a::b::7
+{{ aGk= }}
+{{ "clob text" }}
