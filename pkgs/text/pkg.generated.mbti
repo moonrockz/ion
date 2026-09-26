@@ -2,6 +2,8 @@
 package "moonrockz/ion/text"
 
 import {
+  "moonbitlang/core/bigint",
+  "moonbitlang/core/debug",
   "moonrockz/ion/ion",
 }
 
@@ -9,6 +11,8 @@ import {
 pub fn read_ion(StringView) -> @ion.IonValue raise @ion.IonError
 
 pub fn read_ion_datagram(StringView) -> Array[@ion.IonValue] raise @ion.IonError
+
+pub fn tokenize(StringView) -> Array[IonToken] raise @ion.IonError
 
 pub fn write_all(Array[@ion.IonValue]) -> String raise @ion.IonError
 
@@ -21,6 +25,46 @@ pub fn write_ion_pretty(@ion.IonValue) -> String raise @ion.IonError
 // Errors
 
 // Types and methods
+pub struct IonToken {
+  kind : IonTokenKind
+  start : Int
+  end : Int
+} derive(@debug.Debug)
+pub fn IonToken::end(Self) -> Int
+pub fn IonToken::kind(Self) -> IonTokenKind
+pub fn IonToken::slice(Self, StringView) -> StringView
+pub fn IonToken::start(Self) -> Int
+pub fn IonToken::to_repr(Self) -> @debug.Repr
+
+pub(all) enum IonTokenKind {
+  Whitespace
+  Comment
+  Null
+  TypedNull(@ion.IonType)
+  Bool(Bool)
+  Int(@bigint.BigInt)
+  Float(Double)
+  Decimal(@ion.Decimal)
+  Timestamp(@ion.Timestamp)
+  Symbol(String)
+  QuotedSymbol(String)
+  String(String)
+  LongString(String)
+  Clob(Bytes)
+  Blob(Bytes)
+  ListStart
+  ListEnd
+  SexpStart
+  SexpEnd
+  StructStart
+  StructEnd
+  Comma
+  Colon
+  DoubleColon
+  Operator(String)
+} derive(@debug.Debug)
+pub fn IonTokenKind::to_repr(Self) -> @debug.Repr
+pub fn IonTokenKind::to_text(Self) -> String
 
 // Type aliases
 
