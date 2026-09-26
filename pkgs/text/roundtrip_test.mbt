@@ -152,3 +152,11 @@ test "invalid integer forms are rejected" {
   assert_true(is_rejected("0x_1F"))
   assert_true(is_rejected("0x1F_"))
 }
+
+///|
+test "S-expression operators stay bare" {
+  assert_eq(rewrite("(1 + 2 * 3)"), "(1 + 2 * 3)")
+  assert_eq(rewrite("(a+-b)"), "(a +- b)")
+  // A symbol that would open a comment stays quoted.
+  assert_eq(rewrite("('//')"), "('//')")
+}

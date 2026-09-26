@@ -19,7 +19,7 @@ pub fn write_all(values : Array[@ion.IonValue]) -> String raise @ion.IonError {
     if index > 0 {
       buffer.write_string("\n")
     }
-    write_value(buffer, values[index], 0, false)
+    write_value(buffer, values[index], 0, false, false)
   }
   buffer.to_string()
 }
@@ -28,7 +28,7 @@ pub fn write_all(values : Array[@ion.IonValue]) -> String raise @ion.IonError {
 /// Write a single value as indented Ion text.
 pub fn write_ion_pretty(value : @ion.IonValue) -> String raise @ion.IonError {
   let buffer = StringBuilder()
-  write_value(buffer, value, 0, true)
+  write_value(buffer, value, 0, true, false)
   buffer.to_string()
 }
 
@@ -42,7 +42,7 @@ pub fn write_all_pretty(
     if index > 0 {
       buffer.write_string("\n")
     }
-    write_value(buffer, values[index], 0, true)
+    write_value(buffer, values[index], 0, true, false)
   }
   buffer.to_string()
 }
@@ -66,6 +66,7 @@ fn write_value(
   value : @ion.IonValue,
   depth : Int,
   pretty : Bool,
+  in_sexp : Bool,
 ) -> Unit raise @ion.IonError {
   for annotation in value.annotations() {
     buffer.write_string(quote_symbol(annotation.require_text()))
@@ -82,8 +83,14 @@ fn write_value(
       buffer.write_string(value.to_ion_string())
     @ion.IonValueKind::Timestamp(value) =>
       buffer.write_string(value.to_ion_string())
-    @ion.IonValueKind::Symbol(token) =>
-      buffer.write_string(quote_symbol(token.require_text()))
+    @ion.IonValueKind::Symbol(token) => {
+      let text = token.require_text()
+      if in_sexp && is_operator_symbol(text) {
+        buffer.write_string(text)
+      } else {
+        buffer.write_string(quote_symbol(text))
+      }
+    }
     @ion.IonValueKind::String(value) => {
       buffer.write_string("\"")
       buffer.write_string(escape_ion(value, '"'))
@@ -126,7 +133,7 @@ fn write_list(
     } else if index > 0 {
       buffer.write_string(", ")
     }
-    write_value(buffer, items[index], depth + 1, pretty)
+    write_value(buffer, items[index], depth + 1, pretty, false)
     if pretty && index + 1 < items.length() {
       buffer.write_string(",")
     }
@@ -158,7 +165,7 @@ fn write_sexp(
     } else if index > 0 {
       buffer.write_string(" ")
     }
-    write_value(buffer, items[index], depth + 1, pretty)
+    write_value(buffer, items[index], depth + 1, pretty, true)
   }
   if pretty {
     buffer.write_string("\n")
@@ -190,7 +197,7 @@ fn write_struct(
     let field = fields[index]
     buffer.write_string(quote_symbol(field.name().require_text()))
     buffer.write_string(": ")
-    write_value(buffer, field.value(), depth + 1, pretty)
+    write_value(buffer, field.value(), depth + 1, pretty, false)
     if pretty && index + 1 < fields.length() {
       buffer.write_string(",")
     }
@@ -261,6 +268,40 @@ fn is_reserved_symbol(text : String) -> Bool {
         false
       }
   }
+}
+
+///|
+/// Whether `text` is a bare S-expression operator: one or more operator
+/// characters, and not the start of a comment.
+fn is_operator_symbol(text : String) -> Bool {
+  if text.is_empty() || text.has_prefix("//") || text.has_prefix("/*") {
+    return false
+  }
+  for c in text {
+    match c {
+      '!'
+      | '#'
+      | '%'
+      | '&'
+      | '*'
+      | '+'
+      | '-'
+      | '.'
+      | '/'
+      | ';'
+      | '<'
+      | '='
+      | '>'
+      | '?'
+      | '@'
+      | '^'
+      | '`'
+      | '|'
+      | '~' => ()
+      _ => return false
+    }
+  }
+  true
 }
 
 ///|
