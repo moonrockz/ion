@@ -1,0 +1,33 @@
+# Tool and task configuration for the ion module.
+# https://mise.jdx.dev
+
+[tools]
+"cargo:git-cliff" = "2.7.0"
+
+[tasks."test:unit"]
+description = "Run MoonBit unit tests"
+run = "moon test"
+
+[tasks."test:check"]
+description = "Type-check every package"
+run = "moon check"
+
+[tasks."test:all"]
+description = "Run all checks and tests"
+depends = ["test:check", "test:unit"]
+
+[tasks."build:wasm"]
+description = "Build the wasm target in release mode"
+run = "moon build --target wasm --release"
+
+[tasks."build:native"]
+description = "Build the native CLI binary"
+run = "moon build --target native --release"
+
+[tasks."release:changelog"]
+description = "Regenerate CHANGELOG.md with git-cliff"
+run = "git-cliff -o CHANGELOG.md"
+
+[tasks."release:pre-check"]
+description = "Validate release readiness (format, check, tests)"
+run = "moon fmt --check && moon check && moon test"

@@ -1,0 +1,24 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  pre-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hustcer/setup-moonbit@v1
+
+      - uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Install dependencies
+        run: moon update
+
+      - name: Validate release readiness
+        run: mise run release:pre-check
