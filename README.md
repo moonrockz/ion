@@ -121,6 +121,10 @@ let tokens = @text.tokenize!("int32::12")           // CST tokens
   an optional `TimestampOffset`.
 - **Exact numbers.** Integers and decimals are exact (`BigInt`
   coefficient/exponent), so precision and signed zero round-trip through text.
+- **Decimal arithmetic is opt-in.** `add`/`subtract`/`multiply`/`compare`/
+  `to_double` and conversion go through `moonbitlang/x/decimal`, whose decimal is
+  normalized and caps the scale, so those helpers document what they drop; the
+  value type itself keeps Ion's exact scale and signed zero.
 - **Derived precision.** A timestamp's precision is derived from which
   components are present, not stored separately.
 - **Unsupported is an error.** The schema loader raises

@@ -4,6 +4,7 @@ package "moonrockz/ion/ion"
 import {
   "moonbitlang/core/bigint",
   "moonbitlang/core/debug",
+  "moonbitlang/x/decimal",
 }
 
 // Values
@@ -28,17 +29,24 @@ pub struct Decimal {
   exponent : Int
   negative_zero : Bool
 } derive(@debug.Debug)
+pub fn Decimal::add(Self, Self) -> Self?
 pub fn Decimal::coefficient(Self) -> @bigint.BigInt
+pub fn Decimal::compare(Self, Self) -> Int?
 pub fn Decimal::exponent(Self) -> Int
 pub fn Decimal::from_int(Int) -> Self
+pub fn Decimal::from_x(@decimal.Decimal) -> Self
 pub fn Decimal::is_negative(Self) -> Bool
 pub fn Decimal::is_negative_zero(Self) -> Bool
 pub fn Decimal::is_zero(Self) -> Bool
+pub fn Decimal::multiply(Self, Self) -> Self?
 pub fn Decimal::negative_zero() -> Self
 pub fn Decimal::new(@bigint.BigInt, Int) -> Self
 pub fn Decimal::parse(StringView) -> Self raise IonError
+pub fn Decimal::subtract(Self, Self) -> Self?
+pub fn Decimal::to_double(Self) -> Double?
 pub fn Decimal::to_ion_string(Self) -> String
 pub fn Decimal::to_repr(Self) -> @debug.Repr
+pub fn Decimal::to_x(Self) -> @decimal.Decimal?
 pub fn Decimal::zero() -> Self
 
 pub struct Field {

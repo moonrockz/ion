@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tokenizer and `parse_cst`, the `IonValue` DOM, an `IonVisitor`, an `IonFold`
   with `Continue`/`SkipChildren`/`Stop` flow control, and a SAX-style
   `IonReader`/`IonHandler` event stream.
+- Decimal interoperability with `moonbitlang/x/decimal`: conversion plus
+  `add`/`subtract`/`multiply`/`compare`/`to_double`, for the values that type can
+  represent.
 - Ion binary type-descriptor model and version marker.
 - Ion Schema constraint model, loader, and validator for a focused ISL 2.0
   subset; unsupported constructs raise `IonError::Unsupported`.
