@@ -95,6 +95,12 @@ jobs:
       - name: Print an Ion fixture
         run: moon run pkgs -- print tests/fixtures/sample.ion
 
+      - name: Convert an Ion fixture to JSON
+        run: moon run pkgs -- json tests/fixtures/sample.ion
+
+      - name: Convert a JSON fixture to Ion
+        run: moon run pkgs -- fromjson tests/fixtures/sample.json
+
       - name: Validate fixtures (a violation must exit non-zero)
         run: |
           if moon run pkgs -- validate tests/fixtures/person.isl person tests/fixtures/person.ion; then

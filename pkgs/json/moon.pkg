@@ -1,0 +1,19 @@
+// JSON interoperability: converting between Ion values and core `Json`.
+//
+// The two directions are deliberately asymmetric; see `to_ion.mbt` and
+// `to_json.mbt` for the rules each one follows.
+
+import {
+  "moonrockz/ion/ion" @core,
+  "moonbitlang/core/bigint",
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/json" @cjson,
+  "moonbitlang/core/string",
+}
+
+import {
+  "moonrockz/ion/ion" @core,
+  "moonrockz/ion/text",
+  "moonbitlang/core/json" @cjson,
+  "moonbitlang/core/quickcheck",
+} for "test"
