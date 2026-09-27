@@ -9,19 +9,37 @@ import {
 // Values
 pub fn binary_version_marker() -> Bytes
 
+pub fn decode_value(BytesView, Int, SymbolTable) -> (@ion.IonValue, Int)? raise @ion.IonError
+
 pub fn descriptor_is_null(Int) -> Bool
 
 pub fn descriptor_length_nibble(Int) -> Int
 
 pub fn descriptor_type_code(Int) -> IonTypeCode
 
+pub fn encode_value(@ion.IonValue, SymbolTable) -> Bytes raise @ion.IonError
+
 pub fn has_binary_version_marker(BytesView) -> Bool
+
+pub fn has_version_marker(BytesView, Int) -> Bool
+
+pub fn is_padding_only(BytesView, Int) -> Bool raise @ion.IonError
 
 pub let length_follows : Int
 
 pub let length_null : Int
 
+pub fn local_symbol_table(SymbolTable) -> Bytes? raise @ion.IonError
+
+pub fn read_binary(BytesView) -> Array[@ion.IonValue] raise @ion.IonError
+
+pub fn read_binary_value(BytesView) -> @ion.IonValue raise @ion.IonError
+
 pub fn type_descriptor(IonTypeCode, Int) -> Int
+
+pub fn write_binary(Array[@ion.IonValue]) -> Bytes raise @ion.IonError
+
+pub fn write_binary_value(@ion.IonValue) -> Bytes raise @ion.IonError
 
 // Errors
 
@@ -53,6 +71,20 @@ pub fn IonTypeCode::not_equal(Self, Self) -> Bool
 pub fn IonTypeCode::to_int(Self) -> Int
 pub fn IonTypeCode::to_ion_type(Self) -> @ion.IonType?
 pub fn IonTypeCode::to_repr(Self) -> @debug.Repr
+
+pub struct SymbolTable {
+  mut locals : Array[String]
+}
+pub fn SymbolTable::accept(Self, @ion.IonValue) -> @ion.IonValue? raise @ion.IonError
+pub fn SymbolTable::find(Self, String) -> Int?
+pub fn SymbolTable::for_values(Array[@ion.IonValue]) -> Self raise @ion.IonError
+pub fn SymbolTable::intern(Self, String) -> Int
+pub fn SymbolTable::is_empty(Self) -> Bool
+pub fn SymbolTable::locals(Self) -> Array[String]
+pub fn SymbolTable::set_locals(Self, Array[String]) -> Unit
+pub fn SymbolTable::system() -> Self
+pub fn SymbolTable::text(Self, Int) -> String?
+pub fn SymbolTable::token(Self, Int) -> @ion.SymbolToken
 
 // Type aliases
 

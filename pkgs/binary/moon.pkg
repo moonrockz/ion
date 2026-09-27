@@ -7,9 +7,11 @@
 import {
   "moonrockz/ion/ion",
   "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
 }
 
 import {
   "moonrockz/ion/ion",
+  "moonrockz/ion/text",
   "moonbitlang/core/quickcheck",
 } for "test"
