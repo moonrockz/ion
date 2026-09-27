@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/binary/stream"
+
+import {
+  "moonbitlang/async/io",
+  "moonrockz/ion/binary",
+  "moonrockz/ion/ion",
+}
+
+// Values
+pub async fn write_all(&@io.Writer, Array[@ion.IonValue]) -> Unit
+
+// Errors
+
+// Types and methods
+pub struct BinaryReader {
+  source : &@io.Reader
+  table : @binary.SymbolTable
+  mut buffer : Bytes
+  mut eof : Bool
+}
+pub fn BinaryReader::new(&@io.Reader) -> Self
+pub async fn BinaryReader::next(Self) -> @ion.IonValue?
+
+// Type aliases
+
+// Traits

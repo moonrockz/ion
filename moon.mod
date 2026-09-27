@@ -24,4 +24,5 @@ source = "pkgs"
 
 import {
   "moonbitlang/x@0.5.5",
+  "moonbitlang/async@0.22.4",
 }
