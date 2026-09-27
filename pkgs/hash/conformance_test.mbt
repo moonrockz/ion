@@ -2,11 +2,12 @@
 //
 // `tests/fixtures/ion_hash_tests.ion` is the conformance data published with
 // the specification (<https://github.com/amazon-ion/ion-hash-test>). Each
-// top-level struct carries an `ion` source value (or a `10n` binary encoding,
-// which this module does not read yet) and, under `expect.identity`, the exact
-// bytes that the identity hash function would observe. Those bytes are exactly
-// `s(value)`, so comparing them checks the serialization directly, with no
-// dependence on a particular digest function.
+// top-level struct carries a source value — `ion` as text, or `10n` as Ion
+// binary octets — and, under `expect.identity`, the exact bytes that the
+// identity hash function would observe. Those bytes are exactly `s(value)`, so
+// comparing them checks the serialization directly, with no dependence on a
+// particular digest function. The `10n` cases exercise the Ion binary decoder
+// as well.
 
 ///|
 /// The conformance cases, read from the module root (`moon test`'s cwd).
@@ -88,6 +89,31 @@ fn expected_digest(expectation : @ion.IonValue) -> Bytes? raise @ion.IonError {
 }
 
 ///|
+/// The source value of a case: its `ion` text, or the single value encoded by
+/// its `10n` Ion binary octets. The description names the source in a failure.
+fn case_source(
+  case : @ion.IonValue,
+) -> (@ion.IonValue, String)? raise @ion.IonError {
+  match field_value(case, "ion") {
+    Some(source) => Some((source, @text.write_ion(source)))
+    None =>
+      match field_value(case, "10n") {
+        Some(octets) => {
+          let encoded = digest_bytes(octets)
+          match @binary.read_binary(encoded) {
+            [value] => Some((value, "10n " + to_hex(encoded)))
+            _ =>
+              raise @ion.IonError::DataModel(
+                "a 10n case must encode exactly one value",
+              )
+          }
+        }
+        None => None
+      }
+  }
+}
+
+///|
 test "Ion Hash conformance: identity serialization" {
   let cases = ion_hash_cases()
   let failures : Array[String] = []
@@ -96,8 +122,8 @@ test "Ion Hash conformance: identity serialization" {
   let mut no_digest = 0
   let mut skipped = 0
   for index, case in cases {
-    match field_value(case, "ion") {
-      Some(source) => {
+    match case_source(case) {
+      Some((source, description)) => {
         with_source += 1
         match field_value(case, "expect") {
           Some(expectation) =>
@@ -107,7 +133,7 @@ test "Ion Hash conformance: identity serialization" {
                 let actual = @hash.ion_hash_with(source, bytes => bytes)
                 if to_hex(actual) != to_hex(expected) {
                   failures.push(
-                    "case \{index} (\{@text.write_ion(source)}): expected \{to_hex(expected)}, got \{to_hex(actual)}",
+                    "case \{index} (\{description}): expected \{to_hex(expected)}, got \{to_hex(actual)}",
                   )
                 }
               }
@@ -127,14 +153,14 @@ test "Ion Hash conformance: identity serialization" {
     }
     fail(shown.join("\n"))
   }
-  // Every `ion`-bearing case must be checked or explicitly counted as lacking
-  // an identity digest, so a fixture that loses its expectations fails loudly
-  // instead of being skipped past.
+  // Every case that carries a source must be checked or explicitly counted as
+  // lacking an identity digest, so a fixture that loses its expectations fails
+  // loudly instead of being skipped past.
   assert_true(
     checked + no_digest == with_source,
-    msg="\{with_source} cases carry an 'ion' field, but \{checked} were checked and \{no_digest} had no identity digest",
+    msg="\{with_source} cases carry a source, but \{checked} were checked and \{no_digest} had no identity digest",
   )
-  assert_true(checked > 100, msg="expected many text cases, checked \{checked}")
+  assert_true(checked > 100, msg="expected many cases, checked \{checked}")
   println(
     "Ion Hash conformance: checked \{checked} of \{with_source}, no identity digest \{no_digest}, skipped \{skipped}",
   )

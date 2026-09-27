@@ -9,6 +9,7 @@ import {
 import {
   "moonrockz/ion/ion",
   "moonrockz/ion/text",
+  "moonrockz/ion/binary",
   "moonbitlang/core/quickcheck",
   "moonbitlang/x/fs",
 } for "test"

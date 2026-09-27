@@ -1,0 +1,21 @@
+// The Ion binary codec over asynchronous IO.
+//
+// The sync codec in `moonrockz/ion/binary` works on a byte buffer that is
+// already in memory. This package adapts it to `moonbitlang/async` byte
+// sources and sinks: a streaming reader frames one value at a time from the
+// source and decodes just those octets, so a large stream never has to be
+// buffered whole, and a streaming writer emits the datagram as it goes.
+
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/binary",
+  "moonbitlang/async/io",
+}
+
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/binary",
+  "moonrockz/ion/text",
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+} for "test"

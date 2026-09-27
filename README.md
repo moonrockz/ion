@@ -5,10 +5,10 @@ A [MoonBit](https://www.moonbitlang.com) implementation of Amazon
 hierarchical data serialization format — and
 [Ion Schema](https://amazon-ion.github.io/ion-schema/).
 
-> **Status:** early. The core data model, the Ion **text** encoding, **Ion
-> Hash** (Ion Hash 1.0 over SHA-256), and a focused Ion Schema validation subset
-> are implemented and tested. The Ion **binary** wire codec is the next
-> milestone.
+> **Status:** early. The core data model, the Ion **text** and Ion **binary**
+> encodings, **Ion Hash** (Ion Hash 1.0 over SHA-256), and a focused Ion Schema
+> validation subset are implemented and tested, with an asynchronous streaming
+> reader and writer over `moonbitlang/async`.
 
 ## Installation
 
@@ -23,7 +23,8 @@ moon add moonrockz/ion
 | `@ion` (core) | `pkgs/ion`    | `moonrockz/ion/ion`    | Core data model: Ion types, values, annotations, decimals, timestamps, symbol tokens |
 | `@text`       | `pkgs/text`   | `moonrockz/ion/text`   | Ion text reader and writer                              |
 | `@hash`       | `pkgs/hash`   | `moonrockz/ion/hash`   | Ion Hash 1.0: an encoding-independent hash of an Ion value |
-| `@binary`     | `pkgs/binary` | `moonrockz/ion/binary` | Ion binary type descriptors and version marker          |
+| `@binary`     | `pkgs/binary` | `moonrockz/ion/binary` | Ion binary codec: values, containers, annotations, and local symbol tables |
+| `@binary/stream` | `pkgs/binary/stream` | `moonrockz/ion/binary/stream` | The Ion binary codec over asynchronous IO (`moonbitlang/async`) |
 | `@schema`     | `pkgs/schema` | `moonrockz/ion/schema` | Ion Schema model, loader, and validator                 |
 | `ion` CLI     | `pkgs`        | `moonrockz/ion`        | `ion print`, `ion hash`, `ion validate` — the module root package is the executable |
 
@@ -36,8 +37,8 @@ so the repository root holds only module metadata, tooling, and tests.
   executable** — so the published package is runnable at the short coordinate
   `moonx moonrockz/ion`;
 - `pkgs/ion/` is the `@ion` core data model (`moonrockz/ion/ion`);
-- `pkgs/text`, `pkgs/hash`, `pkgs/binary`, and `pkgs/schema` are the remaining
-  library packages.
+- `pkgs/text`, `pkgs/hash`, `pkgs/binary` (with the async `pkgs/binary/stream`),
+  and `pkgs/schema` are the remaining library packages.
 
 The executable owns the module root (instead of living in a `cmd/` package) so
 that `moonx` can run it as `moonrockz/ion`; library users import the core model
@@ -50,6 +51,14 @@ Read and re-write Ion text:
 ```moonbit skip nocheck
 let value = @text.read_ion!("{ name: \"ion\", tags: [a, b] }")
 println(@text.write_ion!(value)) // {name: "ion", tags: [a, b]}
+```
+
+Read and write Ion **binary**:
+
+```moonbit skip nocheck
+let values = @text.read_ion_datagram!("{ name: \"ion\" } 42")
+let bytes = @binary.write_binary!(values) // Ion binary, with a local symbol table
+let decoded = @binary.read_binary!(bytes) // back to the same values
 ```
 
 Build a value programmatically:
@@ -106,6 +115,7 @@ data model):
 | Visitor | `@ion.IonVisitor` + `IonValue::accept` | Depth-first traversal; override only what you need |
 | Fold | `@ion.IonFold` + `IonValue::fold` | Thread an accumulator with `Continue` / `SkipChildren` / `Stop` |
 | SAX | `@text.IonReader` (pull) and `@text.IonHandler` + `@text.parse_with_handler` (push) | A flat `IonEvent` stream without building the DOM |
+| Binary | `@binary.read_binary`, `@binary.write_binary`, `@binary/stream` | The Ion **binary** codec, with local symbol tables and an async streaming reader and writer |
 
 ```moonbit skip nocheck
 let value = @text.read_ion!("{a: 1}")               // DOM / AST
@@ -161,8 +171,8 @@ cases are skipped, pending the Ion binary codec.
 
 ## Roadmap
 
-- Ion binary wire codec, including local symbol tables and the annotation
-  wrapper.
+- Ion binary: shared symbol table *imports* (`$ion_shared_symbol_table`),
+  which a reader reports as unsupported rather than resolving.
 - Ion Schema: `ordered_elements`, `annotations`, `timestamp_precision`,
   `regex`, `closed::` fields, imports, open content, and the decimal
   `precision`/`exponent` constraints. The
@@ -170,7 +180,8 @@ cases are skipped, pending the Ion binary codec.
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
   the constraints above.
-- Streaming readers over byte and character sources.
+- Streaming readers over character sources (the async streaming reader covers
+  Ion binary).
 - JSON interoperability (`IonValue` ⇄ `Json`).
 
 ## Building and testing
