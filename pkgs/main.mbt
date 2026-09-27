@@ -1,5 +1,6 @@
-// The `ion` CLI: read and re-emit Ion text, hash values, and validate Ion
-// values against an Ion Schema.
+// The `ion` CLI: read and re-emit Ion, hash values, and validate Ion values
+// against an Ion Schema. Input may be Ion text or Ion binary; a leading
+// version marker decides.
 //
 //   ion print [file|-]
 //   ion hash [file|-]
@@ -13,7 +14,7 @@ fn version() -> String {
 ///|
 fn usage() -> String {
   "usage: ion <command> [args]\n" +
-  "  ion print [file|-]\n" +
+  "  ion print [file|-]     Ion text or Ion binary in, Ion text out\n" +
   "  ion hash [file|-]\n" +
   "  ion validate <schema-file> <type-name> [file|-]"
 }
@@ -37,19 +38,44 @@ fn read_input(path : String) -> String raise {
 }
 
 ///|
-/// Parse Ion text and print its canonical form.
-fn do_print(path : String) -> Result[Unit, String] {
-  let text = read_input(path) catch {
-    @fs.IOError(message) => return Err(message)
-    _ => return Err("failed to read " + path)
+/// Read a file (or stdin) as bytes.
+fn read_input_bytes(path : String) -> Bytes raise {
+  if path == "-" {
+    @fs.read_file_to_bytes("/dev/stdin")
+  } else {
+    @fs.read_file_to_bytes(path)
   }
-  let outcome = {
-    let values = @text.read_ion_datagram(text) catch {
-      error => return Err(error.message())
+}
+
+///|
+/// Read a document as a datagram: Ion binary when it begins with the version
+/// marker, and Ion text otherwise.
+fn read_datagram(path : String) -> Array[@core.IonValue] raise @core.IonError {
+  let bytes = read_input_bytes(path) catch {
+    @fs.IOError(message) => raise @core.IonError::Syntax(message)
+    _ => raise @core.IonError::Syntax("failed to read " + path)
+  }
+  if @binary.has_version_marker(bytes[:], 0) {
+    @binary.read_binary(bytes[:])
+  } else {
+    let text = @utf8.decode(bytes) catch {
+      _ =>
+        raise @core.IonError::Syntax(
+          "the input is neither Ion binary nor UTF-8 Ion text",
+        )
     }
-    @text.write_all(values) catch {
-      error => return Err(error.message())
-    }
+    @text.read_ion_datagram(text)
+  }
+}
+
+///|
+/// Read a document and print its canonical Ion text.
+fn do_print(path : String) -> Result[Unit, String] {
+  let values = read_datagram(path) catch {
+    error => return Err(error.message())
+  }
+  let outcome = @text.write_all(values) catch {
+    error => return Err(error.message())
   }
   println(outcome)
   Ok(())
@@ -58,11 +84,7 @@ fn do_print(path : String) -> Result[Unit, String] {
 ///|
 /// Print the SHA-256 Ion Hash of every value in a document, one per line.
 fn do_hash(path : String) -> Result[Unit, String] {
-  let text = read_input(path) catch {
-    @fs.IOError(message) => return Err(message)
-    _ => return Err("failed to read " + path)
-  }
-  let values = @text.read_ion_datagram(text) catch {
+  let values = read_datagram(path) catch {
     error => return Err(error.message())
   }
   let hashes : Array[String] = []
