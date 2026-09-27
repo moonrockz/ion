@@ -37,6 +37,13 @@ pub fn Decimal::negative_zero() -> Decimal {
 }
 
 ///|
+/// The decimal `-0dN`: negative zero at a given exponent, which Ion keeps
+/// distinct from `0dN`.
+pub fn Decimal::negative_zero_at(exponent : Int) -> Decimal {
+  { coefficient: BigInt::from_int(0), exponent, negative_zero: true, }
+}
+
+///|
 /// The unscaled coefficient (significand) of this decimal.
 pub fn Decimal::coefficient(self : Decimal) -> BigInt {
   self.coefficient

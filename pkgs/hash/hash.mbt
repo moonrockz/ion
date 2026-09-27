@@ -295,17 +295,21 @@ fn magnitude_int(value : Int) -> Int {
 /// fractional second is omitted when its exponent is greater than `-1`.
 fn timestamp_representation(ts : @ion.Timestamp) -> Array[Byte] {
   let out : Array[Byte] = []
-  let offset : Int? = match ts.offset() {
-    Some(@ion.TimestampOffset::Known(minutes)) => Some(minutes)
-    _ => None
+  match ts.offset() {
+    Some(@ion.TimestampOffset::Known(minutes)) =>
+      append_var_int(out, magnitude_int(minutes), minutes < 0)
+    _ => append_var_int(out, 0, true)
   }
-  match offset {
-    Some(minutes) => append_var_int(out, magnitude_int(minutes), minutes < 0)
-    None => append_var_int(out, 0, true)
-  }
-  let (year, month, day, hour, minute, second) = utc_parts(ts, offset)
-  append_var_uint(out, year)
-  for component in [month, day, hour, minute, second] {
+  let utc = ts.as_utc()
+  append_var_uint(out, utc.year())
+  for
+    component in [
+      utc.month(),
+      utc.day(),
+      utc.hour(),
+      utc.minute(),
+      utc.second(),
+    ] {
     match component {
       Some(value) => append_var_uint(out, value)
       None => ()
@@ -366,87 +370,6 @@ fn compare_bytes(a : Array[Byte], b : Array[Byte]) -> Int {
   } else {
     1
   }
-}
-
-///|
-/// The `(year, month, day, hour, minute, second)` parts of a timestamp,
-/// shifted from its local offset to UTC when the offset is known. The
-/// fractional second is unaffected, so the caller handles it separately.
-fn utc_parts(
-  ts : @ion.Timestamp,
-  offset : Int?,
-) -> (Int, Int?, Int?, Int?, Int?, Int?) {
-  match (offset, ts.month(), ts.day(), ts.hour(), ts.minute()) {
-    (Some(offset_minutes), Some(month), Some(day), Some(hour), Some(minute)) => {
-      let total = hour * 60 + minute - offset_minutes
-      let shift = floor_div(total, 1440)
-      let minutes_of_day = total - shift * 1440
-      let (year, month, day) = add_days(ts.year(), month, day, shift)
-      (
-        year,
-        Some(month),
-        Some(day),
-        Some(minutes_of_day / 60),
-        Some(minutes_of_day % 60),
-        ts.second(),
-      )
-    }
-    _ => (ts.year(), ts.month(), ts.day(), ts.hour(), ts.minute(), ts.second())
-  }
-}
-
-///|
-/// Integer division that rounds toward negative infinity, so a minute count
-/// before midnight maps onto the previous day.
-fn floor_div(value : Int, divisor : Int) -> Int {
-  let quotient = value / divisor
-  if value % divisor != 0 && value < 0 {
-    quotient - 1
-  } else {
-    quotient
-  }
-}
-
-///|
-/// Add `delta` days to a civil date, rolling over months and years.
-fn add_days(year : Int, month : Int, day : Int, delta : Int) -> (Int, Int, Int) {
-  let mut y = year
-  let mut m = month
-  let mut d = day + delta
-  while d < 1 {
-    m -= 1
-    if m < 1 {
-      m = 12
-      y -= 1
-    }
-    d += days_in_month(y, m)
-  }
-  while d > days_in_month(y, m) {
-    d -= days_in_month(y, m)
-    m += 1
-    if m > 12 {
-      m = 1
-      y += 1
-    }
-  }
-  (y, m, d)
-}
-
-///|
-/// The number of days in a month of a given proleptic-Gregorian year.
-fn days_in_month(year : Int, month : Int) -> Int {
-  match month {
-    1 | 3 | 5 | 7 | 8 | 10 | 12 => 31
-    4 | 6 | 9 | 11 => 30
-    2 => if is_leap_year(year) { 29 } else { 28 }
-    _ => 30
-  }
-}
-
-///|
-/// Whether a year is a leap year in the proleptic Gregorian calendar.
-fn is_leap_year(year : Int) -> Bool {
-  year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
 ///|

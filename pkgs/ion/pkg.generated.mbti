@@ -12,7 +12,13 @@ pub fn accept_values(Array[IonValue], &IonVisitor) -> Unit
 
 pub fn[A, N] continuing((A, N) -> A) -> (A, N) -> FoldAction[A]
 
+pub fn days_in_month(Int, Int) -> Int
+
 pub fn[A] fold_values(Array[IonValue], A, IonFold[A]) -> A
+
+pub fn is_leap_year(Int) -> Bool
+
+pub fn shift_date(Int, Int, Int, Int) -> (Int, Int, Int)
 
 pub fn system_symbol_text(Int) -> String?
 
@@ -42,6 +48,7 @@ pub fn Decimal::is_negative_zero(Self) -> Bool
 pub fn Decimal::is_zero(Self) -> Bool
 pub fn Decimal::multiply(Self, Self) -> Self?
 pub fn Decimal::negative_zero() -> Self
+pub fn Decimal::negative_zero_at(Int) -> Self
 pub fn Decimal::new(@bigint.BigInt, Int) -> Self
 pub fn Decimal::parse(StringView) -> Self raise IonError
 pub fn Decimal::subtract(Self, Self) -> Self?
@@ -182,6 +189,8 @@ pub struct Timestamp {
   fraction : Decimal?
   offset : TimestampOffset?
 } derive(@debug.Debug)
+pub fn Timestamp::as_local(Self) -> Self
+pub fn Timestamp::as_utc(Self) -> Self
 pub fn Timestamp::day(Self) -> Int?
 pub fn Timestamp::fraction(Self) -> Decimal?
 pub fn Timestamp::hour(Self) -> Int?
