@@ -1,0 +1,232 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/ion"
+
+import {
+  "moonbitlang/core/bigint",
+  "moonbitlang/core/debug",
+  "moonbitlang/x/decimal",
+}
+
+// Values
+pub fn accept_values(Array[IonValue], &IonVisitor) -> Unit
+
+pub fn[A, N] continuing((A, N) -> A) -> (A, N) -> FoldAction[A]
+
+pub fn[A] fold_values(Array[IonValue], A, IonFold[A]) -> A
+
+pub fn system_symbol_text(Int) -> String?
+
+// Errors
+pub(all) suberror IonError {
+  Syntax(String)
+  DataModel(String)
+  Unsupported(String)
+} derive(@debug.Debug)
+pub fn IonError::message(Self) -> String
+pub fn IonError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub struct Decimal {
+  coefficient : @bigint.BigInt
+  exponent : Int
+  negative_zero : Bool
+} derive(@debug.Debug)
+pub fn Decimal::add(Self, Self) -> Self?
+pub fn Decimal::coefficient(Self) -> @bigint.BigInt
+pub fn Decimal::compare(Self, Self) -> Int?
+pub fn Decimal::exponent(Self) -> Int
+pub fn Decimal::from_int(Int) -> Self
+pub fn Decimal::from_x(@decimal.Decimal) -> Self
+pub fn Decimal::is_negative(Self) -> Bool
+pub fn Decimal::is_negative_zero(Self) -> Bool
+pub fn Decimal::is_zero(Self) -> Bool
+pub fn Decimal::multiply(Self, Self) -> Self?
+pub fn Decimal::negative_zero() -> Self
+pub fn Decimal::new(@bigint.BigInt, Int) -> Self
+pub fn Decimal::parse(StringView) -> Self raise IonError
+pub fn Decimal::subtract(Self, Self) -> Self?
+pub fn Decimal::to_double(Self) -> Double?
+pub fn Decimal::to_ion_string(Self) -> String
+pub fn Decimal::to_repr(Self) -> @debug.Repr
+pub fn Decimal::to_x(Self) -> @decimal.Decimal?
+pub fn Decimal::zero() -> Self
+
+pub struct Field {
+  name : SymbolToken
+  value : IonValue
+} derive(@debug.Debug)
+pub fn Field::from_token(SymbolToken, IonValue) -> Self
+pub fn Field::name(Self) -> SymbolToken
+pub fn Field::new(String, IonValue) -> Self
+pub fn Field::to_repr(Self) -> @debug.Repr
+pub fn Field::value(Self) -> IonValue
+
+pub(all) enum FoldAction[A] {
+  Continue(A)
+  SkipChildren(A)
+  Stop(A)
+} derive(Eq, @debug.Debug)
+pub fn[A : Eq] FoldAction::equal(Self[A], Self[A]) -> Bool
+pub fn[A] FoldAction::is_stop(Self[A]) -> Bool
+pub fn[A : Eq] FoldAction::not_equal(Self[A], Self[A]) -> Bool
+pub fn[A : @debug.Debug] FoldAction::to_repr(Self[A]) -> @debug.Repr
+pub fn[A] FoldAction::value(Self[A]) -> A
+
+pub(all) struct IonFold[A] {
+  visit_value : (A, IonValue) -> FoldAction[A]
+  visit_annotation : (A, SymbolToken) -> FoldAction[A]
+  visit_field_name : (A, SymbolToken) -> FoldAction[A]
+}
+pub fn[A] IonFold::default() -> Self[A]
+
+pub(all) enum IonType {
+  Null
+  Bool
+  Int
+  Float
+  Decimal
+  Timestamp
+  Symbol
+  String
+  Clob
+  Blob
+  List
+  Sexp
+  Struct
+} derive(Eq, Hash, @debug.Debug)
+pub fn IonType::all() -> Array[Self]
+pub fn IonType::equal(Self, Self) -> Bool
+pub fn IonType::from_text(StringView) -> Self?
+pub fn IonType::has_typed_null(Self) -> Bool
+pub fn IonType::hash(Self) -> Int
+pub fn IonType::hash_combine(Self, Hasher) -> Unit
+pub fn IonType::is_container(Self) -> Bool
+pub fn IonType::not_equal(Self, Self) -> Bool
+pub fn IonType::to_repr(Self) -> @debug.Repr
+pub fn IonType::to_text(Self) -> String
+
+pub struct IonValue {
+  annotations : Array[SymbolToken]
+  kind : IonValueKind
+} derive(@debug.Debug)
+pub fn IonValue::accept(Self, &IonVisitor) -> Unit
+pub fn IonValue::annotations(Self) -> Array[SymbolToken]
+pub fn IonValue::big_int(@bigint.BigInt) -> Self
+pub fn IonValue::blob(Bytes) -> Self
+pub fn IonValue::bool(Bool) -> Self
+pub fn IonValue::clob(Bytes) -> Self
+pub fn IonValue::decimal(Decimal) -> Self
+pub fn IonValue::equals(Self, Self) -> Bool
+pub fn IonValue::float(Double) -> Self
+pub fn[A] IonValue::fold(Self, A, IonFold[A]) -> A
+pub fn IonValue::from_fields(Array[Field]) -> Self
+pub fn IonValue::has_annotations(Self) -> Bool
+pub fn IonValue::int(Int) -> Self
+pub fn IonValue::ion_type(Self) -> IonType
+pub fn IonValue::is_null(Self) -> Bool
+pub fn IonValue::is_untyped_null(Self) -> Bool
+pub fn IonValue::kind(Self) -> IonValueKind
+pub fn IonValue::list(Array[Self]) -> Self
+pub fn IonValue::new(IonValueKind) -> Self
+pub fn IonValue::sexp(Array[Self]) -> Self
+pub fn IonValue::string(String) -> Self
+pub fn IonValue::symbol(String) -> Self
+pub fn IonValue::symbol_token(SymbolToken) -> Self
+pub fn IonValue::timestamp(Timestamp) -> Self
+pub fn IonValue::to_repr(Self) -> @debug.Repr
+pub fn IonValue::typed_null(IonType) -> Self
+pub fn IonValue::untyped_null() -> Self
+pub fn IonValue::with_annotation(Self, SymbolToken) -> Self
+pub fn IonValue::with_annotations(Self, Array[SymbolToken]) -> Self
+
+pub(all) enum IonValueKind {
+  Null(IonType)
+  Bool(Bool)
+  Int(@bigint.BigInt)
+  Float(Double)
+  Decimal(Decimal)
+  Timestamp(Timestamp)
+  Symbol(SymbolToken)
+  String(String)
+  Clob(Bytes)
+  Blob(Bytes)
+  List(Array[IonValue])
+  Sexp(Array[IonValue])
+  Struct(Array[Field])
+} derive(@debug.Debug)
+pub fn IonValueKind::to_repr(Self) -> @debug.Repr
+
+pub struct SymbolToken {
+  text : String?
+  sid : Int?
+} derive(Eq, Hash, @debug.Debug)
+pub fn SymbolToken::equal(Self, Self) -> Bool
+pub fn SymbolToken::from_sid(Int) -> Self
+pub fn SymbolToken::has_text(Self) -> Bool
+pub fn SymbolToken::hash(Self) -> Int
+pub fn SymbolToken::hash_combine(Self, Hasher) -> Unit
+pub fn SymbolToken::new(String) -> Self
+pub fn SymbolToken::not_equal(Self, Self) -> Bool
+pub fn SymbolToken::require_text(Self) -> String raise IonError
+pub fn SymbolToken::sid(Self) -> Int?
+pub fn SymbolToken::text(Self) -> String?
+pub fn SymbolToken::to_repr(Self) -> @debug.Repr
+
+pub struct Timestamp {
+  year : Int
+  month : Int?
+  day : Int?
+  hour : Int?
+  minute : Int?
+  second : Int?
+  fraction : Decimal?
+  offset : TimestampOffset?
+} derive(@debug.Debug)
+pub fn Timestamp::day(Self) -> Int?
+pub fn Timestamp::fraction(Self) -> Decimal?
+pub fn Timestamp::hour(Self) -> Int?
+pub fn Timestamp::minute(Self) -> Int?
+pub fn Timestamp::month(Self) -> Int?
+pub fn Timestamp::new(year~ : Int, month? : Int?, day? : Int?, hour? : Int?, minute? : Int?, second? : Int?, fraction? : Decimal?, offset? : TimestampOffset?) -> Self
+pub fn Timestamp::offset(Self) -> TimestampOffset?
+pub fn Timestamp::parse(StringView) -> Self raise IonError
+pub fn Timestamp::precision(Self) -> TimestampPrecision
+pub fn Timestamp::second(Self) -> Int?
+pub fn Timestamp::to_ion_string(Self) -> String
+pub fn Timestamp::to_repr(Self) -> @debug.Repr
+pub fn Timestamp::year(Self) -> Int
+
+pub(all) enum TimestampOffset {
+  Known(Int)
+  Unknown
+} derive(Eq, Hash, @debug.Debug)
+pub fn TimestampOffset::equal(Self, Self) -> Bool
+pub fn TimestampOffset::hash(Self) -> Int
+pub fn TimestampOffset::hash_combine(Self, Hasher) -> Unit
+pub fn TimestampOffset::not_equal(Self, Self) -> Bool
+pub fn TimestampOffset::to_repr(Self) -> @debug.Repr
+
+pub(all) enum TimestampPrecision {
+  Year
+  Month
+  Day
+  Minute
+  Second
+} derive(Eq, Hash, @debug.Debug)
+pub fn TimestampPrecision::equal(Self, Self) -> Bool
+pub fn TimestampPrecision::hash(Self) -> Int
+pub fn TimestampPrecision::hash_combine(Self, Hasher) -> Unit
+pub fn TimestampPrecision::not_equal(Self, Self) -> Bool
+pub fn TimestampPrecision::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
+pub(open) trait IonVisitor {
+  fn visit_value(Self, IonValue) -> Unit = _
+  fn visit_annotation(Self, SymbolToken) -> Unit = _
+  fn visit_field_name(Self, SymbolToken) -> Unit = _
+  fn visit_list(Self, Array[IonValue]) -> Unit = _
+  fn visit_sexp(Self, Array[IonValue]) -> Unit = _
+  fn visit_struct(Self, Array[Field]) -> Unit = _
+}

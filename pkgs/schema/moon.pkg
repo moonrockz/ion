@@ -1,0 +1,14 @@
+// Ion Schema Language (ISL) support: the schema model, a loader from Ion, and a
+// validator.
+
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+  "moonbitlang/x/fs",
+} for "test"

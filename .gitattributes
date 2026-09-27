@@ -1,0 +1,5 @@
+# Normalize line endings to LF in the repository.
+* text=auto eol=lf
+
+# Generated MoonBit interfaces are derived; collapse them in diffs.
+pkg.generated.mbti linguist-generated=true

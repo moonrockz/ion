@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/core/string",
+  "moonbitlang/x/decimal",
+}
+
+import {
+  "moonbitlang/core/quickcheck",
+} for "test"

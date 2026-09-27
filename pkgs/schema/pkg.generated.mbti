@@ -1,0 +1,81 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/schema"
+
+import {
+  "moonbitlang/core/debug",
+  "moonrockz/ion/ion",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum Constraint {
+  IsType(Array[@ion.IonType])
+  NullOr(Constraint)
+  TypeRef(String)
+  Element(Constraint, Occurs?)
+  Fields(Array[FieldConstraint])
+  ValidValues(Array[@ion.IonValue])
+  ContainerLength(Int, Int?)
+  CodepointLength(Int, Int?)
+  AllOf(Array[Constraint])
+  AnyOf(Array[Constraint])
+  OneOf(Array[Constraint])
+  Not(Constraint)
+  Nothing
+  Contains(Array[@ion.IonValue])
+} derive(@debug.Debug)
+pub fn Constraint::any() -> Self
+pub fn Constraint::to_repr(Self) -> @debug.Repr
+
+pub struct FieldConstraint {
+  name : String
+  ty : Constraint
+  occurs : Occurs
+} derive(@debug.Debug)
+pub fn FieldConstraint::to_repr(Self) -> @debug.Repr
+
+pub struct Occurs {
+  lower : Int
+  upper : Int?
+} derive(@debug.Debug)
+pub fn Occurs::allows(Self, Int) -> Bool
+pub fn Occurs::new(Int, Int?) -> Self
+pub fn Occurs::optional() -> Self
+pub fn Occurs::required() -> Self
+pub fn Occurs::to_repr(Self) -> @debug.Repr
+
+pub struct Schema {
+  types : Array[TypeDefinition]
+} derive(@debug.Debug)
+pub fn Schema::empty() -> Self
+pub fn Schema::find(Self, String) -> TypeDefinition?
+pub fn Schema::from_types(Array[TypeDefinition]) -> Self
+pub fn Schema::is_valid(Self, String, @ion.IonValue) -> Bool
+pub fn Schema::load(Array[@ion.IonValue]) -> Self raise @ion.IonError
+pub fn Schema::load_from_text(StringView) -> Self raise @ion.IonError
+pub fn Schema::to_repr(Self) -> @debug.Repr
+pub fn Schema::types(Self) -> Array[TypeDefinition]
+pub fn Schema::validate(Self, String, @ion.IonValue) -> Array[Violation]
+
+pub struct TypeDefinition {
+  name : String
+  constraints : Array[Constraint]
+} derive(@debug.Debug)
+pub fn TypeDefinition::constraints(Self) -> Array[Constraint]
+pub fn TypeDefinition::name(Self) -> String
+pub fn TypeDefinition::to_repr(Self) -> @debug.Repr
+
+pub struct Violation {
+  path : String
+  message : String
+} derive(@debug.Debug)
+pub fn Violation::message(Self) -> String
+pub fn Violation::path(Self) -> String
+pub fn Violation::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

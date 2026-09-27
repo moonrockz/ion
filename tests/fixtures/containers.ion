@@ -1,0 +1,12 @@
+[]
+()
+{}
+[1, 2, 3]
+[1, [2, [3]]]
+(a b c)
+(1 + 2 * 3)
+{a: 1, b: "x", c: [true, null]}
+{outer: {inner: {deep: 1}}}
+/* comment */ [1, // line comment
+2]
+ann::[1, 2]

@@ -1,0 +1,59 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/binary"
+
+import {
+  "moonbitlang/core/debug",
+  "moonrockz/ion/ion",
+}
+
+// Values
+pub fn binary_version_marker() -> Bytes
+
+pub fn descriptor_is_null(Int) -> Bool
+
+pub fn descriptor_length_nibble(Int) -> Int
+
+pub fn descriptor_type_code(Int) -> IonTypeCode
+
+pub fn has_binary_version_marker(BytesView) -> Bool
+
+pub let length_follows : Int
+
+pub let length_null : Int
+
+pub fn type_descriptor(IonTypeCode, Int) -> Int
+
+// Errors
+
+// Types and methods
+pub(all) enum IonTypeCode {
+  Null
+  Bool
+  PosInt
+  NegInt
+  Float
+  Decimal
+  Timestamp
+  Symbol
+  String
+  Clob
+  Blob
+  List
+  Sexp
+  Struct
+  Annotation
+  Reserved
+} derive(Eq, Hash, @debug.Debug)
+pub fn IonTypeCode::equal(Self, Self) -> Bool
+pub fn IonTypeCode::from_int(Int) -> Self
+pub fn IonTypeCode::from_ion_type(@ion.IonType) -> Self
+pub fn IonTypeCode::hash(Self) -> Int
+pub fn IonTypeCode::hash_combine(Self, Hasher) -> Unit
+pub fn IonTypeCode::not_equal(Self, Self) -> Bool
+pub fn IonTypeCode::to_int(Self) -> Int
+pub fn IonTypeCode::to_ion_type(Self) -> @ion.IonType?
+pub fn IonTypeCode::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

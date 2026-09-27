@@ -1,0 +1,14 @@
+// Ion Hash: an encoding-independent hash of an Ion value.
+
+import {
+  "moonrockz/ion/ion",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/crypto",
+}
+
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/x/fs",
+} for "test"

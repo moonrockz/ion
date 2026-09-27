@@ -1,0 +1,15 @@
+// The Ion binary encoding.
+//
+// This package currently provides the binary format's type-descriptor model and
+// version marker; the wire codec (including local symbol tables) is the next
+// milestone.
+
+import {
+  "moonrockz/ion/ion",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "moonrockz/ion/ion",
+  "moonbitlang/core/quickcheck",
+} for "test"

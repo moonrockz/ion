@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/hash"
+
+import {
+  "moonrockz/ion/ion",
+}
+
+// Values
+pub fn ion_hash(@ion.IonValue) -> Bytes raise @ion.IonError
+
+pub fn ion_hash_hex(@ion.IonValue) -> String raise @ion.IonError
+
+pub fn ion_hash_with(@ion.IonValue, (Array[Byte]) -> Array[Byte]) -> Bytes raise @ion.IonError
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
