@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/json"
+
+import {
+  "moonrockz/ion/ion",
+}
+
+// Values
+pub fn read_json(StringView) -> @ion.IonValue raise @ion.IonError
+
+pub fn to_ion(Json) -> @ion.IonValue
+
+pub fn to_json(@ion.IonValue) -> Json raise @ion.IonError
+
+pub fn write_json(@ion.IonValue, indent? : Int) -> String raise @ion.IonError
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

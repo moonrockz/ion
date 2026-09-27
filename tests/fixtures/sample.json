@@ -1,0 +1,5 @@
+{
+  "name": "sample",
+  "count": 2,
+  "flags": [true, false, null]
+}

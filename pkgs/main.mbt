@@ -1,8 +1,10 @@
-// The `ion` CLI: read and re-emit Ion, hash values, and validate Ion values
-// against an Ion Schema. Input may be Ion text or Ion binary; a leading
-// version marker decides.
+// The `ion` CLI: read and re-emit Ion, convert to and from JSON, hash values,
+// and validate Ion values against an Ion Schema. Ion input may be text or
+// binary; a leading version marker decides.
 //
 //   ion print [file|-]
+//   ion json [file|-]
+//   ion fromjson [file|-]
 //   ion hash [file|-]
 //   ion validate <schema-file> <type-name> [file|-]
 
@@ -15,6 +17,8 @@ fn version() -> String {
 fn usage() -> String {
   "usage: ion <command> [args]\n" +
   "  ion print [file|-]     Ion text or Ion binary in, Ion text out\n" +
+  "  ion json [file|-]      Ion text or Ion binary in, JSON out\n" +
+  "  ion fromjson [file|-]  JSON in, Ion text out\n" +
   "  ion hash [file|-]\n" +
   "  ion validate <schema-file> <type-name> [file|-]"
 }
@@ -145,6 +149,10 @@ fn run(args : Array[String]) -> Result[Unit, String] {
     [_] => do_print("-")
     [_, "print", path, ..] => do_print(path)
     [_, "print"] => do_print("-")
+    [_, "json", path, ..] => do_json(path)
+    [_, "json"] => do_json("-")
+    [_, "fromjson", path, ..] => do_from_json(path)
+    [_, "fromjson"] => do_from_json("-")
     [_, "hash", path, ..] => do_hash(path)
     [_, "hash"] => do_hash("-")
     [_, "validate", schema_path, type_name, input, ..] =>
@@ -168,4 +176,41 @@ fn main {
       @sys.exit(1)
     }
   }
+}
+
+///|
+/// Read a document and print each value as JSON text, one per line, following
+/// the cookbook's down-conversion rules.
+fn do_json(path : String) -> Result[Unit, String] {
+  let values = read_datagram(path) catch {
+    error => return Err(error.message())
+  }
+  let rendered : Array[String] = []
+  for value in values {
+    let text = @json.write_json(value) catch {
+      error => return Err(error.message())
+    }
+    rendered.push(text)
+  }
+  if !rendered.is_empty() {
+    println(rendered.join("\n"))
+  }
+  Ok(())
+}
+
+///|
+/// Read a JSON document and print its canonical Ion text.
+fn do_from_json(path : String) -> Result[Unit, String] {
+  let text = read_input(path) catch {
+    @fs.IOError(message) => return Err(message)
+    _ => return Err("failed to read " + path)
+  }
+  let value = @json.read_json(text) catch {
+    error => return Err(error.message())
+  }
+  let printed = @text.write_ion(value) catch {
+    error => return Err(error.message())
+  }
+  println(printed)
+  Ok(())
 }

@@ -6,9 +6,9 @@ hierarchical data serialization format — and
 [Ion Schema](https://amazon-ion.github.io/ion-schema/).
 
 > **Status:** early. The core data model, the Ion **text** and Ion **binary**
-> encodings, **Ion Hash** (Ion Hash 1.0 over SHA-256), and a focused Ion Schema
-> validation subset are implemented and tested, with an asynchronous streaming
-> reader and writer over `moonbitlang/async`.
+> encodings, **Ion Hash** (Ion Hash 1.0 over SHA-256), a focused Ion Schema
+> validation subset, and **JSON interoperability** are implemented and tested,
+> with an asynchronous streaming reader and writer over `moonbitlang/async`.
 
 ## Installation
 
@@ -26,7 +26,8 @@ moon add moonrockz/ion
 | `@binary`     | `pkgs/binary` | `moonrockz/ion/binary` | Ion binary codec: values, containers, annotations, and local symbol tables |
 | `@binary/stream` | `pkgs/binary/stream` | `moonrockz/ion/binary/stream` | The Ion binary codec over asynchronous IO (`moonbitlang/async`) |
 | `@schema`     | `pkgs/schema` | `moonrockz/ion/schema` | Ion Schema model, loader, and validator                 |
-| `ion` CLI     | `pkgs`        | `moonrockz/ion`        | `ion print`, `ion hash`, `ion validate` — the module root package is the executable |
+| `@json`       | `pkgs/json`   | `moonrockz/ion/json`   | JSON interoperability: `IonValue` ⇄ core `Json`          |
+| `ion` CLI     | `pkgs`        | `moonrockz/ion`        | `ion print`, `ion json`, `ion fromjson`, `ion hash`, `ion validate` — the module root package is the executable |
 
 ## Repository layout
 
@@ -38,7 +39,7 @@ so the repository root holds only module metadata, tooling, and tests.
   `moonx moonrockz/ion`;
 - `pkgs/ion/` is the `@ion` core data model (`moonrockz/ion/ion`);
 - `pkgs/text`, `pkgs/hash`, `pkgs/binary` (with the async `pkgs/binary/stream`),
-  and `pkgs/schema` are the remaining library packages.
+  `pkgs/json`, and `pkgs/schema` are the remaining library packages.
 
 The executable owns the module root (instead of living in a `cmd/` package) so
 that `moonx` can run it as `moonrockz/ion`; library users import the core model
@@ -59,6 +60,14 @@ Read and write Ion **binary**:
 let values = @text.read_ion_datagram!("{ name: \"ion\" } 42")
 let bytes = @binary.write_binary!(values) // Ion binary, with a local symbol table
 let decoded = @binary.read_binary!(bytes) // back to the same values
+```
+
+Convert between Ion and JSON:
+
+```moonbit skip nocheck
+let value = @text.read_ion!("{ name: \"ion\", tags: [a, b] }")
+let json = @json.to_json!(value) // {"name":"ion","tags":["a","b"]}
+let ion = @json.to_ion(json)     // back to the Ion data model
 ```
 
 Build a value programmatically:
@@ -149,6 +158,47 @@ The implementation is checked against the official
 and compares the serialization byte for byte. Only the 8 binary-only (`10n`)
 cases are skipped, pending the Ion binary codec.
 
+## JSON interoperability
+
+`@json` converts between the Ion data model and MoonBit's core `Json` type, in
+both directions. JSON is a strict subset of Ion, so the two directions are not
+inverses:
+
+```moonbit skip nocheck
+let value = @text.read_ion!("{ data: annot::{time: 1969-07-20T20:18Z}, n: 1.50 }")
+let json = @json.to_json!(value) // {"data":{"time":"1969-07-20T20:18Z"},"n":1.50}
+let ion = @json.to_ion(json)     // back into the Ion data model
+```
+
+- **JSON to Ion** is faithful in the sense that a JSON value converted to Ion
+  and back is the same JSON value, and it follows the cookbook's
+  [JSON-to-Ion rules](https://amazon-ion.github.io/ion-docs/guides/cookbook.html#migrating-json-data-to-ion):
+  `null`, booleans, strings, arrays, and objects map to the matching Ion
+  values, and a number becomes an Ion `int`, `decimal`, or `float` according to
+  its spelling. The spelling core kept in `repr` wins when present — core keeps
+  an integer literal above 2^53 - 1 and any literal that overflows a `Double` —
+  so large integers survive exactly; otherwise the number's shortest round-trip
+  spelling decides, so `1.50` becomes the Ion decimal `1.5` and `1e-7` an Ion
+  float.
+- **Ion to JSON** is lossy and follows the Ion cookbook's
+  [down-conversion process](https://amazon-ion.github.io/ion-docs/guides/cookbook.html#down-converting-to-json):
+  a null of any type becomes `null`; integers and decimals keep their precision;
+  `nan` and `±inf` become `null`; timestamps and symbols become strings; a clob
+  becomes a Latin-1 string and a blob a Base64 string; lists and s-expressions
+  become arrays; a struct becomes an object; annotations are dropped. A symbol
+  known only by symbol ID has no text, so converting it raises
+  `IonError::Unsupported` rather than inventing one.
+
+`@json.read_json` and `@json.write_json` wrap the same rules for JSON text:
+
+```moonbit skip nocheck
+let value = @json.read_json!("{\"a\": [1, 2]}") // {a: [1, 2]}
+let text = @json.write_json!(value)               // {"a":[1,2]}
+```
+
+The CLI exposes both directions: `ion json [file]` reads Ion (text or binary)
+and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
+
 ## Design notes
 
 - **Annotations live on the value.** Every `IonValue` carries an ordered
@@ -182,7 +232,6 @@ cases are skipped, pending the Ion binary codec.
   the constraints above.
 - Streaming readers over character sources (the async streaming reader covers
   Ion binary).
-- JSON interoperability (`IonValue` ⇄ `Json`).
 
 ## Building and testing
 
@@ -201,8 +250,9 @@ moon test --update   # refresh the golden fixtures' recorded output
 
 Besides the example and snapshot tests, several packages carry property tests
 (`property_test.mbt`) using the built-in QuickCheck: text round-trips, decimal
-and timestamp rendering, binary type descriptors, and Ion Hash invariances are
-checked over generated inputs, with counterexamples shrunk to a minimal case.
+and timestamp rendering, binary type descriptors, Ion Hash invariances, and the
+JSON conversions are checked over generated inputs, with counterexamples shrunk
+to a minimal case.
 
 ## License
 
