@@ -6,6 +6,11 @@ import {
   "moonrockz/ion/ion",
   "moonrockz/ion/text",
   "moonrockz/ion/binary",
+  "moonrockz/ion/binary/stream" @binary_stream,
+  "moonrockz/ion/text/stream" @text_stream,
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+  "moonbitlang/core/cmp",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/x/fs",
 } for "test"
