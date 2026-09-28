@@ -233,8 +233,13 @@ pub fn SymbolTable::apply_local_symbol_table(
   self : SymbolTable,
   value : IonValue,
 ) -> Bool raise IonError {
+  if !is_local_symbol_table_annotation(value) {
+    return false
+  }
   let fields = match value.kind() {
-    Struct(fields) if is_local_symbol_table_annotation(value) => fields
+    Struct(fields) => fields
+    // A null struct declares an empty table.
+    Null(Struct) => []
     _ => return false
   }
   let mut imports : IonValue? = None
@@ -295,13 +300,20 @@ fn imported_ids(import_ : IonValue) -> Int raise IonError {
   }
   let mut name : String? = None
   let mut max_id : IonValue? = None
+  let seen : Array[String] = []
   for field in fields {
     match field.name().text() {
-      Some("name") =>
-        if field.value().kind() is String(text) {
-          name = Some(text)
+      Some("name" | "version" | "max_id" as key) => {
+        if seen.contains(key) {
+          raise DataModel("an import has two \{key} fields")
         }
-      Some("max_id") => max_id = Some(field.value())
+        seen.push(key)
+        if key == "name" && field.value().kind() is String(text) {
+          name = Some(text)
+        } else if key == "max_id" {
+          max_id = Some(field.value())
+        }
+      }
       _ => ()
     }
   }

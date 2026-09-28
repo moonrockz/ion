@@ -289,3 +289,37 @@ test "the highest symbol ID counts only symbols without text" {
   assert_eq(@ion.highest_symbol_id(values), 27)
   assert_eq(@ion.highest_symbol_id([@ion.IonValue::symbol("a")]), 0)
 }
+
+///|
+test "a repeated field in an import is malformed" {
+  for field in ["name", "version", "max_id"] {
+    let fields = [
+      @ion.Field::new("name", @ion.IonValue::string("shared")),
+      @ion.Field::new("version", @ion.IonValue::int(1)),
+      @ion.Field::new("max_id", @ion.IonValue::int(1)),
+    ]
+    fields.push(
+      match field {
+        "name" => @ion.Field::new("name", @ion.IonValue::string("shared"))
+        _ => @ion.Field::new(field, @ion.IonValue::int(1))
+      },
+    )
+    let value = local_table([
+      @ion.Field::new(
+        "imports",
+        @ion.IonValue::list([@ion.IonValue::from_fields(fields)]),
+      ),
+    ])
+    let table = @ion.SymbolTable::system()
+    let mut failed = false
+    ignore(
+      table.apply_local_symbol_table(value) catch {
+        _ => {
+          failed = true
+          false
+        }
+      },
+    )
+    assert_true(failed)
+  }
+}
