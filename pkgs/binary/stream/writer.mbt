@@ -10,7 +10,7 @@ pub async fn write_all(
   writer : &@io.Writer,
   values : Array[@ion.IonValue],
 ) -> Unit {
-  let symbols = @binary.SymbolTable::for_values(values)
+  let symbols = @binary.symbols_for_values(values)
   writer.write(@binary.binary_version_marker())
   match @binary.local_symbol_table(symbols) {
     Some(table) => writer.write(table)

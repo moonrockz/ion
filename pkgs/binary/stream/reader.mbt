@@ -9,7 +9,7 @@
 /// A reader that pulls Ion binary values from an async byte source.
 pub struct BinaryReader {
   source : &@io.Reader
-  table : @binary.SymbolTable
+  table : @ion.SymbolTable
   mut buffer : Bytes
   mut eof : Bool
 }
@@ -20,7 +20,7 @@ pub struct BinaryReader {
 pub fn BinaryReader::new(source : &@io.Reader) -> BinaryReader {
   {
     source,
-    table: @binary.SymbolTable::system(),
+    table: @ion.SymbolTable::system(),
     buffer: Bytes::new(0),
     eof: false,
   }
@@ -46,14 +46,14 @@ pub async fn BinaryReader::next(self : BinaryReader) -> @ion.IonValue? {
       if self.buffer.length() >= 4 &&
         @binary.has_version_marker(self.buffer[:], 0) {
         self.buffer = self.buffer[4:].to_owned()
-        self.table.set_locals([])
+        self.table.reset()
         continue
       }
     }
     match @binary.decode_value(self.buffer[:], 0, self.table) {
       Some((value, consumed)) => {
         self.buffer = self.buffer[consumed:].to_owned()
-        match self.table.accept(value) {
+        match @binary.accept_value(self.table, value) {
           Some(value) => result = Some(value)
           None => ()
         }

@@ -250,8 +250,8 @@ fn is_bare_symbol(text : String) -> Bool {
 
 ///|
 /// Whether `text` is a reserved token that must be quoted to be read back as a
-/// symbol: a reserved keyword such as `null` or `true`, or a symbol-ID literal
-/// such as `$1`.
+/// symbol: a reserved keyword such as `null` or `true`, a symbol-ID literal
+/// such as `$1`, or a version marker such as `$ion_1_0`.
 fn is_reserved_symbol(text : String) -> Bool {
   match text {
     "null" | "true" | "false" | "nan" => true
@@ -259,7 +259,7 @@ fn is_reserved_symbol(text : String) -> Bool {
       if text.has_prefix("null.") {
         @ion.IonType::from_text(text[5:]) is Some(_)
       } else {
-        is_symbol_id_literal(text)
+        is_symbol_id_literal(text) || is_version_marker_literal(text)
       }
   }
 }

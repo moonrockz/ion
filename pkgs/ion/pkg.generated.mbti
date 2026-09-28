@@ -163,6 +163,19 @@ pub(all) enum IonValueKind {
 } derive(@debug.Debug)
 pub fn IonValueKind::to_repr(Self) -> @debug.Repr
 
+type SymbolTable
+pub fn SymbolTable::apply_local_symbol_table(Self, IonValue) -> Bool raise IonError
+pub fn SymbolTable::find(Self, String) -> Int?
+pub fn SymbolTable::intern(Self, String) -> Int
+pub fn SymbolTable::is_empty(Self) -> Bool
+pub fn SymbolTable::locals(Self) -> Array[String?]
+pub fn SymbolTable::max_id(Self) -> Int
+pub fn SymbolTable::reset(Self) -> Unit
+pub fn SymbolTable::resolve(Self, IonValue) -> IonValue
+pub fn SymbolTable::system() -> Self
+pub fn SymbolTable::text(Self, Int) -> String?
+pub fn SymbolTable::token(Self, Int) -> SymbolToken
+
 pub struct SymbolToken {
   text : String?
   sid : Int?

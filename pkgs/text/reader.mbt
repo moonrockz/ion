@@ -60,31 +60,44 @@ fn is_base64_char(c : UInt16) -> Bool {
 
 ///|
 /// Parse exactly one Ion value, requiring that only whitespace and comments
-/// follow it.
+/// follow it. Version markers and local symbol tables before the value are
+/// applied rather than returned.
 pub fn read_ion(text : StringView) -> @ion.IonValue raise @ion.IonError {
   let parser = Parser::new(text)
+  let symbols = @ion.SymbolTable::system()
+  let mut result : @ion.IonValue? = None
   parser.skip_ws()
-  if parser.at_end() {
-    raise @ion.IonError::Syntax("expected an Ion value, found end of input")
+  while result is None {
+    if parser.at_end() {
+      raise @ion.IonError::Syntax("expected an Ion value, found end of input")
+    }
+    let (value, marker) = parser.parse_top_level_value()
+    result = apply_top_level(symbols, value, marker)
+    parser.skip_ws()
   }
-  let value = parser.parse_value()
-  parser.skip_ws()
   if !parser.at_end() {
     raise @ion.IonError::Syntax("unexpected trailing input after the Ion value")
   }
-  value
+  result.unwrap()
 }
 
 ///|
 /// Parse a whole Ion datagram: a whitespace-separated sequence of values.
+/// Version markers and local symbol tables are applied rather than returned,
+/// so every symbol ID a local symbol table defines comes back with its text.
 pub fn read_ion_datagram(
   text : StringView,
 ) -> Array[@ion.IonValue] raise @ion.IonError {
   let parser = Parser::new(text)
+  let symbols = @ion.SymbolTable::system()
   let values : Array[@ion.IonValue] = []
   parser.skip_ws()
   while !parser.at_end() {
-    values.push(parser.parse_value())
+    let (value, marker) = parser.parse_top_level_value()
+    match apply_top_level(symbols, value, marker) {
+      Some(value) => values.push(value)
+      None => ()
+    }
     parser.skip_ws()
   }
   values
@@ -96,6 +109,11 @@ pub fn read_ion_datagram(
 /// value and the number of code units it spans, including the whitespace and
 /// comments after it; `None` means no value is available yet.
 ///
+/// A version marker or a local symbol table updates `symbols` and comes back
+/// as `Some((None, consumed))`; any other value comes back with the symbol IDs
+/// that `symbols` defines resolved. `symbols` changes only when a value is
+/// returned, so a caller can retry the same text after `None`.
+///
 /// While `end_of_input` is false, a value is returned only when it is settled:
 /// it closes with `]`, `)`, `}`, or `"`, or the text that follows it shows
 /// where it ends. A value that fails to parse is taken to be cut short, so
@@ -103,14 +121,50 @@ pub fn read_ion_datagram(
 /// whitespace and comments remain, and a malformed value raises.
 pub fn read_ion_prefix(
   text : StringView,
+  symbols~ : @ion.SymbolTable,
   end_of_input~ : Bool,
-) -> (@ion.IonValue, Int)? raise @ion.IonError {
-  if end_of_input {
+) -> (@ion.IonValue?, Int)? raise @ion.IonError {
+  let prefix = if end_of_input {
     read_prefix(text, end_of_input=true)
   } else {
     read_prefix(text, end_of_input=false) catch {
       _ => None
     }
+  }
+  match prefix {
+    Some((value, marker, consumed)) =>
+      Some((apply_top_level(symbols, value, marker), consumed))
+    None => None
+  }
+}
+
+///|
+/// Apply a top-level value to `symbols`: an unquoted `$ion_1_0` (a `marker`)
+/// resets the table and a local symbol table updates it, and neither is
+/// returned. Any other value comes back with its symbol IDs resolved.
+fn apply_top_level(
+  symbols : @ion.SymbolTable,
+  value : @ion.IonValue,
+  marker : Bool,
+) -> @ion.IonValue? raise @ion.IonError {
+  if marker &&
+    value.annotations().is_empty() &&
+    value.kind() is @ion.IonValueKind::Symbol(token) &&
+    token.text() is Some(text) &&
+    is_version_marker_literal(text) {
+    if text != "$ion_1_0" {
+      raise @ion.IonError::Unsupported(
+        "the Ion version marker \{text} is not supported; only Ion 1.0 is",
+      )
+    }
+    symbols.reset()
+    return None
+  }
+  let value = symbols.resolve(value)
+  if symbols.apply_local_symbol_table(value) {
+    None
+  } else {
+    Some(value)
   }
 }
 
@@ -135,24 +189,25 @@ fn is_closing_delimiter(last : UInt16) -> Bool {
 }
 
 ///|
-/// `read_ion_prefix`, raising on a malformed value whether or not the input
-/// has ended.
+/// The raw first value of `read_ion_prefix`, whether it may be a version
+/// marker, and the code units it spans. Raises on a malformed value whether or
+/// not the input has ended.
 fn read_prefix(
   text : StringView,
   end_of_input~ : Bool,
-) -> (@ion.IonValue, Int)? raise @ion.IonError {
+) -> (@ion.IonValue, Bool, Int)? raise @ion.IonError {
   let parser = Parser::new(text)
   parser.skip_ws()
   if parser.at_end() {
     return None
   }
-  let value = parser.parse_value()
+  let (value, marker) = parser.parse_top_level_value()
   let closed = is_closing_delimiter(text[parser.pos - 1])
   parser.skip_ws()
   if !end_of_input && !closed && parser.pos + settle_lookahead > text.length() {
     return None
   }
-  Some((value, parser.pos))
+  Some((value, marker, parser.pos))
 }
 
 ///|
@@ -246,6 +301,16 @@ fn Parser::skip_lob_ws(self : Parser) -> Unit {
   while !self.at_end() && is_space_unit(self.input[self.pos]) {
     self.pos += 1
   }
+}
+
+///|
+/// Read a top-level value, and whether it is spelled as an unquoted `$ion_`
+/// identifier, the only spelling of a version marker.
+fn Parser::parse_top_level_value(
+  self : Parser,
+) -> (@ion.IonValue, Bool) raise @ion.IonError {
+  let marker = self.starts_with("$ion_")
+  (self.parse_value(), marker)
 }
 
 ///|

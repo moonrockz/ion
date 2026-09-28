@@ -10,13 +10,34 @@ let framing : String =
   #|'it\'s' "q\"}]" '''long\''''  /* ** */ '''er''' abc a :: b
   #|{a: {{ //8= }}, b: {{ "}}" }}, c: {{ '''x}}''' '''y''' }}, 'd': []}
   #|(a / b // comment ]
-  #|  (+ 1 -2) [x, (y)]) {x: '''z'''} "é ✓ 😀" last
+  #|  (+ 1 -2) [x, (y)]) {x: '''z'''} "é ✓ 😀"
+  #|$ion_symbol_table::{symbols: ["s1", "s2"]} $10 $11::$10
+  #|$ion_symbol_table::{imports: $ion_symbol_table, symbols: ["s3"]} {$12: $10}
+  #|$ion_1_0 $10 last
   #|
 
 ///|
 /// A reader over no source, fed by `append` instead of `fill`.
 fn detached_reader() -> TextReader {
   TextReader::new(@io.MemoryReader(fn(_) { () }))
+}
+
+///|
+/// Whether a parse of `pending` would settle a value that is not a version
+/// marker or a local symbol table. Whether a value is ready does not depend on
+/// the symbols, so a fresh table keeps the reader's own from being updated
+/// twice.
+fn user_value_ready(pending : StringView) -> Bool raise {
+  let symbols = @ion.SymbolTable::system()
+  let mut rest = pending
+  while true {
+    match @text.read_ion_prefix(rest, symbols~, end_of_input=false) {
+      Some((Some(_), _)) => return true
+      Some((None, consumed)) => rest = rest.view(start_offset=consumed)
+      None => return false
+    }
+  }
+  false
 }
 
 ///|
@@ -41,12 +62,11 @@ fn check_framing(text : String, chunk : Int) -> Unit raise {
     reader.append(text[offset:end].to_owned())
     offset = end
     while true {
-      let pending = reader.pending()
-      let ready = @text.read_ion_prefix(pending, end_of_input=false)
+      let ready = user_value_ready(reader.pending())
       match reader.take() {
         Some(value) => values.push(value)
         None => {
-          assert_true(ready is None)
+          assert_false(ready)
           break
         }
       }

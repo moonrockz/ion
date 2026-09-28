@@ -83,7 +83,7 @@ fn null_type(type_code : Int) -> @ion.IonType raise @ion.IonError {
 pub fn decode_value(
   bytes : BytesView,
   offset : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> (@ion.IonValue, Int)? raise @ion.IonError {
   let mut start = offset
   let mut result : (@ion.IonValue, Int)? = None
@@ -113,7 +113,7 @@ pub fn decode_value(
 /// before decoding.
 fn decode_element(
   cursor : Cursor,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let descriptor = cursor.octet()
   let type_code = descriptor >> 4
@@ -134,7 +134,7 @@ fn decode_typed(
   cursor : Cursor,
   type_code : Int,
   nibble : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   if nibble == 0x0F {
     return @ion.IonValue::typed_null(null_type(type_code))
@@ -342,7 +342,7 @@ fn decode_timestamp(
 fn decode_symbol(
   cursor : Cursor,
   length : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let sid = if length == 0 { 0 } else { cursor.uint(length).to_int() }
   @ion.IonValue::symbol_token(table.token(sid))
@@ -366,7 +366,7 @@ fn decode_string(
 fn decode_sequence(
   cursor : Cursor,
   end : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
   is_list : Bool,
 ) -> @ion.IonValue raise @ion.IonError {
   let inner = cursor.scoped(end)
@@ -391,7 +391,7 @@ fn decode_sequence(
 fn decode_struct(
   cursor : Cursor,
   end : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let inner = cursor.scoped(end)
   let fields : Array[@ion.Field] = []
@@ -415,7 +415,7 @@ fn decode_struct(
 fn decode_annotated(
   cursor : Cursor,
   nibble : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let length = if nibble == 0x0E { cursor.var_uint() } else { nibble }
   let end = cursor.pos + length
@@ -472,104 +472,24 @@ pub fn is_padding_only(
 }
 
 ///|
-/// Consume a top-level value: a local symbol table and a version marker update
-/// the table instead of being returned, and everything else is a value.
-pub fn SymbolTable::accept(
-  self : SymbolTable,
+/// Consume a top-level value as a reader sees it: a version marker symbol
+/// resets `symbols` and a local symbol table updates it, and neither is
+/// returned; everything else is a value.
+pub fn accept_value(
+  symbols : @ion.SymbolTable,
   value : @ion.IonValue,
 ) -> @ion.IonValue? raise @ion.IonError {
-  match value.kind() {
-    @ion.IonValueKind::Symbol(token) =>
-      match token.text() {
-        Some("$ion_1_0") => {
-          self.set_locals([])
-          None
-        }
-        _ => Some(value)
-      }
-    @ion.IonValueKind::Struct(fields) =>
-      if has_annotation(value, "$ion_symbol_table") {
-        self.load_local_symbol_table(fields)
-        None
-      } else {
-        Some(value)
-      }
-    _ => Some(value)
+  if value.annotations().is_empty() &&
+    value.kind() is @ion.IonValueKind::Symbol(token) &&
+    token.text() == Some("$ion_1_0") {
+    symbols.reset()
+    return None
   }
-}
-
-///|
-/// Whether a value carries the named annotation.
-fn has_annotation(value : @ion.IonValue, name : String) -> Bool {
-  for annotation in value.annotations() {
-    if annotation.text() == Some(name) {
-      return true
-    }
+  if symbols.apply_local_symbol_table(value) {
+    None
+  } else {
+    Some(value)
   }
-  false
-}
-
-///|
-/// The value of a field named `name`, when present.
-fn field_value(fields : Array[@ion.Field], name : String) -> @ion.IonValue? {
-  for field in fields {
-    if field.name().text() == Some(name) {
-      return Some(field.value())
-    }
-  }
-  None
-}
-
-///|
-/// Apply a local symbol table: the `symbols` field lists the texts of the
-/// symbols that follow, in ID order from 10. An `imports` field is rejected
-/// unless it names the system table, because shared symbol tables are not
-/// implemented — silently ignoring an import would resolve IDs to wrong text.
-fn SymbolTable::load_local_symbol_table(
-  self : SymbolTable,
-  fields : Array[@ion.Field],
-) -> Unit raise @ion.IonError {
-  match field_value(fields, "imports") {
-    Some(imports) =>
-      match imports.kind() {
-        @ion.IonValueKind::Symbol(token) =>
-          if token.text() != Some("$ion_symbol_table") {
-            raise @ion.IonError::Unsupported(
-              "shared symbol table imports are not supported",
-            )
-          }
-        @ion.IonValueKind::Null(_) => ()
-        _ =>
-          raise @ion.IonError::Unsupported(
-            "shared symbol table imports are not supported",
-          )
-      }
-    None => ()
-  }
-  let texts : Array[String] = []
-  match field_value(fields, "symbols") {
-    Some(symbols) =>
-      match symbols.kind() {
-        @ion.IonValueKind::List(items) =>
-          for item in items {
-            match item.kind() {
-              @ion.IonValueKind::String(text) => texts.push(text)
-              @ion.IonValueKind::Null(_) => texts.push("")
-              _ =>
-                raise @ion.IonError::DataModel(
-                  "a symbol table's symbols must be strings",
-                )
-            }
-          }
-        @ion.IonValueKind::Null(_) => ()
-        _ =>
-          raise @ion.IonError::DataModel(
-            "a symbol table's symbols field must be a list",
-          )
-      }
-    None => ()
-  }
-  self.set_locals(texts)
 }
 
 ///|
@@ -578,19 +498,19 @@ fn SymbolTable::load_local_symbol_table(
 pub fn read_binary(
   bytes : BytesView,
 ) -> Array[@ion.IonValue] raise @ion.IonError {
-  let table = SymbolTable::system()
+  let table = @ion.SymbolTable::system()
   let values : Array[@ion.IonValue] = []
   let mut offset = 0
   while offset < bytes.length() {
     if has_version_marker(bytes, offset) {
       offset += 4
-      table.set_locals([])
+      table.reset()
       continue
     }
     match decode_value(bytes, offset, table) {
       Some((value, consumed)) => {
         offset += consumed
-        match table.accept(value) {
+        match accept_value(table, value) {
           Some(value) => values.push(value)
           None => ()
         }

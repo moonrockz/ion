@@ -3,7 +3,6 @@ package "moonrockz/ion/binary/stream"
 
 import {
   "moonbitlang/async/io",
-  "moonrockz/ion/binary",
   "moonrockz/ion/ion",
 }
 
@@ -15,7 +14,7 @@ pub async fn write_all(&@io.Writer, Array[@ion.IonValue]) -> Unit
 // Types and methods
 pub struct BinaryReader {
   source : &@io.Reader
-  table : @binary.SymbolTable
+  table : @ion.SymbolTable
   mut buffer : Bytes
   mut eof : Bool
 }

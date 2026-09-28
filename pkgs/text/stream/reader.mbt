@@ -23,6 +23,9 @@ struct TextReader {
   /// only when a parse is tried, so waiting on a large value copies nothing.
   arrived : StringBuilder
   framer : Framer
+  /// The symbols in effect, as version markers and local symbol tables set
+  /// them.
+  symbols : @ion.SymbolTable
   /// The code units at the end that the framer has not read yet.
   mut unscanned : String
   /// The octets of a UTF-8 character that a read split in two.
@@ -40,6 +43,7 @@ pub fn TextReader::new(source : &@io.Reader) -> TextReader {
     start: 0,
     arrived: StringBuilder(),
     framer: Framer::new(),
+    symbols: @ion.SymbolTable::system(),
     unscanned: "",
     partial: Bytes::new(0),
     eof: false,
@@ -62,21 +66,29 @@ pub async fn TextReader::next(self : TextReader) -> @ion.IonValue? {
 ///|
 /// The next value in the text that has arrived, or `None` when it holds none
 /// yet. A parse is tried only at the end of the stream, or when the framer
-/// has seen the text at the top level since the last try.
+/// has seen the text at the top level since the last try. Version markers and
+/// local symbol tables update the symbol table and are not returned.
 fn TextReader::take(self : TextReader) -> @ion.IonValue? raise @ion.IonError {
-  if !self.eof && !self.framer.at_top {
-    return None
-  }
-  self.framer.at_top = false
-  match @text.read_ion_prefix(self.pending(), end_of_input=self.eof) {
-    Some((value, consumed)) => {
-      self.start += consumed
-      // The rest of the text may already hold the next value.
-      self.framer.at_top = true
-      Some(value)
+  while self.eof || self.framer.at_top {
+    self.framer.at_top = false
+    match
+      @text.read_ion_prefix(
+        self.pending(),
+        symbols=self.symbols,
+        end_of_input=self.eof,
+      ) {
+      Some((value, consumed)) => {
+        self.start += consumed
+        // The rest of the text may already hold the next value.
+        self.framer.at_top = true
+        if value is Some(_) {
+          return value
+        }
+      }
+      None => return None
     }
-    None => None
   }
+  None
 }
 
 ///|

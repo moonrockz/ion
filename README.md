@@ -252,6 +252,12 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   value type itself keeps Ion's exact scale and signed zero.
 - **Derived precision.** A timestamp's precision is derived from which
   components are present, not stored separately.
+- **One symbol table for both encodings.** `@ion.SymbolTable` holds the
+  symbols in effect in a stream. The text and binary readers apply a version
+  marker (`$ion_1_0` unquoted at the top level, or the binary marker) and a
+  top-level `$ion_symbol_table::{...}` struct to it instead of returning them,
+  and resolve each symbol ID against it. A symbol ID that no table defines
+  keeps only its ID.
 - **Unsupported is an error.** The schema loader raises
   `IonError::Unsupported` for constructs it does not implement, rather than
   silently ignoring them.
@@ -267,9 +273,6 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
   the constraints above.
-- Ion text: local symbol tables. The text reader returns `$ion_1_0` and
-  `$ion_symbol_table::{...}` as ordinary values instead of applying them, so a
-  symbol ID such as `$10` keeps no text.
 - Conformance: run the codecs against the official
   [ion-tests](https://github.com/amazon-ion/ion-tests) good and bad files. Only
   the Ion Hash suite runs today.

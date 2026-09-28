@@ -7,8 +7,10 @@ fn prefix(
   text : String,
   end_of_input~ : Bool,
 ) -> (String, Int)? raise @ion.IonError {
-  match @text.read_ion_prefix(text, end_of_input~) {
-    Some((value, consumed)) => Some((@text.write_ion(value), consumed))
+  let symbols = @ion.SymbolTable::system()
+  match @text.read_ion_prefix(text, symbols~, end_of_input~) {
+    Some((Some(value), consumed)) => Some((@text.write_ion(value), consumed))
+    Some((None, consumed)) => Some(("", consumed))
     None => None
   }
 }

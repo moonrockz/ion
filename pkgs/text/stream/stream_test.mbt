@@ -76,6 +76,9 @@ let tricky : String =
   #|{a: 1, 'b': [2, (+ 3 -4)], c: {{ aGVsbG8= }}, d: {{ "clob" }}}
   #|(a <= b // comment
   #|  ) [] {} "é ✓ 😀" 'ünïcödé' // end
+  #|$ion_symbol_table::{symbols: ["s1", "s2"]} $10 $11::{$10: $11}
+  #|$ion_symbol_table::{imports: $ion_symbol_table, symbols: ["s3"]} $12
+  #|$ion_1_0 $10
   #|
 
 ///|

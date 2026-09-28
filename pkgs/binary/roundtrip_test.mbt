@@ -307,3 +307,72 @@ test "generated values survive Ion binary" {
     }
   })
 }
+
+///|
+/// The symbols that `values` read back to after a binary round trip, as text.
+/// A value may be a local symbol table, which the reader applies.
+fn read_back_text(values : Array[@ion.IonValue]) -> String raise {
+  @text.write_all(@binary.read_binary(@binary.write_binary(values)))
+}
+
+///|
+/// A local symbol table value declaring `symbols`, with `imports` when given.
+fn table_value(
+  symbols : Array[@ion.IonValue],
+  imports? : @ion.IonValue,
+) -> @ion.IonValue {
+  let fields = [@ion.Field::new("symbols", @ion.IonValue::list(symbols))]
+  if imports is Some(imports) {
+    fields.insert(0, @ion.Field::new("imports", imports))
+  }
+  @ion.IonValue::from_fields(fields).with_annotations([
+    @ion.SymbolToken::new("$ion_symbol_table"),
+  ])
+}
+
+///|
+/// A symbol known only by its ID.
+fn sid_symbol(sid : Int) -> @ion.IonValue {
+  @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(sid))
+}
+
+///|
+test "a symbol table slot that is not a string has unknown text" {
+  let table = table_value([
+    @ion.IonValue::untyped_null(),
+    @ion.IonValue::string("b"),
+  ])
+  assert_eq(read_back_text([table, sid_symbol(10), sid_symbol(11)]), "$10\nb")
+}
+
+///|
+test "importing $ion_symbol_table appends to the local symbols" {
+  let first = table_value([@ion.IonValue::string("a")])
+  let second = table_value(
+    [@ion.IonValue::string("b")],
+    imports=@ion.IonValue::symbol("$ion_symbol_table"),
+  )
+  assert_eq(
+    read_back_text([first, second, sid_symbol(10), sid_symbol(11)]),
+    "a\nb",
+  )
+}
+
+///|
+test "a struct is a symbol table only when its first annotation says so" {
+  let struct_ = @ion.IonValue::from_fields([
+    @ion.Field::new(
+      "symbols",
+      @ion.IonValue::list([@ion.IonValue::string("a")]),
+    ),
+  ]).with_annotations([
+    @ion.SymbolToken::new("x"),
+    @ion.SymbolToken::new("$ion_symbol_table"),
+  ])
+  // The writer's own table declares `x` as symbol 10. Had the struct been
+  // applied as a table, symbol 10 would read back as `a`.
+  assert_eq(
+    read_back_text([struct_, sid_symbol(10)]),
+    "x::$ion_symbol_table::{symbols: [\"a\"]}\nx",
+  )
+}
