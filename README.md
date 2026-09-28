@@ -292,9 +292,9 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
 Tooling is configured with [mise](https://mise.jdx.dev):
 
 ```bash
-moon update          # install dependencies
+mise run setup       # fetch the ion-tests submodule and install dependencies
 mise run test:check  # moon check
-mise run test:unit   # moon test (unit, snapshot, and QuickCheck properties)
+mise run test:unit   # moon test (unit, doc, snapshot, conformance, QuickCheck)
 mise run test:all    # check + test
 mise run build:native
 moon fmt             # format
@@ -303,7 +303,8 @@ moon test --update   # refresh the golden fixtures' recorded output
 ```
 
 The official [ion-tests](https://github.com/amazon-ion/ion-tests) suite is a
-git submodule at `tests/ion-tests`; fetch it with
+git submodule at `tests/ion-tests`. `mise run setup` fetches it, and
+`mise run test:unit` fetches it first when it is missing; without mise, run
 `git submodule update --init` (or clone with `--recurse-submodules`).
 `pkgs/conformance` runs every Ion 1.0 file in it: each `good` file must read
 and survive a round trip through both writers, each `bad` file must fail, and

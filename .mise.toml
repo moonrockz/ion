@@ -4,8 +4,18 @@
 [tools]
 "cargo:git-cliff" = "2.7.0"
 
+[tasks.setup]
+description = "Initialize the repository: fetch the submodules and the MoonBit dependencies"
+depends = ["setup:submodules"]
+run = "moon update"
+
+[tasks."setup:submodules"]
+description = "Fetch the ion-tests conformance data (the tests/ion-tests submodule)"
+run = "git submodule update --init --recursive"
+
 [tasks."test:unit"]
 description = "Run MoonBit unit tests"
+depends = ["setup:submodules"]
 run = "moon test"
 
 [tasks."test:check"]
@@ -30,4 +40,5 @@ run = "git-cliff -o CHANGELOG.md"
 
 [tasks."release:pre-check"]
 description = "Validate release readiness (format, check, tests)"
+depends = ["setup:submodules"]
 run = "moon fmt --check && moon check && moon test"
