@@ -97,3 +97,33 @@ test "a top-level symbol with the text $ion_1_0 is a no-op" {
     "['$ion_1_0']\na::'$ion_1_0'",
   )
 }
+
+///|
+test "an underscore in a float or decimal must sit between two digits" {
+  for
+    text in [
+      "1_.2e3", "1._2e3", "1.2_e3", "1.2e_3", "1.2e3_", "-6.0__1e1", "1_.2", "1._2",
+      "1.2_", "1_d2", "_1.2e3",
+    ] {
+    assert_true(rejects(text))
+  }
+  assert_eq(
+    reads_as("1_0.2_5e1_0 1_0.2_5 -1_2.3d1"),
+    "102500000000e0\n1025d-2\n-123d0",
+  )
+}
+
+///|
+test "a null struct annotated $ion_symbol_table is an empty symbol table" {
+  assert_eq(
+    reads_as(
+      "$ion_symbol_table::{symbols: [\"a\"]} $10 $ion_symbol_table::null.struct first",
+    ),
+    "a\nfirst",
+  )
+  assert_true(
+    rejects(
+      "$ion_symbol_table::{symbols: [\"a\"]} $ion_symbol_table::null.struct $10",
+    ),
+  )
+}

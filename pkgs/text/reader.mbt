@@ -616,6 +616,7 @@ fn classify_number(token : StringView) -> @ion.IonValue raise @ion.IonError {
   }
   if has_exponent_d || has_dot || has_exponent_e {
     check_leading_zero(token, start)
+    check_underscores(token)
   }
   if has_exponent_d || (has_dot && !has_exponent_e) {
     return @ion.IonValue::decimal(@ion.Decimal::parse(token))
@@ -648,6 +649,25 @@ fn check_leading_zero(
     token[start] == '0' &&
     (is_digit(token[start + 1]) || token[start + 1] == '_') {
     raise @ion.IonError::Syntax("leading zeros are not allowed in a number")
+  }
+}
+
+///|
+/// Reject an underscore in a decimal or float that does not sit between two
+/// digits, such as in `1_.2`, `1.2e_3`, or `6.0__1e1`.
+fn check_underscores(token : StringView) -> Unit raise @ion.IonError {
+  for index in 0..<token.length() {
+    if token[index] == '_' &&
+      (
+        index == 0 ||
+        index + 1 >= token.length() ||
+        !is_digit(token[index - 1]) ||
+        !is_digit(token[index + 1])
+      ) {
+      raise @ion.IonError::Syntax(
+        "an underscore in a number must sit between two digits",
+      )
+    }
   }
 }
 

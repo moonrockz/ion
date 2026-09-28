@@ -325,7 +325,10 @@ and survive a round trip through both writers, each `bad` file must fail, and
 the `equivs` and `non-equivs` sequences must compare as their directory says.
 It also runs each file through the stream readers (in one-octet and 4 KiB
 chunks), the streaming event reader, the tokenizer and syntax tree, the pretty
-writer, and the async writers, which must agree with the sync reader.
+writer, and the async writers, which must agree with the sync reader. And it
+runs the Ion 1.0 cases of ion-tests' `conformance/` directory, written in its
+test language, which cover version markers, symbol tables, imports, and the
+data model.
 The two files skipped, each with its reason, are listed in
 `pkgs/conformance/ion_tests_test.mbt`; a skipped file that starts to pass fails
 the test.
