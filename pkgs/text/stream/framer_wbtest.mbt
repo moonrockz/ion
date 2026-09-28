@@ -13,7 +13,7 @@ let framing : String =
   #|  (+ 1 -2) [x, (y)]) {x: '''z'''} "é ✓ 😀"
   #|$ion_symbol_table::{symbols: ["s1", "s2"]} $10 $11::$10
   #|$ion_symbol_table::{imports: $ion_symbol_table, symbols: ["s3"]} {$12: $10}
-  #|$ion_1_0 $10 last
+  #|$ion_1_0 $4 last
   #|
 
 ///|
@@ -27,11 +27,15 @@ fn detached_reader() -> TextReader {
 /// marker or a local symbol table. Whether a value is ready does not depend on
 /// the symbols, so a fresh table keeps the reader's own from being updated
 /// twice.
-fn user_value_ready(pending : StringView) -> Bool raise {
+fn user_value_ready(pending : StringView) -> Bool {
   let symbols = @ion.SymbolTable::system()
   let mut rest = pending
   while true {
-    match @text.read_ion_prefix(rest, symbols~, end_of_input=false) {
+    // A value that the fresh table cannot resolve is still a whole value.
+    let prefix = @text.read_ion_prefix(rest, symbols~, end_of_input=false) catch {
+      _ => return true
+    }
+    match prefix {
       Some((Some(_), _)) => return true
       Some((None, consumed)) => rest = rest.view(start_offset=consumed)
       None => return false

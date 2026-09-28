@@ -150,14 +150,40 @@ test "a local symbol table applies to the values after it" {
 }
 
 ///|
-test "a symbol ID the table does not define keeps only its ID" {
+test "a symbol ID beyond the symbol table is rejected" {
   let stream : Array[Byte] = [0xE0, 0x01, 0x00, 0xEA, 0x71, 0x0B]
-  let values = @binary.read_binary(Bytes::from_array(stream))
+  let mut failed = false
+  ignore(
+    @binary.read_binary(Bytes::from_array(stream)) catch {
+      _ => {
+        failed = true
+        []
+      }
+    },
+  )
+  assert_true(failed)
+}
+
+///|
+test "a symbol ID with unknown text keeps only its ID" {
+  // `$ion_symbol_table::{symbols: [null]}` and then the symbol with ID 10.
+  let table = @ion.IonValue::from_fields([
+    @ion.Field::new(
+      "symbols",
+      @ion.IonValue::list([@ion.IonValue::untyped_null()]),
+    ),
+  ]).with_annotations([@ion.SymbolToken::new("$ion_symbol_table")])
+  let values = @binary.read_binary(
+    @binary.write_binary([
+      table,
+      @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(10)),
+    ]),
+  )
   assert_eq(values.length(), 1)
   match values[0].kind() {
     @ion.IonValueKind::Symbol(token) => {
       assert_eq(token.text(), None)
-      assert_eq(token.sid(), Some(11))
+      assert_eq(token.sid(), Some(10))
     }
     _ => fail("expected a symbol")
   }
@@ -342,7 +368,11 @@ test "a symbol table slot that is not a string has unknown text" {
     @ion.IonValue::untyped_null(),
     @ion.IonValue::string("b"),
   ])
-  assert_eq(read_back_text([table, sid_symbol(10), sid_symbol(11)]), "$10\nb")
+  // The writer reserves symbol 10, which has no text, when it writes it back.
+  assert_eq(
+    read_back_text([table, sid_symbol(10), sid_symbol(11)]),
+    "$ion_symbol_table::{imports: [{name: \"moonrockz.ion.unknown_symbols\", version: 1, max_id: 1}]}\n$10\nb",
+  )
 }
 
 ///|
@@ -369,11 +399,11 @@ test "a struct is a symbol table only when its first annotation says so" {
     @ion.SymbolToken::new("x"),
     @ion.SymbolToken::new("$ion_symbol_table"),
   ])
-  // The writer's own table declares `x` as symbol 10. Had the struct been
-  // applied as a table, symbol 10 would read back as `a`.
+  // The writer reserves symbol 10, whose text it does not know. Had the
+  // struct been applied as a table, symbol 10 would read back as `a`.
   assert_eq(
     read_back_text([struct_, sid_symbol(10)]),
-    "x::$ion_symbol_table::{symbols: [\"a\"]}\nx",
+    "x::$ion_symbol_table::{symbols: [\"a\"]}\n$ion_symbol_table::{imports: [{name: \"moonrockz.ion.unknown_symbols\", version: 1, max_id: 1}]}\n$10",
   )
 }
 
@@ -390,4 +420,38 @@ test "a decimal or timestamp followed by another value in a container" {
     assert_eq(read_back.length(), 1)
     assert_true(read_back[0].equals(values[0]))
   }
+}
+
+///|
+test "an ordered struct carries its length as a VarUInt" {
+  // `{name: null, version: false, imports: true}` as an ordered struct: the
+  // descriptor 0xD1, a VarUInt length of 6, and the fields in ID order.
+  let stream : Array[Byte] = [
+    0xE0, 0x01, 0x00, 0xEA, 0xD1, 0x86, 0x84, 0x0F, 0x85, 0x10, 0x86, 0x11,
+  ]
+  let values = @binary.read_binary(Bytes::from_array(stream))
+  assert_eq(
+    @text.write_all(values),
+    "{name: null, version: false, imports: true}",
+  )
+}
+
+///|
+test "symbols with unknown text keep their IDs apart from the writer's own" {
+  let values = [
+    @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(27)),
+    @ion.IonValue::symbol("a"),
+    @ion.IonValue::symbol("b"),
+  ]
+  let read_back = @binary.read_binary(@binary.write_binary(values))
+  assert_eq(read_back.length(), 3)
+  match read_back[0].kind() {
+    @ion.IonValueKind::Symbol(token) => {
+      assert_eq(token.text(), None)
+      assert_eq(token.sid(), Some(27))
+    }
+    _ => fail("expected a symbol")
+  }
+  assert_true(read_back[1].equals(values[1]))
+  assert_true(read_back[2].equals(values[2]))
 }

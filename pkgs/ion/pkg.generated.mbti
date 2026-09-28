@@ -16,6 +16,8 @@ pub fn days_in_month(Int, Int) -> Int
 
 pub fn[A] fold_values(Array[IonValue], A, IonFold[A]) -> A
 
+pub fn highest_symbol_id(Array[IonValue]) -> Int
+
 pub fn is_leap_year(Int) -> Bool
 
 pub fn shift_date(Int, Int, Int, Int) -> (Int, Int, Int)
@@ -169,11 +171,14 @@ pub fn SymbolTable::find(Self, String) -> Int?
 pub fn SymbolTable::intern(Self, String) -> Int
 pub fn SymbolTable::is_empty(Self) -> Bool
 pub fn SymbolTable::locals(Self) -> Array[String?]
+pub fn SymbolTable::lookup(Self, Int) -> SymbolToken raise IonError
 pub fn SymbolTable::max_id(Self) -> Int
+pub fn SymbolTable::reserve(Self, Int) -> Unit
 pub fn SymbolTable::reset(Self) -> Unit
-pub fn SymbolTable::resolve(Self, IonValue) -> IonValue
+pub fn SymbolTable::resolve(Self, IonValue) -> IonValue raise IonError
 pub fn SymbolTable::system() -> Self
 pub fn SymbolTable::text(Self, Int) -> String?
+pub fn SymbolTable::to_local_symbol_table(Self) -> IonValue?
 pub fn SymbolTable::token(Self, Int) -> SymbolToken
 
 pub struct SymbolToken {
@@ -216,6 +221,7 @@ pub fn Timestamp::precision(Self) -> TimestampPrecision
 pub fn Timestamp::second(Self) -> Int?
 pub fn Timestamp::to_ion_string(Self) -> String
 pub fn Timestamp::to_repr(Self) -> @debug.Repr
+pub fn Timestamp::validate(Self) -> Unit raise IonError
 pub fn Timestamp::year(Self) -> Int
 
 pub(all) enum TimestampOffset {

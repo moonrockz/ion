@@ -71,8 +71,7 @@ pub fn read_ion(text : StringView) -> @ion.IonValue raise @ion.IonError {
     if parser.at_end() {
       raise @ion.IonError::Syntax("expected an Ion value, found end of input")
     }
-    let (value, marker) = parser.parse_top_level_value()
-    result = apply_top_level(symbols, value, marker)
+    result = apply_top_level(symbols, parser.parse_top_level_value())
     parser.skip_ws()
   }
   if !parser.at_end() {
@@ -93,8 +92,7 @@ pub fn read_ion_datagram(
   let values : Array[@ion.IonValue] = []
   parser.skip_ws()
   while !parser.at_end() {
-    let (value, marker) = parser.parse_top_level_value()
-    match apply_top_level(symbols, value, marker) {
+    match apply_top_level(symbols, parser.parse_top_level_value()) {
       Some(value) => values.push(value)
       None => ()
     }
@@ -132,21 +130,22 @@ pub fn read_ion_prefix(
     }
   }
   match prefix {
-    Some((value, marker, consumed)) =>
-      Some((apply_top_level(symbols, value, marker), consumed))
+    Some((top_level, consumed)) =>
+      Some((apply_top_level(symbols, top_level), consumed))
     None => None
   }
 }
 
 ///|
-/// Apply a top-level value to `symbols`: an unquoted `$ion_1_0` (a `marker`)
-/// resets the table and a local symbol table updates it, and neither is
+/// Apply a top-level value to `symbols`: an unquoted `$ion_1_0` (a marker)
+/// resets the table, a local symbol table updates it, and any other
+/// unannotated symbol with the text `$ion_1_0` is a no-op; none of them is
 /// returned. Any other value comes back with its symbol IDs resolved.
 fn apply_top_level(
   symbols : @ion.SymbolTable,
-  value : @ion.IonValue,
-  marker : Bool,
+  top_level : TopLevel,
 ) -> @ion.IonValue? raise @ion.IonError {
+  let { value, marker, symbol_ids, } = top_level
   if marker &&
     value.annotations().is_empty() &&
     value.kind() is @ion.IonValueKind::Symbol(token) &&
@@ -160,12 +159,22 @@ fn apply_top_level(
     symbols.reset()
     return None
   }
-  let value = symbols.resolve(value)
-  if symbols.apply_local_symbol_table(value) {
+  let value = if symbol_ids { symbols.resolve(value) } else { value }
+  if symbols.apply_local_symbol_table(value) || is_version_marker_symbol(value) {
     None
   } else {
     Some(value)
   }
+}
+
+///|
+/// Whether a top-level value is an unannotated symbol with the text
+/// `$ion_1_0` that is not spelled as a version marker, such as `'$ion_1_0'` or
+/// `$2`. Such a value is a no-op: a reader drops it and keeps its table.
+fn is_version_marker_symbol(value : @ion.IonValue) -> Bool {
+  value.annotations().is_empty() &&
+  value.kind() is @ion.IonValueKind::Symbol(token) &&
+  token.text() == Some("$ion_1_0")
 }
 
 ///|
@@ -189,25 +198,25 @@ fn is_closing_delimiter(last : UInt16) -> Bool {
 }
 
 ///|
-/// The raw first value of `read_ion_prefix`, whether it may be a version
-/// marker, and the code units it spans. Raises on a malformed value whether or
-/// not the input has ended.
+/// The first value of `read_ion_prefix` as the parser read it, and the code
+/// units it spans. Raises on a malformed value whether or not the input has
+/// ended.
 fn read_prefix(
   text : StringView,
   end_of_input~ : Bool,
-) -> (@ion.IonValue, Bool, Int)? raise @ion.IonError {
+) -> (TopLevel, Int)? raise @ion.IonError {
   let parser = Parser::new(text)
   parser.skip_ws()
   if parser.at_end() {
     return None
   }
-  let (value, marker) = parser.parse_top_level_value()
+  let top_level = parser.parse_top_level_value()
   let closed = is_closing_delimiter(text[parser.pos - 1])
   parser.skip_ws()
   if !end_of_input && !closed && parser.pos + settle_lookahead > text.length() {
     return None
   }
-  Some((value, marker, parser.pos))
+  Some((top_level, parser.pos))
 }
 
 ///|
@@ -217,12 +226,15 @@ priv struct Parser {
   mut pos : Int
   /// Depth of nested S-expressions; operators are only recognized inside one.
   mut sexp_depth : Int
+  /// Whether the parser has read a symbol-ID literal that a symbol table must
+  /// resolve, since the flag was last cleared.
+  mut symbol_ids : Bool
 }
 
 ///|
 /// A parser positioned at the start of `input`.
 fn Parser::new(input : StringView) -> Parser {
-  { input, pos: 0, sexp_depth: 0, }
+  { input, pos: 0, sexp_depth: 0, symbol_ids: false, }
 }
 
 ///|
@@ -306,11 +318,33 @@ fn Parser::skip_lob_ws(self : Parser) -> Unit {
 ///|
 /// Read a top-level value, and whether it is spelled as an unquoted `$ion_`
 /// identifier, the only spelling of a version marker.
-fn Parser::parse_top_level_value(
-  self : Parser,
-) -> (@ion.IonValue, Bool) raise @ion.IonError {
+fn Parser::parse_top_level_value(self : Parser) -> TopLevel raise @ion.IonError {
   let marker = self.starts_with("$ion_")
-  (self.parse_value(), marker)
+  self.symbol_ids = false
+  let value = self.parse_value()
+  { value, marker, symbol_ids: self.symbol_ids, }
+}
+
+///|
+/// A top-level value as the parser read it, before a symbol table applies.
+priv struct TopLevel {
+  value : @ion.IonValue
+  /// Spelled as an unquoted `$ion_` identifier, the only spelling of a
+  /// version marker.
+  marker : Bool
+  /// Holds a symbol-ID literal that the symbol table must resolve.
+  symbol_ids : Bool
+}
+
+///|
+/// The token for a symbol-ID literal such as `$10`, noting that the value
+/// holds one the symbol table must resolve.
+fn Parser::symbol_id(self : Parser, word : String) -> @ion.SymbolToken? {
+  let token = resolve_symbol_id(word)
+  if token is Some(token) && token.text() is None && token.sid() != Some(0) {
+    self.symbol_ids = true
+  }
+  token
 }
 
 ///|
@@ -339,12 +373,14 @@ fn Parser::parse_annotations(
       break
     }
     let c = self.input[self.pos]
+    let mut keyword = false
     let token : @ion.SymbolToken? = if c == '\'' {
       Some(self.parse_quoted_symbol())
     } else if is_identifier_start(c) {
       let word = self.parse_identifier()
+      keyword = is_keyword(word)
       Some(
-        match resolve_symbol_id(word) {
+        match self.symbol_id(word) {
           Some(token) => token
           None => @ion.SymbolToken::new(word)
         },
@@ -360,6 +396,11 @@ fn Parser::parse_annotations(
       Some(token) => {
         self.skip_ws()
         if self.peek_at(0) == Some(':') && self.peek_at(1) == Some(':') {
+          if keyword {
+            raise @ion.IonError::Syntax(
+              "a keyword must be quoted to be an annotation",
+            )
+          }
           self.pos += 2
           annotations.push(token)
         } else {
@@ -433,7 +474,7 @@ fn Parser::parse_unquoted(self : Parser) -> @ion.IonValue raise @ion.IonError {
 /// `true`, `false`, and `nan`; everything else is a symbol.
 fn Parser::parse_word(self : Parser) -> @ion.IonValue raise @ion.IonError {
   let word = self.parse_identifier()
-  match resolve_symbol_id(word) {
+  match self.symbol_id(word) {
     Some(token) => return @ion.IonValue::symbol_token(token)
     None => ()
   }
@@ -573,17 +614,77 @@ fn classify_number(token : StringView) -> @ion.IonValue raise @ion.IonError {
       _ => ()
     }
   }
+  if has_exponent_d || has_dot || has_exponent_e {
+    check_leading_zero(token, start)
+  }
   if has_exponent_d || (has_dot && !has_exponent_e) {
     return @ion.IonValue::decimal(@ion.Decimal::parse(token))
   }
   if has_exponent_e {
     let cleaned = strip_underscores(token)
     let value : Double = @string.parse_double(cleaned) catch {
+      // A well-formed literal beyond the range of a double is infinite.
+      Failure(_) if is_float_literal(cleaned) =>
+        if negative {
+          @double.neg_infinity
+        } else {
+          @double.infinity
+        }
       _ => raise @ion.IonError::Syntax("invalid float literal")
     }
     return @ion.IonValue::float(value)
   }
   @ion.IonValue::big_int(parse_decimal_int(token))
+}
+
+///|
+/// Reject a decimal or float whose integer part, from `start`, has a leading
+/// zero, such as `03.4` or `00e0`.
+fn check_leading_zero(
+  token : StringView,
+  start : Int,
+) -> Unit raise @ion.IonError {
+  if start + 1 < token.length() &&
+    token[start] == '0' &&
+    (is_digit(token[start + 1]) || token[start + 1] == '_') {
+    raise @ion.IonError::Syntax("leading zeros are not allowed in a number")
+  }
+}
+
+///|
+/// Whether `text` is a well-formed float literal: digits, an optional
+/// fraction, and an exponent, with an optional sign.
+fn is_float_literal(text : String) -> Bool {
+  let mut index = 0
+  let n = text.length()
+  if index < n && text[index] == '-' {
+    index += 1
+  }
+  let digits_start = index
+  while index < n && is_digit(text[index]) {
+    index += 1
+  }
+  if index == digits_start {
+    return false
+  }
+  if index < n && text[index] == '.' {
+    index += 1
+    while index < n && is_digit(text[index]) {
+      index += 1
+    }
+  }
+  if index >= n || (text[index] != 'e' && text[index] != 'E') {
+    return false
+  }
+  index += 1
+  if index < n && (text[index] == '+' || text[index] == '-') {
+    index += 1
+  }
+  let exponent_start = index
+  while index < n && is_digit(text[index]) {
+    index += 1
+  }
+  index > exponent_start && index == n
 }
 
 ///|
@@ -690,6 +791,7 @@ fn Parser::parse_double_quoted_string(
     if c == '\n' || c == '\r' {
       raise @ion.IonError::Syntax("unescaped newline in string")
     }
+    check_raw_unit(c, long=false)
     if c == '\\' {
       let code = self.parse_escape()
       if code >= 0 {
@@ -700,6 +802,34 @@ fn Parser::parse_double_quoted_string(
     }
   }
   sb.to_string()
+}
+
+///|
+/// Reject a raw control character, which a string, symbol, or clob must
+/// escape. Tab, vertical tab, and form feed are whitespace and allowed, and a
+/// long string or long clob (`long`) also allows raw newlines.
+fn check_raw_unit(c : UInt16, long~ : Bool) -> Unit raise @ion.IonError {
+  if c >= 0x20 {
+    return
+  }
+  match c.to_int() {
+    0x09 | 0x0B | 0x0C => ()
+    0x0A | 0x0D if long => ()
+    _ =>
+      raise @ion.IonError::Syntax(
+        "a raw control character must be escaped in a string, symbol, or clob",
+      )
+  }
+}
+
+///|
+/// Consume a raw carriage return, and the line feed after it if any. Either
+/// form of line ending reads as a line feed.
+fn Parser::skip_carriage_return(self : Parser) -> Unit {
+  self.pos += 1
+  if self.peek_at(0) == Some('\n') {
+    self.pos += 1
+  }
 }
 
 ///|
@@ -745,11 +875,15 @@ fn Parser::parse_long_string_body(
       break
     }
     let c = self.input[self.pos]
+    check_raw_unit(c, long=true)
     if c == '\\' {
       let code = self.parse_escape()
       if code >= 0 {
         sb.write_char(char_from_code(code))
       }
+    } else if c == '\r' {
+      self.skip_carriage_return()
+      sb.write_char('\n')
     } else {
       self.copy_code_point(sb)
     }
@@ -772,6 +906,10 @@ fn Parser::parse_quoted_symbol(
       self.pos += 1
       break
     }
+    if c == '\n' || c == '\r' {
+      raise @ion.IonError::Syntax("unescaped newline in symbol")
+    }
+    check_raw_unit(c, long=false)
     if c == '\\' {
       let code = self.parse_escape()
       if code >= 0 {
@@ -995,6 +1133,7 @@ fn Parser::parse_clob_body(self : Parser) -> Bytes raise @ion.IonError {
     if c == '\n' || c == '\r' {
       raise @ion.IonError::Syntax("unescaped newline in clob")
     }
+    check_raw_unit(c, long=false)
     if c == '\\' {
       match self.parse_clob_escape() {
         Some(code) => bytes.push(code.to_byte())
@@ -1020,7 +1159,8 @@ fn Parser::parse_long_clob_body(self : Parser) -> Bytes raise @ion.IonError {
   self.parse_one_long_clob(bytes)
   while true {
     let save = self.pos
-    self.skip_ws()
+    // Unlike a long string, a long clob allows no comments between its parts.
+    self.skip_lob_ws()
     if self.at_triple_quote() {
       self.parse_one_long_clob(bytes)
     } else {
@@ -1047,11 +1187,15 @@ fn Parser::parse_one_long_clob(
       break
     }
     let c = self.input[self.pos]
+    check_raw_unit(c, long=true)
     if c == '\\' {
       match self.parse_clob_escape() {
         Some(code) => bytes.push(code.to_byte())
         None => ()
       }
+    } else if c == '\r' {
+      self.skip_carriage_return()
+      bytes.push(b'\n')
     } else {
       if c.to_int() > 0x7F {
         raise @ion.IonError::Syntax(
@@ -1115,11 +1259,16 @@ fn Parser::parse_field_name(
   let c = self.input[self.pos]
   if c == '"' {
     @ion.SymbolToken::new(self.parse_double_quoted_string())
+  } else if self.at_triple_quote() {
+    @ion.SymbolToken::new(self.parse_long_string())
   } else if c == '\'' {
     self.parse_quoted_symbol()
   } else if is_identifier_start(c) {
     let word = self.parse_identifier()
-    match resolve_symbol_id(word) {
+    if is_keyword(word) {
+      raise @ion.IonError::Syntax("a keyword must be quoted to be a field name")
+    }
+    match self.symbol_id(word) {
       Some(token) => token
       None => @ion.SymbolToken::new(word)
     }

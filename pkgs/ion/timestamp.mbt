@@ -59,6 +59,62 @@ pub fn Timestamp::new(
 }
 
 ///|
+/// Check that the components describe a real moment: the year is 1 to 9999,
+/// each component is in range and the day exists in its month, an hour comes
+/// with a minute, and a fractional second is at least zero and less than one.
+pub fn Timestamp::validate(self : Timestamp) -> Unit raise IonError {
+  if self.year < 1 || self.year > 9999 {
+    raise DataModel("timestamp year is out of range")
+  }
+  if self.month is Some(month) && (month < 1 || month > 12) {
+    raise DataModel("timestamp month is out of range")
+  }
+  if self.day is Some(day) {
+    let limit = match self.month {
+      Some(month) => days_in_month(self.year, month)
+      None => 31
+    }
+    if day < 1 || day > limit {
+      raise DataModel("timestamp day is out of range for its month")
+    }
+  }
+  if self.hour is Some(hour) {
+    if hour < 0 || hour > 23 {
+      raise DataModel("timestamp hour is out of range")
+    }
+    if self.minute is None {
+      raise DataModel("a timestamp with an hour must have a minute")
+    }
+  }
+  if self.minute is Some(minute) && (minute < 0 || minute > 59) {
+    raise DataModel("timestamp minute is out of range")
+  }
+  if self.second is Some(second) && (second < 0 || second > 59) {
+    raise DataModel("timestamp second is out of range")
+  }
+  if self.fraction is Some(fraction) && !is_proper_fraction(fraction) {
+    raise DataModel(
+      "a timestamp's fractional second must be at least 0 and less than 1",
+    )
+  }
+}
+
+///|
+/// Whether a decimal is at least zero and less than one. Zero of either sign
+/// is; otherwise the coefficient must be positive and have no more digits than
+/// the exponent moves the decimal point left. Comparing digit counts avoids
+/// building a power of ten for a large exponent.
+fn is_proper_fraction(fraction : Decimal) -> Bool {
+  if fraction.is_zero() {
+    return true
+  }
+  if fraction.is_negative() || fraction.exponent() >= 0 {
+    return false
+  }
+  fraction.coefficient().to_string().length() <= -fraction.exponent()
+}
+
+///|
 /// The year component.
 pub fn Timestamp::year(self : Timestamp) -> Int {
   self.year
@@ -353,8 +409,8 @@ pub fn Timestamp::parse(text : StringView) -> Timestamp raise IonError {
   i += 1
   let (day, next) = read_fixed_uint(text, i, 2)
   i = next
-  if day < 1 || day > 31 {
-    raise IonError::DataModel("timestamp day is out of range")
+  if day < 1 || day > days_in_month(year, month) {
+    raise IonError::DataModel("timestamp day is out of range for its month")
   }
   if i == n {
     return Timestamp::new(year~, month=Some(month), day=Some(day))

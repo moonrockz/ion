@@ -125,26 +125,56 @@ test "only a struct whose first annotation is $ion_symbol_table is a table" {
 }
 
 ///|
-test "shared symbol table imports are reported as unsupported" {
-  let table = @ion.SymbolTable::system()
-  let import_ = @ion.IonValue::from_fields([
-    @ion.Field::new("name", @ion.IonValue::string("shared")),
+/// An import of the shared table `name`, with `max_id` when given.
+fn import_of(name : String, max_id? : Int) -> @ion.IonValue {
+  let fields = [
+    @ion.Field::new("name", @ion.IonValue::string(name)),
     @ion.Field::new("version", @ion.IonValue::int(1)),
-  ])
+  ]
+  if max_id is Some(max_id) {
+    fields.push(@ion.Field::new("max_id", @ion.IonValue::int(max_id)))
+  }
+  @ion.IonValue::from_fields(fields)
+}
+
+///|
+test "an import reserves max_id symbol IDs with unknown text" {
+  let table = @ion.SymbolTable::system()
   let value = local_table([
-    @ion.Field::new("imports", @ion.IonValue::list([import_])),
+    @ion.Field::new(
+      "imports",
+      @ion.IonValue::list([
+        import_of("one", max_id=2),
+        import_of("$ion", max_id=9),
+        import_of("big", max_id=268435444),
+      ]),
+    ),
+    @ion.Field::new("symbols", texts(["a"])),
   ])
-  let mut unsupported = false
+  assert_true(table.apply_local_symbol_table(value))
+  assert_eq(table.text(10), None)
+  assert_eq(table.text(268435455), None)
+  assert_eq(table.text(268435456), Some("a"))
+  assert_eq(table.max_id(), 268435456)
+  assert_eq(table.find("a"), Some(268435456))
+}
+
+///|
+test "an import without max_id is an error" {
+  let table = @ion.SymbolTable::system()
+  let value = local_table([
+    @ion.Field::new("imports", @ion.IonValue::list([import_of("shared")])),
+  ])
+  let mut failed = false
   ignore(
     table.apply_local_symbol_table(value) catch {
-      @ion.IonError::Unsupported(_) => {
-        unsupported = true
+      _ => {
+        failed = true
         false
       }
-      _ => false
     },
   )
-  assert_true(unsupported)
+  assert_true(failed)
 }
 
 ///|
@@ -167,11 +197,20 @@ test "a table with two symbols fields is malformed" {
 }
 
 ///|
-test "resolving gives text to every symbol ID the table defines" {
+test "resolving gives text to every symbol ID the table defines, and rejects an ID beyond it" {
   let table = @ion.SymbolTable::system()
   ignore(
     table.apply_local_symbol_table(
-      local_table([@ion.Field::new("symbols", texts(["a", "b"]))]),
+      local_table([
+        @ion.Field::new(
+          "symbols",
+          @ion.IonValue::list([
+            @ion.IonValue::string("a"),
+            @ion.IonValue::string("b"),
+            @ion.IonValue::untyped_null(),
+          ]),
+        ),
+      ]),
     ),
   )
   let value = @ion.IonValue::from_fields([
@@ -188,6 +227,16 @@ test "resolving gives text to every symbol ID the table defines" {
     @ion.Field::new("sexp", @ion.IonValue::sexp([@ion.IonValue::symbol("b")])),
   ]).with_annotations([@ion.SymbolToken::new("b")])
   assert_true(table.resolve(value).equals(expected))
+  let mut failed = false
+  ignore(
+    table.resolve(sid(13)) catch {
+      _ => {
+        failed = true
+        sid(0)
+      }
+    },
+  )
+  assert_true(failed)
 }
 
 ///|
@@ -212,4 +261,31 @@ test "interning reuses system and local IDs" {
   assert_eq(table.intern("a"), 10)
   assert_eq(table.find("b"), Some(11))
   assert_eq(table.find("c"), None)
+}
+
+///|
+test "a table describes itself as a local symbol table" {
+  let table = @ion.SymbolTable::system()
+  assert_true(table.to_local_symbol_table() is None)
+  table.reserve(18)
+  ignore(table.intern("a"))
+  let copy = @ion.SymbolTable::system()
+  assert_true(
+    copy.apply_local_symbol_table(table.to_local_symbol_table().unwrap()),
+  )
+  assert_eq(copy.max_id(), 28)
+  assert_eq(copy.text(27), None)
+  assert_eq(copy.text(28), Some("a"))
+}
+
+///|
+test "the highest symbol ID counts only symbols without text" {
+  let values = [
+    @ion.IonValue::symbol("a"),
+    @ion.IonValue::list([sid(27)]).with_annotations([
+      @ion.SymbolToken::from_sid(12),
+    ]),
+  ]
+  assert_eq(@ion.highest_symbol_id(values), 27)
+  assert_eq(@ion.highest_symbol_id([@ion.IonValue::symbol("a")]), 0)
 }

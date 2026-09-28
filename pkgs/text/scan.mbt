@@ -62,3 +62,9 @@ fn is_version_marker_literal(word : String) -> Bool {
   .iter()
   .all(part => part.length() > 0 && part.iter().all(c => c >= '0' && c <= '9'))
 }
+
+///|
+/// Whether `word` is an Ion keyword, which is not a symbol unless quoted.
+fn is_keyword(word : String) -> Bool {
+  word is ("null" | "true" | "false" | "nan")
+}

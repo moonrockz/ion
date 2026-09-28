@@ -7,6 +7,8 @@ struct TextWriter {
   sink : &@io.Writer
   pretty : Bool
   mut first : Bool
+  /// The highest symbol ID reserved with unknown text so far.
+  mut reserved : Int
 }
 
 ///|
@@ -15,7 +17,7 @@ pub fn TextWriter::new(
   sink : &@io.Writer,
   pretty? : Bool = false,
 ) -> TextWriter {
-  { sink, pretty, first: true, }
+  { sink, pretty, first: true, reserved: 9, }
 }
 
 ///|
@@ -31,11 +33,12 @@ pub async fn TextWriter::write(
   self : TextWriter,
   value : @ion.IonValue,
 ) -> Unit {
-  let text = if self.pretty {
-    @text.write_ion_pretty(value)
-  } else {
-    @text.write_ion(value)
-  }
+  let (text, reserved) = @text.write_stream_value(
+    value,
+    reserved=self.reserved,
+    pretty=self.pretty,
+  )
+  self.reserved = reserved
   let separator = if self.first { "" } else { "\n" }
   self.first = false
   self.sink.write(@utf8.encode(separator + text))

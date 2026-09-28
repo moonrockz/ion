@@ -34,6 +34,8 @@ pub fn write_ion(@ion.IonValue) -> String raise @ion.IonError
 
 pub fn write_ion_pretty(@ion.IonValue) -> String raise @ion.IonError
 
+pub fn write_stream_value(@ion.IonValue, reserved~ : Int, pretty? : Bool) -> (String, Int) raise @ion.IonError
+
 // Errors
 
 // Types and methods

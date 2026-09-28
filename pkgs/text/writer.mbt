@@ -13,38 +13,81 @@ pub fn write_ion(value : @ion.IonValue) -> String raise @ion.IonError {
 ///|
 /// Write a sequence of values (an Ion datagram) as compact Ion text, one value
 /// per line.
+///
+/// A symbol known only by its ID keeps that ID: before the first value that
+/// holds such an ID, a local symbol table reserves the IDs up to it with
+/// unknown text, so the text reads back to the same symbols.
 pub fn write_all(values : Array[@ion.IonValue]) -> String raise @ion.IonError {
-  let buffer = StringBuilder()
-  for index in 0..<values.length() {
-    if index > 0 {
-      buffer.write_string("\n")
-    }
-    write_value(buffer, values[index], 0, false, false)
-  }
-  buffer.to_string()
+  write_values(values, pretty=false)
 }
 
 ///|
 /// Write a single value as indented Ion text.
 pub fn write_ion_pretty(value : @ion.IonValue) -> String raise @ion.IonError {
-  let buffer = StringBuilder()
-  write_value(buffer, value, 0, true, false)
-  buffer.to_string()
+  write_all_pretty([value])
 }
 
 ///|
-/// Write a sequence of values as indented Ion text, one value per line.
+/// Write a sequence of values as indented Ion text, one value per line, as
+/// `write_all` does.
 pub fn write_all_pretty(
   values : Array[@ion.IonValue],
 ) -> String raise @ion.IonError {
+  write_values(values, pretty=true)
+}
+
+///|
+/// Write values one per line, each after the local symbol table it needs.
+fn write_values(
+  values : Array[@ion.IonValue],
+  pretty~ : Bool,
+) -> String raise @ion.IonError {
   let buffer = StringBuilder()
+  let mut reserved = 9
   for index in 0..<values.length() {
     if index > 0 {
       buffer.write_string("\n")
     }
-    write_value(buffer, values[index], 0, true, false)
+    let (text, now_reserved) = write_stream_value(
+      values[index],
+      reserved~,
+      pretty~,
+    )
+    buffer.write_string(text)
+    reserved = now_reserved
   }
   buffer.to_string()
+}
+
+///|
+/// Write one value of a stream as `write_all` writes it there. `reserved` is
+/// the highest symbol ID that the values before it reserved with unknown text,
+/// 9 at the start of a stream. Returns the text, which starts with a local
+/// symbol table on its own line when the value holds a symbol known only by an
+/// ID above `reserved`, and the highest reserved ID after it.
+pub fn write_stream_value(
+  value : @ion.IonValue,
+  reserved~ : Int,
+  pretty? : Bool = false,
+) -> (String, Int) raise @ion.IonError {
+  let buffer = StringBuilder()
+  let highest = @ion.highest_symbol_id([value])
+  let reserved = if highest > reserved {
+    let table = @ion.SymbolTable::system()
+    table.reserve(highest - 9)
+    match table.to_local_symbol_table() {
+      Some(table) => {
+        write_value(buffer, table, 0, pretty, false)
+        buffer.write_string("\n")
+      }
+      None => ()
+    }
+    highest
+  } else {
+    reserved
+  }
+  write_value(buffer, value, 0, pretty, false)
+  (buffer.to_string(), reserved)
 }
 
 ///|

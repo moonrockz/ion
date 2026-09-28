@@ -8,6 +8,14 @@
 // returns.
 
 ///|
+/// Whether a value's length follows its descriptor as a `VarUInt`: a length
+/// nibble of 14, or 1 for a struct, which marks an ordered struct (one whose
+/// fields are sorted by symbol ID).
+fn has_var_uint_length(type_code : Int, nibble : Int) -> Bool {
+  nibble == 0x0E || (type_code == 13 && nibble == 1)
+}
+
+///|
 /// Whether the Ion binary version marker begins at `offset`.
 pub fn has_version_marker(bytes : BytesView, offset : Int) -> Bool {
   offset + 4 <= bytes.length() &&
@@ -49,7 +57,7 @@ pub fn value_size(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
   } else if nibble == 0x0F {
     // A typed null has no representation.
     ()
-  } else if nibble == 0x0E {
+  } else if has_var_uint_length(type_code, nibble) {
     let cursor = Cursor::new(bytes, offset + 1, bytes.length())
     let mut value = 0
     let mut done = false
@@ -152,7 +160,14 @@ fn decode_typed(
     // A bool's nibble carries the value.
     return decode_bool(nibble)
   }
-  let length = if nibble == 0x0E { cursor.var_uint() } else { nibble }
+  let length = if has_var_uint_length(type_code, nibble) {
+    cursor.var_uint()
+  } else {
+    nibble
+  }
+  if type_code == 13 && nibble == 1 && length == 0 {
+    raise @ion.IonError::Syntax("an ordered struct must not be empty")
+  }
   let end = cursor.pos + length
   if end > cursor.limit {
     raise @ion.IonError::Syntax("a value overruns its container")
@@ -353,6 +368,8 @@ fn decode_timestamp(
     fraction~,
     offset=local_offset,
   )
+  // The components are in UTC, and must describe a real moment there too.
+  timestamp.validate()
   @ion.IonValue::timestamp(timestamp.as_local())
 }
 
@@ -364,7 +381,7 @@ fn decode_symbol(
   table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let sid = if length == 0 { 0 } else { cursor.uint(length).to_int() }
-  @ion.IonValue::symbol_token(table.token(sid))
+  @ion.IonValue::symbol_token(table.lookup(sid))
 }
 
 ///|
@@ -420,7 +437,7 @@ fn decode_struct(
     if inner.skip_padding() {
       continue
     }
-    let name = table.token(sid)
+    let name = table.lookup(sid)
     let value = decode_element(inner, table)
     fields.push(@ion.Field::from_token(name, value))
   }
@@ -449,7 +466,7 @@ fn decode_annotated(
   let annotations : Array[@ion.SymbolToken] = []
   while cursor.pos < annotation_end {
     let sid = cursor.var_uint()
-    annotations.push(table.token(sid))
+    annotations.push(table.lookup(sid))
   }
   if cursor.at_end() {
     raise @ion.IonError::Syntax("an annotation wrapper has no value")
@@ -491,9 +508,10 @@ pub fn is_padding_only(
 }
 
 ///|
-/// Consume a top-level value as a reader sees it: a version marker symbol
-/// resets `symbols` and a local symbol table updates it, and neither is
-/// returned; everything else is a value.
+/// Consume a top-level value as a reader sees it: a local symbol table updates
+/// `symbols`, and an unannotated symbol with the text `$ion_1_0` is a no-op
+/// (only the four-octet marker is a version marker in Ion binary); neither is
+/// returned. Everything else is a value.
 pub fn accept_value(
   symbols : @ion.SymbolTable,
   value : @ion.IonValue,
@@ -501,7 +519,6 @@ pub fn accept_value(
   if value.annotations().is_empty() &&
     value.kind() is @ion.IonValueKind::Symbol(token) &&
     token.text() == Some("$ion_1_0") {
-    symbols.reset()
     return None
   }
   if symbols.apply_local_symbol_table(value) {

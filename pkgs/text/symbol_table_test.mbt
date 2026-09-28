@@ -29,22 +29,25 @@ test "symbol IDs resolve in annotations, field names, and nested values" {
 }
 
 ///|
-test "a symbol ID the table does not define keeps only its ID" {
-  assert_eq(datagram("$ion_symbol_table::{symbols: [\"a\"]} $11 $0"), "$11\n$0")
+test "a symbol ID with unknown text keeps only its ID" {
+  assert_eq(
+    datagram("$ion_symbol_table::{symbols: [\"a\", null]} $11 $0"),
+    "$ion_symbol_table::{imports: [{name: \"moonrockz.ion.unknown_symbols\", version: 1, max_id: 2}]}\n$11\n$0",
+  )
 }
 
 ///|
 test "a version marker is consumed and resets the symbol table" {
   assert_eq(datagram("$ion_1_0 1"), "1")
   assert_eq(
-    datagram("$ion_symbol_table::{symbols: [\"a\"]} $10 $ion_1_0 $10"),
-    "a\n$10",
+    datagram("$ion_symbol_table::{symbols: [\"a\"]} $10 $ion_1_0 $4"),
+    "a\nname",
   )
 }
 
 ///|
-test "a quoted or annotated $ion_1_0 is an ordinary symbol" {
-  assert_eq(datagram("'$ion_1_0' $ion_1_0::1"), "'$ion_1_0'\n'$ion_1_0'::1")
+test "an annotated or nested $ion_1_0 is an ordinary symbol" {
+  assert_eq(datagram("$ion_1_0::1 ['$ion_1_0']"), "'$ion_1_0'::1\n['$ion_1_0']")
 }
 
 ///|
@@ -77,8 +80,8 @@ test "importing $ion_symbol_table appends to the current symbols" {
 ///|
 test "a symbol table that is not at the top level is data" {
   assert_eq(
-    datagram("[$ion_symbol_table::{symbols: [\"a\"]}] $10"),
-    "[$ion_symbol_table::{symbols: [\"a\"]}]\n$10",
+    datagram("[$ion_symbol_table::{symbols: [\"a\"]}] $4"),
+    "[$ion_symbol_table::{symbols: [\"a\"]}]\nname",
   )
 }
 
@@ -127,4 +130,23 @@ test "a prefix read reports a system value and updates the table" {
       }
     _ => fail("expected the symbol table to be consumed")
   }
+}
+
+///|
+test "symbols with unknown text round-trip through the writer" {
+  let values = [
+    @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(27)),
+    @ion.IonValue::symbol("a"),
+  ]
+  let text = @text.write_all(values)
+  let read_back = @text.read_ion_datagram(text)
+  assert_eq(read_back.length(), 2)
+  match read_back[0].kind() {
+    @ion.IonValueKind::Symbol(token) => {
+      assert_eq(token.text(), None)
+      assert_eq(token.sid(), Some(27))
+    }
+    _ => fail("expected a symbol")
+  }
+  assert_true(read_back[1].equals(values[1]))
 }

@@ -267,6 +267,11 @@ pub fn symbols_for_values(
   values : Array[@ion.IonValue],
 ) -> @ion.SymbolTable raise @ion.IonError {
   let table = @ion.SymbolTable::system()
+  // Symbols known only by ID keep their IDs, so the texts go after them.
+  let highest = @ion.highest_symbol_id(values)
+  if highest > 9 {
+    table.reserve(highest - 9)
+  }
   for value in values {
     collect_symbols(value, table)
   }
@@ -279,22 +284,10 @@ pub fn symbols_for_values(
 pub fn local_symbol_table(
   symbols : @ion.SymbolTable,
 ) -> Bytes? raise @ion.IonError {
-  if symbols.is_empty() {
-    return None
+  match symbols.to_local_symbol_table() {
+    Some(table) => Some(Bytes::from_array(encode(table, symbols)))
+    None => None
   }
-  let texts : Array[@ion.IonValue] = []
-  for text in symbols.locals() {
-    texts.push(
-      match text {
-        Some(text) => @ion.IonValue::string(text)
-        None => @ion.IonValue::untyped_null()
-      },
-    )
-  }
-  let table = @ion.IonValue::from_fields([
-    @ion.Field::new("symbols", @ion.IonValue::list(texts)),
-  ]).with_annotations([@ion.SymbolToken::new("$ion_symbol_table")])
-  Some(Bytes::from_array(encode(table, symbols)))
 }
 
 ///|

@@ -78,7 +78,7 @@ let tricky : String =
   #|  ) [] {} "é ✓ 😀" 'ünïcödé' // end
   #|$ion_symbol_table::{symbols: ["s1", "s2"]} $10 $11::{$10: $11}
   #|$ion_symbol_table::{imports: $ion_symbol_table, symbols: ["s3"]} $12
-  #|$ion_1_0 $10
+  #|$ion_1_0 $4
   #|
 
 ///|
