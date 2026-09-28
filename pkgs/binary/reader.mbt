@@ -151,8 +151,18 @@ fn decode_typed(
   let value = match type_code {
     2 | 3 => decode_int(cursor, length, type_code == 3)
     4 => decode_float(cursor, length)
-    5 => decode_decimal(cursor, length)
-    6 => decode_timestamp(cursor, length)
+    5 | 6 => {
+      // A decimal or a timestamp ends where its length says, not at the end
+      // of its container, so it reads through a cursor that stops there.
+      let inner = Cursor::new(cursor.bytes, cursor.pos, end)
+      let value = if type_code == 5 {
+        decode_decimal(inner, length)
+      } else {
+        decode_timestamp(inner, length)
+      }
+      cursor.pos = inner.pos
+      value
+    }
     7 => decode_symbol(cursor, length, table)
     8 => decode_string(cursor, length)
     9 => @ion.IonValue::clob(cursor.take(length).to_owned())

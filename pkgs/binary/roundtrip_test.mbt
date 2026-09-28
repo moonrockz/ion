@@ -376,3 +376,18 @@ test "a struct is a symbol table only when its first annotation says so" {
     "x::$ion_symbol_table::{symbols: [\"a\"]}\nx",
   )
 }
+
+///|
+test "a decimal or timestamp followed by another value in a container" {
+  // Both end at their own length, not at the end of their container.
+  for
+    text in [
+      "[2.5, \"s\"]", "(1.25 x)", "{a: 1.5, b: 2}", "[2007-01-01T12:30:15.25Z, 1]",
+      "[2007-02-03T04:05Z, 2.5, 2007T]",
+    ] {
+    let values = @text.read_ion_datagram(text)
+    let read_back = @binary.read_binary(@binary.write_binary(values))
+    assert_eq(read_back.length(), 1)
+    assert_true(read_back[0].equals(values[0]))
+  }
+}
