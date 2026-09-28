@@ -130,6 +130,17 @@ fn string_of(value : @ion.IonValue) -> String? {
 }
 
 ///|
+/// The text of a symbol or a string. The grammar's quoted terminals, such as
+/// `"negative_0"`, may be written as either.
+fn atom_text(value : @ion.IonValue) -> String? {
+  match value.kind() {
+    Symbol(token) => token.text()
+    String(text) => Some(text)
+    _ => None
+  }
+}
+
+///|
 /// The name a test or a branch may start with: a string, or `null.string`
 /// for no name.
 fn name_of(value : @ion.IonValue) -> String? {
@@ -660,7 +671,7 @@ fn model_value(value : @ion.IonValue) -> @ion.IonValue raise {
     }
     Some("Decimal") =>
       match args[0].kind() {
-        Symbol(token) if token.text() == Some("negative_0") =>
+        Symbol(_) | String(_) if atom_text(args[0]) == Some("negative_0") =>
           @ion.IonValue::decimal(
             @ion.Decimal::negative_zero_at(int_of(args[1])),
           )
@@ -779,4 +790,19 @@ test "ion-tests conformance DSL" {
     println("  PASSES BUT SKIPPED " + id)
   }
   assert_true(unexpected.is_empty() && stale.is_empty())
+}
+
+///|
+test "the decimal model accepts negative_0 as a symbol or a string" {
+  // The grammar's quoted terminals, such as "negative_0", may be written as
+  // either; data_model/decimal.ion uses the string form.
+  let expected = @ion.IonValue::decimal(@ion.Decimal::negative_zero_at(-3))
+  for model in ["(Decimal negative_0 -3)", "(Decimal \"negative_0\" -3)"] {
+    assert_true(model_value(@text.read_ion(model)).equals(expected))
+  }
+  assert_true(
+    model_value(@text.read_ion("(Decimal -15 -1)")).equals(
+      @ion.IonValue::decimal(@ion.Decimal::parse("-1.5")),
+    ),
+  )
 }
