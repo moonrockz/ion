@@ -192,8 +192,8 @@ function yields the serialization `s(value)` itself.
 The implementation is checked against the official
 [conformance suite](https://github.com/amazon-ion/ion-hash-test):
 `pkgs/hash/conformance_test.mbt` replays `tests/fixtures/ion_hash_tests.ion`
-and compares the serialization byte for byte. Only the 8 binary-only (`10n`)
-cases are skipped, pending the Ion binary codec.
+and compares the serialization byte for byte, for both the text (`ion`) and
+the binary (`10n`) cases.
 
 ## JSON interoperability
 
@@ -267,6 +267,15 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
   the constraints above.
+- Ion text: local symbol tables. The text reader returns `$ion_1_0` and
+  `$ion_symbol_table::{...}` as ordinary values instead of applying them, so a
+  symbol ID such as `$10` keeps no text.
+- Conformance: run the codecs against the official
+  [ion-tests](https://github.com/amazon-ion/ion-tests) good and bad files. Only
+  the Ion Hash suite runs today.
+- Ion 1.1: only Ion 1.0 is implemented.
+- CLI: `ion print`, `json`, `hash`, and `validate` read the whole input into
+  memory rather than streaming it through `@text/stream` and `@binary/stream`.
 
 ## Building and testing
 
