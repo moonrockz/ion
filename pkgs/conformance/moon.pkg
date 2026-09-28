@@ -1,0 +1,16 @@
+// Conformance tests against the official Ion 1.0 test data in
+// `tests/ion-tests` (https://github.com/amazon-ion/ion-tests), a git
+// submodule. This package holds tests only.
+
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+  "moonrockz/ion/binary",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/fs",
+} for "test"
+
+// Not wasm-gc: there, `moonbitlang/core/bigint` converts a BigInt of about
+// 5,000 digits to and from a string incorrectly, which the long decimals in
+// `good/subfieldVarInt.ion` expose.
+supported_targets = "native+wasm+js"

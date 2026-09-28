@@ -263,16 +263,18 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   symbols in effect in a stream. The text and binary readers apply a version
   marker (`$ion_1_0` unquoted at the top level, or the binary marker) and a
   top-level `$ion_symbol_table::{...}` struct to it instead of returning them,
-  and resolve each symbol ID against it. A symbol ID that no table defines
-  keeps only its ID.
+  and resolve each symbol ID against it. A symbol ID beyond the table is an
+  error; one whose slot has no text keeps only its ID, and the writers keep
+  that ID by reserving it in the symbol table they write.
 - **Unsupported is an error.** The schema loader raises
   `IonError::Unsupported` for constructs it does not implement, rather than
   silently ignoring them.
 
 ## Roadmap
 
-- Ion binary: shared symbol table *imports* (`$ion_shared_symbol_table`),
-  which a reader reports as unsupported rather than resolving.
+- Shared symbol tables: there is no catalog, so an import resolves as a table
+  the catalog does not hold, reserving `max_id` symbol IDs with unknown text.
+  A catalog API would give those symbols their text.
 - Ion Schema: `ordered_elements`, `annotations`, `timestamp_precision`,
   `regex`, `closed::` fields, imports, open content, and the decimal
   `precision`/`exponent` constraints. The
@@ -280,9 +282,9 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
   the constraints above.
-- Conformance: run the codecs against the official
-  [ion-tests](https://github.com/amazon-ion/ion-tests) good and bad files. Only
-  the Ion Hash suite runs today.
+- UTF-16 and UTF-32 Ion text: the text readers take decoded strings, and the
+  CLI and stream readers decode only UTF-8, so the two ion-tests files in those
+  encodings are skipped.
 - Ion 1.1: only Ion 1.0 is implemented.
 
 ## Building and testing
@@ -299,6 +301,16 @@ moon fmt             # format
 moon info            # regenerate package interfaces (*.mbti)
 moon test --update   # refresh the golden fixtures' recorded output
 ```
+
+The official [ion-tests](https://github.com/amazon-ion/ion-tests) suite is a
+git submodule at `tests/ion-tests`; fetch it with
+`git submodule update --init` (or clone with `--recurse-submodules`).
+`pkgs/conformance` runs every Ion 1.0 file in it: each `good` file must read
+and survive a round trip through both writers, each `bad` file must fail, and
+the `equivs` and `non-equivs` sequences must compare as their directory says.
+The two files skipped, each with its reason, are listed in
+`pkgs/conformance/ion_tests_test.mbt`; a skipped file that starts to pass fails
+the test.
 
 Besides the example and snapshot tests, several packages carry property tests
 (`property_test.mbt`) using the built-in QuickCheck: text round-trips, decimal
