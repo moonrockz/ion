@@ -4,18 +4,27 @@
 // returned once it is settled (see `@text.read_ion_prefix`), so memory stays
 // proportional to the largest single value rather than to the stream.
 //
-// Text has no length prefix to frame a value by, so a value that does not
-// parse yet is taken to be cut short and the reader reads on. A malformed
-// value is therefore reported only at the end of the stream.
+// Text has no length prefix to frame a value by. A framer reads each code
+// unit once and tells the reader when the text is back at the top level
+// between values; only then does the reader try a parse, so a large value
+// costs time linear in its length. A value that does not parse yet is taken to
+// be cut short and the reader reads on, so a malformed value is reported only
+// at the end of the stream.
 
 ///|
 /// A reader that pulls Ion text values from an async byte source of UTF-8
 /// text.
-pub struct TextReader {
+struct TextReader {
   source : &@io.Reader
-  /// Decoded text not yet parsed, from `start` on.
+  /// Decoded text not yet parsed, from `start` on, and then `arrived`.
   mut text : String
   mut start : Int
+  /// Decoded text that came after `text` was last built. It joins `text`
+  /// only when a parse is tried, so waiting on a large value copies nothing.
+  arrived : StringBuilder
+  framer : Framer
+  /// The code units at the end that the framer has not read yet.
+  mut unscanned : String
   /// The octets of a UTF-8 character that a read split in two.
   mut partial : Bytes
   mut eof : Bool
@@ -25,7 +34,16 @@ pub struct TextReader {
 /// A reader over `source`, holding no text until the first value is asked
 /// for.
 pub fn TextReader::new(source : &@io.Reader) -> TextReader {
-  { source, text: "", start: 0, partial: Bytes::new(0), eof: false, }
+  {
+    source,
+    text: "",
+    start: 0,
+    arrived: StringBuilder(),
+    framer: Framer::new(),
+    unscanned: "",
+    partial: Bytes::new(0),
+    eof: false,
+  }
 }
 
 ///|
@@ -33,16 +51,53 @@ pub fn TextReader::new(source : &@io.Reader) -> TextReader {
 /// `@text.read_ion_datagram` would return them for the whole text.
 pub async fn TextReader::next(self : TextReader) -> @ion.IonValue? {
   while true {
-    let pending = self.text.view(start_offset=self.start)
-    match @text.read_ion_prefix(pending, end_of_input=self.eof) {
-      Some((value, consumed)) => {
-        self.start += consumed
-        return Some(value)
-      }
+    match self.take() {
+      Some(value) => return Some(value)
       None => if self.eof { return None } else { self.fill() }
     }
   }
   None
+}
+
+///|
+/// The next value in the text that has arrived, or `None` when it holds none
+/// yet. A parse is tried only at the end of the stream, or when the framer
+/// has seen the text at the top level since the last try.
+fn TextReader::take(self : TextReader) -> @ion.IonValue? raise @ion.IonError {
+  if !self.eof && !self.framer.at_top {
+    return None
+  }
+  self.framer.at_top = false
+  match @text.read_ion_prefix(self.pending(), end_of_input=self.eof) {
+    Some((value, consumed)) => {
+      self.start += consumed
+      // The rest of the text may already hold the next value.
+      self.framer.at_top = true
+      Some(value)
+    }
+    None => None
+  }
+}
+
+///|
+/// The decoded text not yet parsed, joining the text that has arrived.
+fn TextReader::pending(self : TextReader) -> StringView {
+  if !self.arrived.is_empty() {
+    self.text = self.text.view(start_offset=self.start).to_owned() +
+      self.arrived.to_string()
+    self.start = 0
+    self.arrived.reset()
+  }
+  self.text.view(start_offset=self.start)
+}
+
+///|
+/// Take in decoded text and let the framer read it.
+fn TextReader::append(self : TextReader, decoded : String) -> Unit {
+  self.arrived.write_string(decoded)
+  let text = self.unscanned + decoded
+  let stop = self.framer.scan(text, 0)
+  self.unscanned = text.view(start_offset=stop).to_owned()
 }
 
 ///|
@@ -69,8 +124,7 @@ async fn TextReader::fill(self : TextReader) -> Unit {
     _ => raise @ion.IonError::Syntax("the Ion text stream is not UTF-8")
   }
   self.partial = octets[whole:].to_owned()
-  self.text = self.text.view(start_offset=self.start).to_owned() + decoded
-  self.start = 0
+  self.append(decoded)
 }
 
 ///|

@@ -4,7 +4,7 @@
 /// A reader that pulls the `@text.IonEvent` stream of an async byte source of
 /// UTF-8 text. It parses one top-level value at a time and hands out its
 /// events, so it holds the events of one value rather than of the stream.
-pub struct TextEventReader {
+struct TextEventReader {
   values : TextReader
   /// The events of the current value that are not yet handed out.
   events : Array[@text.IonEvent]
