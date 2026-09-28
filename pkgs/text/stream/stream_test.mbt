@@ -183,3 +183,53 @@ async test "the event reader frames an empty stream as a document" {
   let reader = @stream.TextEventReader::new(reader_of(Bytes::new(0)))
   assert_eq(event_names(reader), ["DocumentStart", "DocumentEnd"])
 }
+
+///|
+/// A writer that collects every octet written to it.
+struct Collector {
+  mut bytes : Bytes
+}
+
+///|
+impl @io.Writer for Collector with fn write_once(self, data, offset~, len~) {
+  self.bytes = self.bytes + data[offset:offset + len].to_owned()
+  len
+}
+
+///|
+async test "the async writer produces the octets of the sync writer" {
+  let values = @text.read_ion_datagram(tricky)
+  let compact = { bytes: Bytes::new(0), }
+  @stream.write_all(compact, values)
+  assert_eq(compact.bytes, @utf8.encode(@text.write_all(values)))
+  let pretty = { bytes: Bytes::new(0), }
+  @stream.write_all(pretty, values, pretty=true)
+  assert_eq(pretty.bytes, @utf8.encode(@text.write_all_pretty(values)))
+}
+
+///|
+async test "a text writer writes one value at a time" {
+  let values = @text.read_ion_datagram("1 [2] {a: 3} 'a b' \"é\"")
+  let collector = { bytes: Bytes::new(0), }
+  let writer = @stream.TextWriter::new(collector)
+  for value in values {
+    writer.write(value)
+  }
+  assert_eq(collector.bytes, @utf8.encode(@text.write_all(values)))
+}
+
+///|
+async test "the async writer round-trips through the async reader" {
+  let values = @text.read_ion_datagram(tricky)
+  for pretty in [false, true] {
+    let collector = { bytes: Bytes::new(0), }
+    @stream.write_all(collector, values, pretty~)
+    let read_back = read_all(
+      @stream.TextReader::new(reader_of(collector.bytes, chunk=3)),
+    )
+    assert_eq(read_back.length(), values.length())
+    for index in 0..<values.length() {
+      assert_true(read_back[index].equals(values[index]))
+    }
+  }
+}

@@ -8,7 +8,7 @@ hierarchical data serialization format — and
 > **Status:** early. The core data model, the Ion **text** and Ion **binary**
 > encodings, **Ion Hash** (Ion Hash 1.0 over SHA-256), a focused Ion Schema
 > validation subset, and **JSON interoperability** are implemented and tested,
-> with asynchronous streaming readers for both encodings over
+> with asynchronous streaming readers and writers for both encodings over
 > `moonbitlang/async`.
 
 ## Installation
@@ -23,7 +23,7 @@ moon add moonrockz/ion
 | ------------- | ------------- | ---------------------- | ------- |
 | `@ion` (core) | `pkgs/ion`    | `moonrockz/ion/ion`    | Core data model: Ion types, values, annotations, decimals, timestamps, symbol tokens |
 | `@text`       | `pkgs/text`   | `moonrockz/ion/text`   | Ion text reader and writer                              |
-| `@text/stream` | `pkgs/text/stream` | `moonrockz/ion/text/stream` | Ion text readers over asynchronous IO (`moonbitlang/async`) |
+| `@text/stream` | `pkgs/text/stream` | `moonrockz/ion/text/stream` | Ion text readers and writers over asynchronous IO (`moonbitlang/async`) |
 | `@hash`       | `pkgs/hash`   | `moonrockz/ion/hash`   | Ion Hash 1.0: an encoding-independent hash of an Ion value |
 | `@binary`     | `pkgs/binary` | `moonrockz/ion/binary` | Ion binary codec: values, containers, annotations, and local symbol tables |
 | `@binary/stream` | `pkgs/binary/stream` | `moonrockz/ion/binary/stream` | The Ion binary codec over asynchronous IO (`moonbitlang/async`) |
@@ -128,7 +128,7 @@ data model):
 | Fold | `@ion.IonFold` + `IonValue::fold` | Thread an accumulator with `Continue` / `SkipChildren` / `Stop` |
 | SAX | `@text.IonReader` (pull) and `@text.IonHandler` + `@text.parse_with_handler` (push) | A flat `IonEvent` stream without building the DOM |
 | Binary | `@binary.read_binary`, `@binary.write_binary`, `@binary/stream` | The Ion **binary** codec, with local symbol tables and an async streaming reader and writer |
-| Streaming text | `@text/stream.TextReader` (values) and `@text/stream.TextEventReader` (events) | Ion **text** from an async byte source, parsed one top-level value at a time |
+| Streaming text | `@text/stream.TextReader` (values), `@text/stream.TextEventReader` (events), `@text/stream.TextWriter` | Ion **text** over async byte sources and sinks, one top-level value at a time |
 
 ```moonbit skip nocheck
 let value = @text.read_ion!("{a: 1}")               // DOM / AST
@@ -140,25 +140,35 @@ let tokens = @text.tokenize!("int32::12")           // CST tokens
 
 ### Streaming Ion text
 
-`@text/stream` reads Ion text from a `moonbitlang/async` byte source. It
-decodes the UTF-8 as it arrives and parses one top-level value at a time, so
-memory stays proportional to the largest value, not to the stream:
+`@text/stream` reads and writes Ion text over `moonbitlang/async` byte
+sources and sinks. The reader decodes the UTF-8 as it arrives and parses one
+top-level value at a time, so memory stays proportional to the largest value,
+not to the stream:
 
 ```moonbit skip nocheck
 let reader = @stream.TextReader::new(source) // moonrockz/ion/text/stream; any &@io.Reader
 while reader.next() is Some(value) {
   println(@text.write_ion!(value))
 }
+let writer = @stream.TextWriter::new(sink) // any &@io.Writer
+writer.write(value)                        // one value per line
+@stream.write_all(sink, values, pretty=true)
 ```
 
 `TextReader` yields the values that `@text.read_ion_datagram` returns for the
 whole text, and `TextEventReader` yields the events that `@text.IonReader`
-returns for it. Text has no length prefix, so a value is settled when it closes
-with `]`, `)`, `}`, or `"`. Any other value, such as a number or a symbol, is
-settled only when the text after it shows where it ends. Until the stream ends, a value that does not
-parse is taken to be cut short, and the reader reads on. Thus a malformed value
-is reported only at the end of the stream, and the reader holds the text from
-that value on until then. `@text.read_ion_prefix` is that framing step on its
+returns for it. `TextWriter` and `write_all` write the UTF-8 octets of
+`@text.write_all` (or `@text.write_all_pretty`), one value at a time.
+
+Text has no length prefix, so a value is settled when it closes with `]`, `)`,
+`}`, or `"`. Any other value, such as a number or a symbol, is settled only
+when the text after it shows where it ends. The reader reads each code unit
+once to track containers, strings, comments, and lobs, and it parses only when
+the text is back at the top level between values. Thus a large value costs
+time linear in its length. Until the stream ends, a value that does not parse
+is taken to be cut short, and the reader reads on. Thus a malformed value is
+reported only at the end of the stream, and the reader holds the text from
+that value on until then. `@text.read_ion_prefix` is the parsing step on its
 own, for a caller that feeds text in some other way.
 
 ## Ion Hash
