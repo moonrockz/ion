@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/text/stream"
+
+import {
+  "moonbitlang/async/io",
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+}
+
+// Values
+pub async fn write_all(&@io.Writer, Array[@ion.IonValue], pretty? : Bool) -> Unit
+
+// Errors
+
+// Types and methods
+type TextEventReader
+pub fn TextEventReader::new(&@io.Reader) -> Self
+pub async fn TextEventReader::next(Self) -> @text.IonEvent?
+
+type TextReader
+pub fn TextReader::new(&@io.Reader) -> Self
+pub async fn TextReader::next(Self) -> @ion.IonValue?
+
+type TextWriter
+pub fn TextWriter::new(&@io.Writer, pretty? : Bool) -> Self
+pub async fn TextWriter::write(Self, @ion.IonValue) -> Unit
+
+// Type aliases
+
+// Traits

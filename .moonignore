@@ -1,0 +1,7 @@
+# Files kept out of the package that `moon publish` uploads to mooncakes.io.
+# The test data and the repository tooling serve development only, and
+# `pkgs/conformance` holds only a test over `tests/ion-tests`.
+tests/
+.github/
+.githooks/
+pkgs/conformance/

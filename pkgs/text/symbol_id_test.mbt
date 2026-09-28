@@ -2,8 +2,8 @@
 //
 // Ion text writes a symbol ID as `$` followed by digits. The reader resolves
 // the Ion 1.0 system IDs (1..9) to their text, leaves ID 0 without text, and
-// keeps IDs beyond the system range as ID-only tokens. Anything else — a `$`
-// with trailing non-digits — is an ordinary symbol.
+// rejects an ID beyond the symbol table. Anything else — a `$` with trailing
+// non-digits — is an ordinary symbol.
 
 ///|
 /// The text of the symbol a value written as `text` parses to.
@@ -32,11 +32,19 @@ test "system symbol IDs resolve to their text" {
 }
 
 ///|
-test "symbol ID zero and unassigned IDs keep only their ID" {
+test "symbol ID zero keeps only its ID, and an unassigned ID is an error" {
   assert_eq(symbol_text("$0"), None)
   assert_eq(symbol_sid("$0"), Some(0))
-  assert_eq(symbol_text("$10"), None)
-  assert_eq(symbol_sid("$10"), Some(10))
+  let mut failed = false
+  ignore(
+    symbol_text("$10") catch {
+      _ => {
+        failed = true
+        None
+      }
+    },
+  )
+  assert_true(failed)
 }
 
 ///|
@@ -49,6 +57,5 @@ test "a dollar sign without digits is an ordinary symbol" {
 ///|
 test "symbol-ID literals round-trip through the writer" {
   assert_eq(@text.write_ion(@text.read_ion("$0")), "$0")
-  assert_eq(@text.write_ion(@text.read_ion("$10")), "$10")
   assert_eq(@text.write_ion(@text.read_ion("{$0: $1}")), "{$0: $ion}")
 }

@@ -1,8 +1,6 @@
-// The Ion binary encoding.
-//
-// This package currently provides the binary format's type-descriptor model and
-// version marker; the wire codec (including local symbol tables) is the next
-// milestone.
+// The Ion binary encoding: the type-descriptor model, the version marker, and
+// the wire codec. Local symbol tables go through the shared
+// `@ion.SymbolTable`.
 
 import {
   "moonrockz/ion/ion",

@@ -7,10 +7,21 @@ import {
   "moonrockz/ion/json",
   "moonrockz/ion/schema",
   "moonrockz/ion/text",
-  "moonbitlang/core/encoding/utf8",
+  "moonrockz/ion/binary/stream" @binary_stream,
+  "moonrockz/ion/text/stream" @text_stream,
+  "moonbitlang/async",
+  "moonbitlang/async/fs" @async_fs,
+  "moonbitlang/async/io",
+  "moonbitlang/async/os_error",
+  "moonbitlang/async/stdio",
   "moonbitlang/core/env",
   "moonbitlang/x/fs",
   "moonbitlang/x/sys",
 }
+
+// The CLI reads files and stdin through `moonbitlang/async`, which supports
+// only these targets. The library packages build on every target.
+
+supported_targets = "native+wasm"
 
 pkgtype(kind: "executable")

@@ -4,6 +4,7 @@ package "moonrockz/ion"
 // Values
 
 // Errors
+type CliError
 
 // Types and methods
 

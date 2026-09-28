@@ -46,3 +46,25 @@ fn is_symbol_id_literal(word : String) -> Bool {
   }
   true
 }
+
+///|
+/// Whether `word` has the form of an Ion version marker, `$ion_` followed by a
+/// major and a minor version, such as `$ion_1_0`. Unquoted at the top level,
+/// such a word is a version marker rather than a symbol, so a writer must
+/// quote it to keep the symbol.
+fn is_version_marker_literal(word : String) -> Bool {
+  if !word.has_prefix("$ion_") {
+    return false
+  }
+  let parts = word[5:].split("_").collect()
+  parts.length() == 2 &&
+  parts
+  .iter()
+  .all(part => part.length() > 0 && part.iter().all(c => c >= '0' && c <= '9'))
+}
+
+///|
+/// Whether `word` is an Ion keyword, which is not a symbol unless quoted.
+fn is_keyword(word : String) -> Bool {
+  word is ("null" | "true" | "false" | "nan")
+}

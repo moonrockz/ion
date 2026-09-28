@@ -1,0 +1,22 @@
+// Ion text over asynchronous IO.
+//
+// The sync reader and writer in `moonrockz/ion/text` work on a string that is
+// already in memory. This package adapts them to `moonbitlang/async` byte
+// sources and sinks: a streaming reader decodes UTF-8 as it arrives and parses
+// one top-level value at a time, so a large stream never has to be buffered
+// whole, and a streaming writer emits each value as it is written.
+
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+  "moonbitlang/async/io",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+  "moonbitlang/core/encoding/utf8",
+} for "test"

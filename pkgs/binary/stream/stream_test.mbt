@@ -119,3 +119,26 @@ async test "a truncated value is reported" {
   )
   assert_true(failed)
 }
+
+///|
+async test "a large value and many small ones arrive in small reads" {
+  let items : Array[@ion.IonValue] = []
+  for i in 0..<20000 {
+    items.push(@ion.IonValue::int(i))
+  }
+  let values = [@ion.IonValue::list(items)]
+  for i in 0..<2000 {
+    values.push(
+      @ion.IonValue::from_fields([@ion.Field::new("id", @ion.IonValue::int(i))]),
+    )
+  }
+  for chunk in [7, 4096] {
+    let read_back = read_all(
+      @stream.BinaryReader::new(reader_of(@binary.write_binary(values), chunk~)),
+    )
+    assert_eq(read_back.length(), values.length())
+    for index in 0..<values.length() {
+      assert_true(read_back[index].equals(values[index]))
+    }
+  }
+}

@@ -10,6 +10,7 @@ import {
   "moonrockz/ion/ion",
   "moonrockz/ion/binary",
   "moonbitlang/async/io",
+  "moonbitlang/core/buffer",
 }
 
 import {
@@ -18,4 +19,5 @@ import {
   "moonrockz/ion/text",
   "moonbitlang/async",
   "moonbitlang/async/io",
+  "moonbitlang/core/cmp",
 } for "test"

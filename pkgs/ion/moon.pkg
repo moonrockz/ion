@@ -1,9 +1,11 @@
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/cmp",
   "moonbitlang/core/string",
   "moonbitlang/x/decimal",
 }
 
 import {
+  "moonrockz/ion/text",
   "moonbitlang/core/quickcheck",
 } for "test"

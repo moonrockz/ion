@@ -75,3 +75,73 @@ test "struct equality ignores field order" {
   ])
   assert_true(a.equals(b))
 }
+
+///|
+/// Whether validating `timestamp` raises an error.
+fn invalid(timestamp : @ion.Timestamp) -> Bool {
+  try timestamp.validate() catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+}
+
+///|
+test "a timestamp's day must exist in its month" {
+  assert_true(
+    invalid(@ion.Timestamp::new(year=2001, month=Some(2), day=Some(29))),
+  )
+  assert_true(
+    invalid(@ion.Timestamp::new(year=2000, month=Some(4), day=Some(31))),
+  )
+  assert_false(
+    invalid(@ion.Timestamp::new(year=2000, month=Some(2), day=Some(29))),
+  )
+}
+
+///|
+test "a timestamp's components must be in range and complete" {
+  assert_true(invalid(@ion.Timestamp::new(year=0)))
+  assert_true(invalid(@ion.Timestamp::new(year=2000, month=Some(13))))
+  assert_true(
+    invalid(
+      @ion.Timestamp::new(year=2000, month=Some(1), day=Some(1), hour=Some(1)),
+    ),
+  )
+  assert_true(
+    invalid(
+      @ion.Timestamp::new(
+        year=2000,
+        month=Some(1),
+        day=Some(1),
+        hour=Some(24),
+        minute=Some(0),
+        offset=Some(@ion.TimestampOffset::Known(0)),
+      ),
+    ),
+  )
+  let fraction = (text : String) => {
+    @ion.Timestamp::new(
+      year=2000,
+      month=Some(1),
+      day=Some(1),
+      hour=Some(0),
+      minute=Some(0),
+      second=Some(0),
+      fraction=Some(@ion.Decimal::parse(text)),
+      offset=Some(@ion.TimestampOffset::Known(0)),
+    )
+  }
+  assert_true(invalid(fraction("1d0")))
+  assert_true(invalid(fraction("1.1")))
+  assert_true(invalid(fraction("-0.1")))
+  assert_false(invalid(fraction("0.999")))
+}
+
+///|
+test "positive and negative zero floats are not equivalent" {
+  let zero = @ion.IonValue::float(0.0)
+  let negative_zero = @ion.IonValue::float(-0.0)
+  assert_false(zero.equals(negative_zero))
+  assert_true(negative_zero.equals(@ion.IonValue::float(-0.0)))
+}

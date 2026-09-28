@@ -8,6 +8,14 @@
 // returns.
 
 ///|
+/// Whether a value's length follows its descriptor as a `VarUInt`: a length
+/// nibble of 14, or 1 for a struct, which marks an ordered struct (one whose
+/// fields are sorted by symbol ID).
+fn has_var_uint_length(type_code : Int, nibble : Int) -> Bool {
+  nibble == 0x0E || (type_code == 13 && nibble == 1)
+}
+
+///|
 /// Whether the Ion binary version marker begins at `offset`.
 pub fn has_version_marker(bytes : BytesView, offset : Int) -> Bool {
   offset + 4 <= bytes.length() &&
@@ -22,6 +30,19 @@ pub fn has_version_marker(bytes : BytesView, offset : Int) -> Bool {
 /// `offset` — the descriptor, its length field, and the representation — or
 /// `None` when the input does not hold all of them yet.
 fn frame(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
+  match value_size(bytes, offset) {
+    Some(total) if offset + total <= bytes.length() => Some(total)
+    _ => None
+  }
+}
+
+///|
+/// The total octets the value (or NOP padding) whose descriptor sits at
+/// `offset` spans — the descriptor, its length field, and the representation —
+/// once the descriptor and length field have arrived, even when the
+/// representation has not. `None` means the length field is still incomplete.
+/// A streaming reader uses it to wait for a whole value before decoding.
+pub fn value_size(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
   if offset >= bytes.length() {
     return None
   }
@@ -36,7 +57,7 @@ fn frame(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
   } else if nibble == 0x0F {
     // A typed null has no representation.
     ()
-  } else if nibble == 0x0E {
+  } else if has_var_uint_length(type_code, nibble) {
     let cursor = Cursor::new(bytes, offset + 1, bytes.length())
     let mut value = 0
     let mut done = false
@@ -58,11 +79,7 @@ fn frame(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
   } else {
     length = nibble
   }
-  let total = header + length
-  if offset + total > bytes.length() {
-    return None
-  }
-  Some(total)
+  Some(header + length)
 }
 
 ///|
@@ -83,7 +100,7 @@ fn null_type(type_code : Int) -> @ion.IonType raise @ion.IonError {
 pub fn decode_value(
   bytes : BytesView,
   offset : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> (@ion.IonValue, Int)? raise @ion.IonError {
   let mut start = offset
   let mut result : (@ion.IonValue, Int)? = None
@@ -113,7 +130,7 @@ pub fn decode_value(
 /// before decoding.
 fn decode_element(
   cursor : Cursor,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let descriptor = cursor.octet()
   let type_code = descriptor >> 4
@@ -134,7 +151,7 @@ fn decode_typed(
   cursor : Cursor,
   type_code : Int,
   nibble : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   if nibble == 0x0F {
     return @ion.IonValue::typed_null(null_type(type_code))
@@ -143,7 +160,14 @@ fn decode_typed(
     // A bool's nibble carries the value.
     return decode_bool(nibble)
   }
-  let length = if nibble == 0x0E { cursor.var_uint() } else { nibble }
+  let length = if has_var_uint_length(type_code, nibble) {
+    cursor.var_uint()
+  } else {
+    nibble
+  }
+  if type_code == 13 && nibble == 1 && length == 0 {
+    raise @ion.IonError::Syntax("an ordered struct must not be empty")
+  }
   let end = cursor.pos + length
   if end > cursor.limit {
     raise @ion.IonError::Syntax("a value overruns its container")
@@ -151,8 +175,18 @@ fn decode_typed(
   let value = match type_code {
     2 | 3 => decode_int(cursor, length, type_code == 3)
     4 => decode_float(cursor, length)
-    5 => decode_decimal(cursor, length)
-    6 => decode_timestamp(cursor, length)
+    5 | 6 => {
+      // A decimal or a timestamp ends where its length says, not at the end
+      // of its container, so it reads through a cursor that stops there.
+      let inner = Cursor::new(cursor.bytes, cursor.pos, end)
+      let value = if type_code == 5 {
+        decode_decimal(inner, length)
+      } else {
+        decode_timestamp(inner, length)
+      }
+      cursor.pos = inner.pos
+      value
+    }
     7 => decode_symbol(cursor, length, table)
     8 => decode_string(cursor, length)
     9 => @ion.IonValue::clob(cursor.take(length).to_owned())
@@ -334,6 +368,8 @@ fn decode_timestamp(
     fraction~,
     offset=local_offset,
   )
+  // The components are in UTC, and must describe a real moment there too.
+  timestamp.validate()
   @ion.IonValue::timestamp(timestamp.as_local())
 }
 
@@ -342,10 +378,10 @@ fn decode_timestamp(
 fn decode_symbol(
   cursor : Cursor,
   length : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let sid = if length == 0 { 0 } else { cursor.uint(length).to_int() }
-  @ion.IonValue::symbol_token(table.token(sid))
+  @ion.IonValue::symbol_token(table.lookup(sid))
 }
 
 ///|
@@ -366,7 +402,7 @@ fn decode_string(
 fn decode_sequence(
   cursor : Cursor,
   end : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
   is_list : Bool,
 ) -> @ion.IonValue raise @ion.IonError {
   let inner = cursor.scoped(end)
@@ -391,7 +427,7 @@ fn decode_sequence(
 fn decode_struct(
   cursor : Cursor,
   end : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let inner = cursor.scoped(end)
   let fields : Array[@ion.Field] = []
@@ -401,7 +437,7 @@ fn decode_struct(
     if inner.skip_padding() {
       continue
     }
-    let name = table.token(sid)
+    let name = table.lookup(sid)
     let value = decode_element(inner, table)
     fields.push(@ion.Field::from_token(name, value))
   }
@@ -415,7 +451,7 @@ fn decode_struct(
 fn decode_annotated(
   cursor : Cursor,
   nibble : Int,
-  table : SymbolTable,
+  table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let length = if nibble == 0x0E { cursor.var_uint() } else { nibble }
   let end = cursor.pos + length
@@ -430,7 +466,7 @@ fn decode_annotated(
   let annotations : Array[@ion.SymbolToken] = []
   while cursor.pos < annotation_end {
     let sid = cursor.var_uint()
-    annotations.push(table.token(sid))
+    annotations.push(table.lookup(sid))
   }
   if cursor.at_end() {
     raise @ion.IonError::Syntax("an annotation wrapper has no value")
@@ -472,104 +508,24 @@ pub fn is_padding_only(
 }
 
 ///|
-/// Consume a top-level value: a local symbol table and a version marker update
-/// the table instead of being returned, and everything else is a value.
-pub fn SymbolTable::accept(
-  self : SymbolTable,
+/// Consume a top-level value as a reader sees it: a local symbol table updates
+/// `symbols`, and an unannotated symbol with the text `$ion_1_0` is a no-op
+/// (only the four-octet marker is a version marker in Ion binary); neither is
+/// returned. Everything else is a value.
+pub fn accept_value(
+  symbols : @ion.SymbolTable,
   value : @ion.IonValue,
 ) -> @ion.IonValue? raise @ion.IonError {
-  match value.kind() {
-    @ion.IonValueKind::Symbol(token) =>
-      match token.text() {
-        Some("$ion_1_0") => {
-          self.set_locals([])
-          None
-        }
-        _ => Some(value)
-      }
-    @ion.IonValueKind::Struct(fields) =>
-      if has_annotation(value, "$ion_symbol_table") {
-        self.load_local_symbol_table(fields)
-        None
-      } else {
-        Some(value)
-      }
-    _ => Some(value)
+  if value.annotations().is_empty() &&
+    value.kind() is @ion.IonValueKind::Symbol(token) &&
+    token.text() == Some("$ion_1_0") {
+    return None
   }
-}
-
-///|
-/// Whether a value carries the named annotation.
-fn has_annotation(value : @ion.IonValue, name : String) -> Bool {
-  for annotation in value.annotations() {
-    if annotation.text() == Some(name) {
-      return true
-    }
+  if symbols.apply_local_symbol_table(value) {
+    None
+  } else {
+    Some(value)
   }
-  false
-}
-
-///|
-/// The value of a field named `name`, when present.
-fn field_value(fields : Array[@ion.Field], name : String) -> @ion.IonValue? {
-  for field in fields {
-    if field.name().text() == Some(name) {
-      return Some(field.value())
-    }
-  }
-  None
-}
-
-///|
-/// Apply a local symbol table: the `symbols` field lists the texts of the
-/// symbols that follow, in ID order from 10. An `imports` field is rejected
-/// unless it names the system table, because shared symbol tables are not
-/// implemented — silently ignoring an import would resolve IDs to wrong text.
-fn SymbolTable::load_local_symbol_table(
-  self : SymbolTable,
-  fields : Array[@ion.Field],
-) -> Unit raise @ion.IonError {
-  match field_value(fields, "imports") {
-    Some(imports) =>
-      match imports.kind() {
-        @ion.IonValueKind::Symbol(token) =>
-          if token.text() != Some("$ion_symbol_table") {
-            raise @ion.IonError::Unsupported(
-              "shared symbol table imports are not supported",
-            )
-          }
-        @ion.IonValueKind::Null(_) => ()
-        _ =>
-          raise @ion.IonError::Unsupported(
-            "shared symbol table imports are not supported",
-          )
-      }
-    None => ()
-  }
-  let texts : Array[String] = []
-  match field_value(fields, "symbols") {
-    Some(symbols) =>
-      match symbols.kind() {
-        @ion.IonValueKind::List(items) =>
-          for item in items {
-            match item.kind() {
-              @ion.IonValueKind::String(text) => texts.push(text)
-              @ion.IonValueKind::Null(_) => texts.push("")
-              _ =>
-                raise @ion.IonError::DataModel(
-                  "a symbol table's symbols must be strings",
-                )
-            }
-          }
-        @ion.IonValueKind::Null(_) => ()
-        _ =>
-          raise @ion.IonError::DataModel(
-            "a symbol table's symbols field must be a list",
-          )
-      }
-    None => ()
-  }
-  self.set_locals(texts)
 }
 
 ///|
@@ -578,19 +534,19 @@ fn SymbolTable::load_local_symbol_table(
 pub fn read_binary(
   bytes : BytesView,
 ) -> Array[@ion.IonValue] raise @ion.IonError {
-  let table = SymbolTable::system()
+  let table = @ion.SymbolTable::system()
   let values : Array[@ion.IonValue] = []
   let mut offset = 0
   while offset < bytes.length() {
     if has_version_marker(bytes, offset) {
       offset += 4
-      table.set_locals([])
+      table.reset()
       continue
     }
     match decode_value(bytes, offset, table) {
       Some((value, consumed)) => {
         offset += consumed
-        match table.accept(value) {
+        match accept_value(table, value) {
           Some(value) => values.push(value)
           None => ()
         }

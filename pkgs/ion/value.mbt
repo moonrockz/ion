@@ -248,7 +248,8 @@ fn symbol_text(token : SymbolToken) -> String? {
 
 ///|
 /// Structural equality following the Ion data model: annotations must match in
-/// order, all NaNs are equivalent, list and sexp elements are compared
+/// order, all NaNs are equivalent, positive and negative zero are not, list
+/// and sexp elements are compared
 /// pairwise, and struct fields are compared as an unordered multiset.
 pub fn IonValue::equals(self : IonValue, other : IonValue) -> Bool {
   if self.annotations.length() != other.annotations.length() {
@@ -265,7 +266,9 @@ pub fn IonValue::equals(self : IonValue, other : IonValue) -> Bool {
     (IonValueKind::Bool(a), IonValueKind::Bool(b)) => a == b
     (IonValueKind::Int(a), IonValueKind::Int(b)) => a.equal(b)
     (IonValueKind::Float(a), IonValueKind::Float(b)) =>
-      (a.is_nan() && b.is_nan()) || a == b
+      // All NaNs are equivalent, and positive and negative zero are not.
+      (a.is_nan() && b.is_nan()) ||
+      a.reinterpret_as_uint64() == b.reinterpret_as_uint64()
     (IonValueKind::Decimal(a), IonValueKind::Decimal(b)) =>
       a.coefficient().equal(b.coefficient()) &&
       a.exponent() == b.exponent() &&

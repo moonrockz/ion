@@ -45,7 +45,7 @@ fn wrap(type_code : Int, representation : Array[Byte]) -> Array[Byte] {
 /// carries when it has no text.
 fn symbol_id(
   token : @ion.SymbolToken,
-  symbols : SymbolTable,
+  symbols : @ion.SymbolTable,
 ) -> Int raise @ion.IonError {
   match token.text() {
     Some(text) => symbols.intern(text)
@@ -137,7 +137,7 @@ fn encode_timestamp(value : @ion.Timestamp) -> Array[Byte] {
 /// A symbol's representation: its symbol ID.
 fn encode_symbol(
   token : @ion.SymbolToken,
-  symbols : SymbolTable,
+  symbols : @ion.SymbolTable,
 ) -> Array[Byte] raise @ion.IonError {
   let out : Array[Byte] = []
   push_uint(out, BigInt::from_int(symbol_id(token, symbols)))
@@ -148,7 +148,7 @@ fn encode_symbol(
 /// The representations of a list of values, in order.
 fn encode_all(
   values : Array[@ion.IonValue],
-  symbols : SymbolTable,
+  symbols : @ion.SymbolTable,
 ) -> Array[Byte] raise @ion.IonError {
   let out : Array[Byte] = []
   for value in values {
@@ -164,7 +164,7 @@ fn encode_all(
 /// each field's value.
 fn encode_fields(
   fields : Array[@ion.Field],
-  symbols : SymbolTable,
+  symbols : @ion.SymbolTable,
 ) -> Array[Byte] raise @ion.IonError {
   let out : Array[Byte] = []
   for field in fields {
@@ -180,7 +180,7 @@ fn encode_fields(
 /// The representation of a value's kind, without its descriptor.
 fn encode_body(
   kind : @ion.IonValueKind,
-  symbols : SymbolTable,
+  symbols : @ion.SymbolTable,
 ) -> Array[Byte] raise @ion.IonError {
   match kind {
     @ion.IonValueKind::Null(t) =>
@@ -214,7 +214,7 @@ fn encode_body(
 /// annotations.
 fn encode(
   value : @ion.IonValue,
-  symbols : SymbolTable,
+  symbols : @ion.SymbolTable,
 ) -> Array[Byte] raise @ion.IonError {
   if value.has_annotations() {
     let annotations : Array[Byte] = []
@@ -240,7 +240,7 @@ fn encode(
 /// them before the values that reference them.
 fn collect_symbols(
   value : @ion.IonValue,
-  symbols : SymbolTable,
+  symbols : @ion.SymbolTable,
 ) -> Unit raise @ion.IonError {
   for annotation in value.annotations() {
     ignore(symbol_id(annotation, symbols))
@@ -263,10 +263,15 @@ fn collect_symbols(
 ///|
 /// The symbol table a datagram's values need: the system symbols plus a local
 /// symbol for every text they use that the system table does not define.
-pub fn SymbolTable::for_values(
+pub fn symbols_for_values(
   values : Array[@ion.IonValue],
-) -> SymbolTable raise @ion.IonError {
-  let table = SymbolTable::system()
+) -> @ion.SymbolTable raise @ion.IonError {
+  let table = @ion.SymbolTable::system()
+  // Symbols known only by ID keep their IDs, so the texts go after them.
+  let highest = @ion.highest_symbol_id(values)
+  if highest > 9 {
+    table.reserve(highest - 9)
+  }
   for value in values {
     collect_symbols(value, table)
   }
@@ -276,18 +281,13 @@ pub fn SymbolTable::for_values(
 ///|
 /// A local symbol table declaring `symbols`, as a `$ion_symbol_table` annotated
 /// struct, or `None` when the system table already defines every symbol.
-pub fn local_symbol_table(symbols : SymbolTable) -> Bytes? raise @ion.IonError {
-  if symbols.is_empty() {
-    return None
+pub fn local_symbol_table(
+  symbols : @ion.SymbolTable,
+) -> Bytes? raise @ion.IonError {
+  match symbols.to_local_symbol_table() {
+    Some(table) => Some(Bytes::from_array(encode(table, symbols)))
+    None => None
   }
-  let texts : Array[@ion.IonValue] = []
-  for text in symbols.locals() {
-    texts.push(@ion.IonValue::string(text))
-  }
-  let table = @ion.IonValue::from_fields([
-    @ion.Field::new("symbols", @ion.IonValue::list(texts)),
-  ]).with_annotations([@ion.SymbolToken::new("$ion_symbol_table")])
-  Some(Bytes::from_array(encode(table, symbols)))
 }
 
 ///|
@@ -296,7 +296,7 @@ pub fn local_symbol_table(symbols : SymbolTable) -> Bytes? raise @ion.IonError {
 /// one table and encodes every value with it.
 pub fn encode_value(
   value : @ion.IonValue,
-  symbols : SymbolTable,
+  symbols : @ion.SymbolTable,
 ) -> Bytes raise @ion.IonError {
   Bytes::from_array(encode(value, symbols))
 }
@@ -305,7 +305,7 @@ pub fn encode_value(
 /// Encode values as an Ion binary datagram: the version marker, a local symbol
 /// table when it is needed, and the values.
 pub fn write_binary(values : Array[@ion.IonValue]) -> Bytes raise @ion.IonError {
-  let symbols = SymbolTable::for_values(values)
+  let symbols = symbols_for_values(values)
   let out : Array[Byte] = []
   for octet in binary_version_marker().to_array() {
     out.push(octet)
