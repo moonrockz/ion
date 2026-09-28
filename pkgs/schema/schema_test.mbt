@@ -143,3 +143,22 @@ test "contains matches values in a list, sexp, or struct" {
   // A non-container cannot contain a value.
   assert_true(!accepts(schema, "has_high", "high"))
 }
+
+///|
+test "length constraints accept a range" {
+  let containers = "type::{ name: short, container_length: range::[1, 3] }"
+  assert_true(accepts(containers, "short", "[1, 2]"))
+  assert_true(!accepts(containers, "short", "[]"))
+  assert_true(!accepts(containers, "short", "[1, 2, 3, 4]"))
+  let codes = "type::{ name: code, codepoint_length: range::[2, max] }"
+  assert_true(accepts(codes, "code", "\"abcdef\""))
+  assert_true(!accepts(codes, "code", "\"a\""))
+}
+
+///|
+test "an exclusive range bound is unsupported" {
+  let error = load_error(
+    "type::{ name: short, container_length: range::[exclusive::0, 3] }",
+  )
+  assert_true(error is Some(@ion.IonError::Unsupported(_)))
+}

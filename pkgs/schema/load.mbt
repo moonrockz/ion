@@ -135,7 +135,10 @@ fn load_constraint(
   key : String,
   value : @ion.IonValue,
 ) -> Constraint raise @ion.IonError {
-  reject_unknown_annotations(value, "constraint '" + key + "'")
+  // A length takes a `range::` annotation, which `load_range` checks.
+  if key != "container_length" && key != "codepoint_length" {
+    reject_unknown_annotations(value, "constraint '" + key + "'")
+  }
   match key {
     "type" => load_type_constraint(value)
     "element" => Element(load_inline_type(value), occurs_of(value))
@@ -285,8 +288,17 @@ fn load_occurs(value : @ion.IonValue) -> Occurs raise @ion.IonError {
 ///|
 /// Load a `range::[lower, upper]`, where `upper` may be `max` for unbounded.
 fn load_range(value : @ion.IonValue) -> (Int, Int?) raise @ion.IonError {
+  let annotations = value.annotations().map(token => token.text())
   match value.kind() {
     @ion.IonValueKind::List(items) => {
+      if annotations != [Some("range")] {
+        raise @ion.IonError::DataModel("a range must be annotated with 'range'")
+      }
+      if items.iter().any(item => item.has_annotations()) {
+        raise @ion.IonError::Unsupported(
+          "exclusive range bounds are not supported",
+        )
+      }
       if items.length() != 2 {
         raise @ion.IonError::DataModel(
           "a range needs a lower and an upper bound",
@@ -306,6 +318,12 @@ fn load_range(value : @ion.IonValue) -> (Int, Int?) raise @ion.IonError {
       (lower, upper)
     }
     _ => {
+      if !annotations.is_empty() {
+        raise @ion.IonError::Unsupported(
+          "unsupported annotation on a range: " +
+          value.annotations()[0].text().unwrap_or("?"),
+        )
+      }
       let single = int_of(value)
       (single, Some(single))
     }
