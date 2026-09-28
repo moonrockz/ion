@@ -15,8 +15,19 @@ The test in `ion_tests_test.mbt` reads every file under
   equivalent, and in `good/non-equivs` no two of them may be. A sequence
   annotated `embedded_documents` holds strings, each an Ion document.
 
-A skip list names the files this implementation does not handle yet, each
-with its reason. A skipped file that starts to pass fails the test, so the
+The test in `readers_test.mbt` runs the same files through every other
+reader and writer, and compares them with the sync reader above:
+
+- the stream readers (`TextReader`, `BinaryReader`), fed in chunks of one
+  octet and of 4 KiB, read the same values from a good file and fail on a bad
+  one;
+- `TextEventReader` gives the events of those values;
+- `tokenize` covers a good text file exactly, and `parse_cst` parses it;
+- the values survive the pretty writer;
+- the async writers write the same octets as the sync writers.
+
+Skip lists name the files, or `check:file` pairs, this implementation does
+not handle yet, each with its reason. A skipped file that starts to pass fails the test, so the
 list stays accurate.
 
 The package does not build for wasm-gc, where `moonbitlang/core`'s `BigInt`

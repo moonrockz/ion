@@ -323,6 +323,9 @@ git submodule at `tests/ion-tests`. `mise run setup` fetches it, and
 `pkgs/conformance` runs every Ion 1.0 file in it: each `good` file must read
 and survive a round trip through both writers, each `bad` file must fail, and
 the `equivs` and `non-equivs` sequences must compare as their directory says.
+It also runs each file through the stream readers (in one-octet and 4 KiB
+chunks), the streaming event reader, the tokenizer and syntax tree, the pretty
+writer, and the async writers, which must agree with the sync reader.
 The two files skipped, each with its reason, are listed in
 `pkgs/conformance/ion_tests_test.mbt`; a skipped file that starts to pass fails
 the test.
