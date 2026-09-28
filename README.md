@@ -274,21 +274,32 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
 
 ## Roadmap
 
-- Shared symbol tables: there is no catalog, so an import resolves as a table
-  the catalog does not hold, reserving `max_id` symbol IDs with unknown text.
-  A catalog API would give those symbols their text.
-- Ion Schema: `ordered_elements`, `annotations`, `timestamp_precision`,
-  `regex`, `closed::` fields, imports, open content, the decimal
-  `precision`/`exponent` constraints, `valid_values` ranges, and
-  `exclusive::` range bounds. The
+Each item is a [GitHub issue](https://github.com/moonrockz/ion/issues);
+test-suite work carries the
+[`testing`](https://github.com/moonrockz/ion/issues?q=is%3Aissue+label%3Atesting)
+label.
+
+- Shared symbol tables ([#2](https://github.com/moonrockz/ion/issues/2)):
+  there is no catalog, so an import resolves as a table the catalog does not
+  hold, reserving `max_id` symbol IDs with unknown text. A catalog API would
+  give those symbols their text.
+- Ion Schema ([#5](https://github.com/moonrockz/ion/issues/5)):
+  `ordered_elements`, `annotations`, `timestamp_precision`, `regex`,
+  `closed::` fields, imports, open content, the decimal `precision`/`exponent`
+  constraints, `valid_values` ranges, and `exclusive::` range bounds. The
   [Cookbook](https://amazon-ion.github.io/ion-schema/docs/cookbook/)'s
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
   the constraints above.
-- UTF-16 and UTF-32 Ion text: the text readers take decoded strings, and the
-  CLI and stream readers decode only UTF-8, so the two ion-tests files in those
-  encodings are skipped.
-- Ion 1.1: only Ion 1.0 is implemented.
+- UTF-16 and UTF-32 Ion text ([#6](https://github.com/moonrockz/ion/issues/6)):
+  the text readers take decoded strings, and the CLI and stream readers decode
+  only UTF-8, so the two ion-tests files in those encodings are skipped.
+- Ion 1.1 ([#7](https://github.com/moonrockz/ion/issues/7)): only Ion 1.0 is
+  implemented.
+- Ion binary output from the CLI ([#8](https://github.com/moonrockz/ion/issues/8)).
+- An incremental writer that writes containers without building them first
+  ([#9](https://github.com/moonrockz/ion/issues/9)).
+- An event reader for Ion binary ([#10](https://github.com/moonrockz/ion/issues/10)).
 
 ## Building and testing
 

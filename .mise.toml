@@ -42,3 +42,39 @@ run = "git-cliff -o CHANGELOG.md"
 description = "Validate release readiness (format, check, tests)"
 depends = ["setup:submodules"]
 run = "moon fmt --check && moon check && moon test"
+
+[tasks."release:version"]
+description = "Determine the next release version from conventional commits"
+run = '''
+version=$(git cliff --bumped-version 2>/dev/null || echo "0.1.0")
+echo "${version#v}"
+'''
+
+[tasks."release:notes"]
+description = "Generate the release notes for the latest version"
+run = "git cliff --latest --strip header"
+
+[tasks."release:credentials"]
+description = "Write mooncakes.io credentials from the MOONCAKES_USER_TOKEN environment variable"
+run = '''
+if [ -z "${MOONCAKES_USER_TOKEN:-}" ]; then
+  echo "Error: MOONCAKES_USER_TOKEN is not set" >&2
+  exit 1
+fi
+mkdir -p ~/.moon
+printf '{"token": "%s"}\n' "$MOONCAKES_USER_TOKEN" > ~/.moon/credentials.json
+echo "Mooncakes credentials written to ~/.moon/credentials.json"
+'''
+
+[tasks."release:prepare-assets"]
+description = "Collect the native CLI binaries from artifacts/ (downloaded build artifacts) into release/"
+run = '''
+artifacts=artifacts
+release=release
+mkdir -p "$release"
+cp "$artifacts/ion-linux-amd64/ion.exe" "$release/ion-linux-amd64"
+cp "$artifacts/ion-macos-arm64/ion.exe" "$release/ion-macos-arm64"
+cp "$artifacts/ion-windows-amd64.exe/ion.exe" "$release/ion-windows-amd64.exe"
+chmod +x "$release/ion-linux-amd64" "$release/ion-macos-arm64"
+ls -la "$release"
+'''
