@@ -105,6 +105,13 @@ moon run pkgs -- hash data.ion
 moon run pkgs -- validate schema.isl person data.ion
 ```
 
+`print`, `json`, `hash`, and `validate` stream their Ion input (text or
+binary, from a file or from stdin with `-`) through `@text/stream` and
+`@binary/stream`: each value is read, handled, and dropped in turn, so memory
+stays proportional to the largest value rather than to the input. An error
+stops the command after the values before it are handled. The CLI builds for
+the `native` and `wasm` targets, which `moonbitlang/async` supports.
+
 Once published, the same commands run through `moonx` at the short coordinate:
 
 ```bash
@@ -277,8 +284,6 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   [ion-tests](https://github.com/amazon-ion/ion-tests) good and bad files. Only
   the Ion Hash suite runs today.
 - Ion 1.1: only Ion 1.0 is implemented.
-- CLI: `ion print`, `json`, `hash`, and `validate` read the whole input into
-  memory rather than streaming it through `@text/stream` and `@binary/stream`.
 
 ## Building and testing
 

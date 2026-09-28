@@ -98,6 +98,9 @@ jobs:
       - name: Convert an Ion fixture to JSON
         run: moon run pkgs -- json tests/fixtures/sample.ion
 
+      - name: Stream Ion from stdin
+        run: moon run pkgs -- hash - < tests/fixtures/sample.ion
+
       - name: Convert a JSON fixture to Ion
         run: moon run pkgs -- fromjson tests/fixtures/sample.json
 

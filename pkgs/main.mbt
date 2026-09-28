@@ -1,6 +1,8 @@
 // The `ion` CLI: read and re-emit Ion, convert to and from JSON, hash values,
 // and validate Ion values against an Ion Schema. Ion input may be text or
-// binary; a leading version marker decides.
+// binary; a leading version marker decides. Ion input is streamed: each value
+// is read, handled, and dropped in turn, so memory stays proportional to the
+// largest value rather than to the input.
 //
 //   ion print [file|-]
 //   ion json [file|-]
@@ -42,71 +44,116 @@ fn read_input(path : String) -> String raise {
 }
 
 ///|
-/// Read a file (or stdin) as bytes.
-fn read_input_bytes(path : String) -> Bytes raise {
-  if path == "-" {
-    @fs.read_file_to_bytes("/dev/stdin")
-  } else {
-    @fs.read_file_to_bytes(path)
+/// An error the CLI reports in its own words, such as an input it cannot open.
+suberror CliError {
+  CliError(String)
+}
+
+///|
+/// The message of an error: the text of an `IonError` or a `CliError`, or its
+/// description.
+fn describe(error : Error) -> String {
+  match error {
+    @core.IonError::Syntax(message)
+    | @core.IonError::DataModel(message)
+    | @core.IonError::Unsupported(message)
+    | CliError(message) => message
+    _ => error.to_string()
   }
 }
 
 ///|
-/// Read a document as a datagram: Ion binary when it begins with the version
+/// Why `path` could not be opened.
+fn open_failure(path : String, error : Error) -> CliError {
+  match error {
+    @os_error.OSError(_, ..) as os_error if os_error.is_ENOENT() =>
+      CliError("\{path}: no such file or directory")
+    @os_error.OSError(_, ..) as os_error if os_error.is_EACCES() =>
+      CliError("\{path}: permission denied")
+    _ => CliError("\{path}: cannot be opened")
+  }
+}
+
+///|
+/// Call `visit` on every value of a file, or of stdin when the path is `-`,
+/// as each value arrives: Ion binary when the input begins with the version
 /// marker, and Ion text otherwise.
-fn read_datagram(path : String) -> Array[@core.IonValue] raise @core.IonError {
-  let bytes = read_input_bytes(path) catch {
-    @fs.IOError(message) => raise @core.IonError::Syntax(message)
-    _ => raise @core.IonError::Syntax("failed to read " + path)
-  }
-  if @binary.has_version_marker(bytes[:], 0) {
-    @binary.read_binary(bytes[:])
+async fn each_value(
+  path : String,
+  visit : (@core.IonValue) -> Unit raise,
+) -> Unit {
+  if path == "-" {
+    each_value_of("stdin", @stdio.stdin, visit)
   } else {
-    let text = @utf8.decode(bytes) catch {
-      _ =>
-        raise @core.IonError::Syntax(
-          "the input is neither Ion binary nor UTF-8 Ion text",
-        )
+    let file = @async_fs.open(path, mode=ReadOnly) catch {
+      error => raise open_failure(path, error)
     }
-    @text.read_ion_datagram(text)
+    defer file.close()
+    each_value_of(path, file, visit)
   }
 }
 
 ///|
-/// Read a document and print its canonical Ion text.
-fn do_print(path : String) -> Result[Unit, String] {
-  let values = read_datagram(path) catch {
-    error => return Err(error.message())
+/// Call `visit` on every value of `source`, which `name` names in errors. The
+/// first octets decide the encoding, and then go to the reader ahead of the
+/// rest of the source.
+async fn each_value_of(
+  name : String,
+  source : &@io.Reader,
+  visit : (@core.IonValue) -> Unit raise,
+) -> Unit {
+  let mut head = Bytes::new(0)
+  while head.length() < 4 {
+    let chunk = source.read_some() catch {
+      _ => raise CliError("\{name}: cannot be read")
+    }
+    match chunk {
+      Some(chunk) if chunk.length() > 0 => head = head + chunk
+      _ => break
+    }
   }
-  let outcome = @text.write_all(values) catch {
-    error => return Err(error.message())
+  let input = @io.MemoryReader(async fn(writer) {
+    writer.write(head)
+    // Large reads keep the number of hand-offs through the pipe small.
+    while source.read_some(max_len=65536) is Some(chunk) {
+      writer.write(chunk)
+    }
+  })
+  defer input.close()
+  if @binary.has_version_marker(head[:], 0) {
+    let reader = @binary_stream.BinaryReader::new(input)
+    while reader.next() is Some(value) {
+      visit(value)
+    }
+  } else {
+    let reader = @text_stream.TextReader::new(input)
+    while reader.next() is Some(value) {
+      visit(value)
+    }
   }
-  println(outcome)
+}
+
+///|
+/// Read a document and print its canonical Ion text, one value per line.
+async fn do_print(path : String) -> Result[Unit, String] {
+  each_value(path, value => println(@text.write_ion(value))) catch {
+    error => return Err(describe(error))
+  }
   Ok(())
 }
 
 ///|
 /// Print the SHA-256 Ion Hash of every value in a document, one per line.
-fn do_hash(path : String) -> Result[Unit, String] {
-  let values = read_datagram(path) catch {
-    error => return Err(error.message())
-  }
-  let hashes : Array[String] = []
-  for value in values {
-    let digest = @hash.ion_hash_hex(value) catch {
-      error => return Err(error.message())
-    }
-    hashes.push(digest)
-  }
-  if !hashes.is_empty() {
-    println(hashes.join("\n"))
+async fn do_hash(path : String) -> Result[Unit, String] {
+  each_value(path, value => println(@hash.ion_hash_hex(value))) catch {
+    error => return Err(describe(error))
   }
   Ok(())
 }
 
 ///|
 /// Validate every value in a document against a named schema type.
-fn do_validate(
+async fn do_validate(
   schema_path : String,
   type_name : String,
   input : String,
@@ -118,33 +165,30 @@ fn do_validate(
   let schema = @schema.Schema::load_from_text(schema_text) catch {
     error => return Err(error.message())
   }
-  let input_text = read_input(input) catch {
-    @fs.IOError(message) => return Err(message)
-    _ => return Err("failed to read " + input)
-  }
-  let values = @text.read_ion_datagram(input_text) catch {
-    error => return Err(error.message())
-  }
+  let mut index = 0
   let mut failed = 0
-  for index in 0..<values.length() {
-    let violations = schema.validate(type_name, values[index])
+  each_value(input, fn(value) {
+    let violations = schema.validate(type_name, value)
     for violation in violations {
       eprintln("value \{index}: \{violation.path()}: \{violation.message()}")
     }
     if !violations.is_empty() {
       failed += 1
     }
+    index += 1
+  }) catch {
+    error => return Err(describe(error))
   }
   if failed == 0 {
     Ok(())
   } else {
-    Err("\{failed} of \{values.length()} value(s) failed validation")
+    Err("\{failed} of \{index} value(s) failed validation")
   }
 }
 
 ///|
 /// Dispatch a parsed command line.
-fn run(args : Array[String]) -> Result[Unit, String] {
+async fn run(args : Array[String]) -> Result[Unit, String] {
   match args {
     [_] => do_print("-")
     [_, "print", path, ..] => do_print(path)
@@ -168,7 +212,7 @@ fn run(args : Array[String]) -> Result[Unit, String] {
 }
 
 ///|
-fn main {
+async fn main {
   match run(@env.args()) {
     Ok(_) => ()
     Err(message) => {
@@ -181,19 +225,9 @@ fn main {
 ///|
 /// Read a document and print each value as JSON text, one per line, following
 /// the cookbook's down-conversion rules.
-fn do_json(path : String) -> Result[Unit, String] {
-  let values = read_datagram(path) catch {
-    error => return Err(error.message())
-  }
-  let rendered : Array[String] = []
-  for value in values {
-    let text = @json.write_json(value) catch {
-      error => return Err(error.message())
-    }
-    rendered.push(text)
-  }
-  if !rendered.is_empty() {
-    println(rendered.join("\n"))
+async fn do_json(path : String) -> Result[Unit, String] {
+  each_value(path, value => println(@json.write_json(value))) catch {
+    error => return Err(describe(error))
   }
   Ok(())
 }
