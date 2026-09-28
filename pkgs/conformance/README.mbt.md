@@ -13,7 +13,9 @@ The test in `ion_tests_test.mbt` reads every file under
 - each file under `bad` must fail to read;
 - in `good/equivs`, the members of each top-level sequence must be
   equivalent, and in `good/non-equivs` no two of them may be. A sequence
-  annotated `embedded_documents` holds strings, each an Ion document.
+  annotated `embedded_documents` holds strings, each an Ion document;
+- in `good/timestamp/equivTimeline`, the timestamps of each top-level
+  sequence name the same instant, whatever their precision and offset.
 
 The test in `readers_test.mbt` runs the same files through every other
 reader and writer, and compares them with the sync reader above:

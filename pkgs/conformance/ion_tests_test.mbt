@@ -6,7 +6,9 @@
 // - every file under `bad` fails to read;
 // - in `good/equivs`, the values of each top-level sequence are equivalent,
 //   and in `good/non-equivs`, no two of them are. A sequence annotated
-//   `embedded_documents` holds strings, each an Ion document to compare.
+//   `embedded_documents` holds strings, each an Ion document to compare;
+// - in `good/timestamp/equivTimeline`, the timestamps of each top-level
+//   sequence name the same instant, whatever their precision and offset.
 //
 // `skipped` lists the files this implementation does not handle yet, each
 // with the reason. A skipped file that starts to pass fails the test, so the
@@ -153,6 +155,34 @@ fn check_equivalence(
 }
 
 ///|
+/// Check that the timestamps of each top-level sequence name the same
+/// instant. They need not be equivalent: they differ in precision and offset.
+fn check_same_instants(values : Array[@ion.IonValue]) -> Unit raise {
+  for sequence in values {
+    let timestamps : Array[@ion.Timestamp] = []
+    match sequence.kind() {
+      List(items) | Sexp(items) =>
+        for item in items {
+          match item.kind() {
+            Timestamp(timestamp) => timestamps.push(timestamp)
+            _ => fail("a timeline member is not a timestamp: \{show([item])}")
+          }
+        }
+      _ => fail("a top-level value is not a sequence: \{show([sequence])}")
+    }
+    for i in 0..<timestamps.length() {
+      for j in (i + 1)..<timestamps.length() {
+        if timestamps[i].compare_instant(timestamps[j]) != 0 {
+          fail(
+            "\{timestamps[i].to_ion_string()} and \{timestamps[j].to_ion_string()} name different instants",
+          )
+        }
+      }
+    }
+  }
+}
+
+///|
 /// Check one file, raising with the reason when it does not behave as its
 /// directory requires.
 fn check_file(relative : String) -> Unit raise {
@@ -163,6 +193,9 @@ fn check_file(relative : String) -> Unit raise {
   }
   let values = read_file(path)
   check_round_trips(values)
+  if relative.has_prefix("good/timestamp/equivTimeline/") {
+    check_same_instants(values)
+  }
   if relative.has_prefix("good/equivs/") {
     check_equivalence(values, true)
   } else if relative.has_prefix("good/non-equivs/") {
