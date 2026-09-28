@@ -135,6 +135,31 @@ test "timestamps" {
 }
 ```
 
+`with_offset` moves a timestamp to another offset, keeping the instant it
+names, and `as_utc` moves it to `Z`. `compare_instant` compares the instants
+two timestamps name, whatever their precision and offset; `equals` compares
+Ion values, which differ when the precision or the offset does.
+
+```mbt check
+///|
+test "offsets and instants" {
+  let eastern = @ion.Timestamp::parse("2024-01-01T01:30+02:00")
+  inspect(eastern.as_utc().to_ion_string(), content="2023-12-31T23:30Z")
+  inspect(
+    eastern.with_offset(@ion.TimestampOffset::Known(-300)).to_ion_string(),
+    content="2023-12-31T18:30-05:00",
+  )
+  let midnight = @ion.Timestamp::parse("2024-01-01")
+  let also_midnight = @ion.Timestamp::parse("2024-01-01T01:00:00.000+01:00")
+  inspect(midnight.compare_instant(also_midnight), content="0")
+  assert_false(
+    @ion.IonValue::timestamp(midnight).equals(
+      @ion.IonValue::timestamp(also_midnight),
+    ),
+  )
+}
+```
+
 ## Symbols and symbol tables
 
 A symbol has text, a symbol ID, or both. The Ion 1.0 system symbols take IDs

@@ -352,13 +352,10 @@ fn decode_timestamp(
       )
     }
   }
-  // A timestamp with no time of day has no offset to apply; the model leaves it
-  // out, matching Ion text.
-  let local_offset = match (hour, minute) {
-    (Some(_), Some(_)) => Some(offset)
-    _ => None
-  }
-  let timestamp = @ion.Timestamp::new(
+  // The components are in UTC. A timestamp with no time of day has no offset
+  // to apply; the model leaves it out, matching Ion text.
+  let has_time = hour is Some(_) && minute is Some(_)
+  let utc = @ion.Timestamp::new(
     year~,
     month~,
     day~,
@@ -366,11 +363,11 @@ fn decode_timestamp(
     minute~,
     second~,
     fraction~,
-    offset=local_offset,
+    offset=if has_time { Some(@ion.TimestampOffset::Known(0)) } else { None },
   )
-  // The components are in UTC, and must describe a real moment there too.
-  timestamp.validate()
-  @ion.IonValue::timestamp(timestamp.as_local())
+  // The components must describe a real moment in UTC too.
+  utc.validate()
+  @ion.IonValue::timestamp(if has_time { utc.with_offset(offset) } else { utc })
 }
 
 ///|

@@ -207,8 +207,10 @@ pub struct Timestamp {
   fraction : Decimal?
   offset : TimestampOffset?
 } derive(@debug.Debug)
+#deprecated
 pub fn Timestamp::as_local(Self) -> Self
 pub fn Timestamp::as_utc(Self) -> Self
+pub fn Timestamp::compare_instant(Self, Self) -> Int
 pub fn Timestamp::day(Self) -> Int?
 pub fn Timestamp::fraction(Self) -> Decimal?
 pub fn Timestamp::hour(Self) -> Int?
@@ -222,6 +224,7 @@ pub fn Timestamp::second(Self) -> Int?
 pub fn Timestamp::to_ion_string(Self) -> String
 pub fn Timestamp::to_repr(Self) -> @debug.Repr
 pub fn Timestamp::validate(Self) -> Unit raise IonError
+pub fn Timestamp::with_offset(Self, TimestampOffset) -> Self
 pub fn Timestamp::year(Self) -> Int
 
 pub(all) enum TimestampOffset {
