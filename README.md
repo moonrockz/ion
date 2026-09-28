@@ -8,7 +8,8 @@ hierarchical data serialization format — and
 > **Status:** early. The core data model, the Ion **text** and Ion **binary**
 > encodings, **Ion Hash** (Ion Hash 1.0 over SHA-256), a focused Ion Schema
 > validation subset, and **JSON interoperability** are implemented and tested,
-> with an asynchronous streaming reader and writer over `moonbitlang/async`.
+> with asynchronous streaming readers for both encodings over
+> `moonbitlang/async`.
 
 ## Installation
 
@@ -22,6 +23,7 @@ moon add moonrockz/ion
 | ------------- | ------------- | ---------------------- | ------- |
 | `@ion` (core) | `pkgs/ion`    | `moonrockz/ion/ion`    | Core data model: Ion types, values, annotations, decimals, timestamps, symbol tokens |
 | `@text`       | `pkgs/text`   | `moonrockz/ion/text`   | Ion text reader and writer                              |
+| `@text/stream` | `pkgs/text/stream` | `moonrockz/ion/text/stream` | Ion text readers over asynchronous IO (`moonbitlang/async`) |
 | `@hash`       | `pkgs/hash`   | `moonrockz/ion/hash`   | Ion Hash 1.0: an encoding-independent hash of an Ion value |
 | `@binary`     | `pkgs/binary` | `moonrockz/ion/binary` | Ion binary codec: values, containers, annotations, and local symbol tables |
 | `@binary/stream` | `pkgs/binary/stream` | `moonrockz/ion/binary/stream` | The Ion binary codec over asynchronous IO (`moonbitlang/async`) |
@@ -38,8 +40,9 @@ so the repository root holds only module metadata, tooling, and tests.
   executable** — so the published package is runnable at the short coordinate
   `moonx moonrockz/ion`;
 - `pkgs/ion/` is the `@ion` core data model (`moonrockz/ion/ion`);
-- `pkgs/text`, `pkgs/hash`, `pkgs/binary` (with the async `pkgs/binary/stream`),
-  `pkgs/json`, and `pkgs/schema` are the remaining library packages.
+- `pkgs/text` (with the async `pkgs/text/stream`), `pkgs/hash`, `pkgs/binary`
+  (with the async `pkgs/binary/stream`), `pkgs/json`, and `pkgs/schema` are the
+  remaining library packages.
 
 The executable owns the module root (instead of living in a `cmd/` package) so
 that `moonx` can run it as `moonrockz/ion`; library users import the core model
@@ -125,6 +128,7 @@ data model):
 | Fold | `@ion.IonFold` + `IonValue::fold` | Thread an accumulator with `Continue` / `SkipChildren` / `Stop` |
 | SAX | `@text.IonReader` (pull) and `@text.IonHandler` + `@text.parse_with_handler` (push) | A flat `IonEvent` stream without building the DOM |
 | Binary | `@binary.read_binary`, `@binary.write_binary`, `@binary/stream` | The Ion **binary** codec, with local symbol tables and an async streaming reader and writer |
+| Streaming text | `@text/stream.TextReader` (values) and `@text/stream.TextEventReader` (events) | Ion **text** from an async byte source, parsed one top-level value at a time |
 
 ```moonbit skip nocheck
 let value = @text.read_ion!("{a: 1}")               // DOM / AST
@@ -133,6 +137,29 @@ let total = value.fold(0, @ion.IonFold::default())  // fold
 let tokens = @text.tokenize!("int32::12")           // CST tokens
 @text.parse_with_handler!("1 2 3", handler)         // SAX (push)
 ```
+
+### Streaming Ion text
+
+`@text/stream` reads Ion text from a `moonbitlang/async` byte source. It
+decodes the UTF-8 as it arrives and parses one top-level value at a time, so
+memory stays proportional to the largest value, not to the stream:
+
+```moonbit skip nocheck
+let reader = @stream.TextReader::new(source) // moonrockz/ion/text/stream; any &@io.Reader
+while reader.next() is Some(value) {
+  println(@text.write_ion!(value))
+}
+```
+
+`TextReader` yields the values that `@text.read_ion_datagram` returns for the
+whole text, and `TextEventReader` yields the events that `@text.IonReader`
+returns for it. Text has no length prefix, so a value is settled when it closes
+with `]`, `)`, `}`, or `"`. Any other value, such as a number or a symbol, is
+settled only when the text after it shows where it ends. Until the stream ends, a value that does not
+parse is taken to be cut short, and the reader reads on. Thus a malformed value
+is reported only at the end of the stream, and the reader holds the text from
+that value on until then. `@text.read_ion_prefix` is that framing step on its
+own, for a caller that feeds text in some other way.
 
 ## Ion Hash
 
@@ -230,8 +257,6 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
   the constraints above.
-- Streaming readers over character sources (the async streaming reader covers
-  Ion binary).
 
 ## Building and testing
 

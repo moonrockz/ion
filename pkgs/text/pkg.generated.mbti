@@ -22,6 +22,8 @@ pub fn read_ion(StringView) -> @ion.IonValue raise @ion.IonError
 
 pub fn read_ion_datagram(StringView) -> Array[@ion.IonValue] raise @ion.IonError
 
+pub fn read_ion_prefix(StringView, end_of_input~ : Bool) -> (@ion.IonValue, Int)? raise @ion.IonError
+
 pub fn tokenize(StringView) -> Array[IonToken] raise @ion.IonError
 
 pub fn write_all(Array[@ion.IonValue]) -> String raise @ion.IonError

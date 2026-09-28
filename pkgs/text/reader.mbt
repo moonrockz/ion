@@ -91,6 +91,71 @@ pub fn read_ion_datagram(
 }
 
 ///|
+/// Parse the first top-level value of a datagram from text that may be only
+/// the start of the input, as a streaming reader sees it. The result is the
+/// value and the number of code units it spans, including the whitespace and
+/// comments after it; `None` means no value is available yet.
+///
+/// While `end_of_input` is false, a value is returned only when it is settled:
+/// it closes with `]`, `)`, `}`, or `"`, or the text that follows it shows
+/// where it ends. A value that fails to parse is taken to be cut short, so
+/// `None` asks for more text. Once `end_of_input` is true, `None` means only
+/// whitespace and comments remain, and a malformed value raises.
+pub fn read_ion_prefix(
+  text : StringView,
+  end_of_input~ : Bool,
+) -> (@ion.IonValue, Int)? raise @ion.IonError {
+  if end_of_input {
+    read_prefix(text, end_of_input=true)
+  } else {
+    read_prefix(text, end_of_input=false) catch {
+      _ => None
+    }
+  }
+}
+
+///|
+/// The number of code units that must follow a value, once whitespace and
+/// comments are skipped, before the value is settled. An unquoted scalar can
+/// run on into more text, and otherwise a value can still grow only through a
+/// token that begins right after it: `::` makes a symbol an annotation, and
+/// `'''` continues a long string. Three code units tell both apart from the
+/// start of the next value.
+let settle_lookahead : Int = 3
+
+///|
+/// Whether a value that ends with the code unit `last` is settled whatever
+/// text follows it: a container, a lob, or a short string closes with a
+/// delimiter that nothing can extend.
+fn is_closing_delimiter(last : UInt16) -> Bool {
+  match last {
+    ']' | ')' | '}' | '"' => true
+    _ => false
+  }
+}
+
+///|
+/// `read_ion_prefix`, raising on a malformed value whether or not the input
+/// has ended.
+fn read_prefix(
+  text : StringView,
+  end_of_input~ : Bool,
+) -> (@ion.IonValue, Int)? raise @ion.IonError {
+  let parser = Parser::new(text)
+  parser.skip_ws()
+  if parser.at_end() {
+    return None
+  }
+  let value = parser.parse_value()
+  let closed = is_closing_delimiter(text[parser.pos - 1])
+  parser.skip_ws()
+  if !end_of_input && !closed && parser.pos + settle_lookahead > text.length() {
+    return None
+  }
+  Some((value, parser.pos))
+}
+
+///|
 /// A cursor over an Ion text document.
 priv struct Parser {
   input : StringView

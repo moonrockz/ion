@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/text/stream"
+
+import {
+  "moonbitlang/async/io",
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct TextEventReader {
+  values : TextReader
+  events : Array[@text.IonEvent]
+  mut index : Int
+  mut started : Bool
+  mut ended : Bool
+}
+pub fn TextEventReader::new(&@io.Reader) -> Self
+pub async fn TextEventReader::next(Self) -> @text.IonEvent?
+
+pub struct TextReader {
+  source : &@io.Reader
+  mut text : String
+  mut start : Int
+  mut partial : Bytes
+  mut eof : Bool
+}
+pub fn TextReader::new(&@io.Reader) -> Self
+pub async fn TextReader::next(Self) -> @ion.IonValue?
+
+// Type aliases
+
+// Traits
