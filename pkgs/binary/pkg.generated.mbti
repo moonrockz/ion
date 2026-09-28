@@ -41,6 +41,8 @@ pub fn symbols_for_values(Array[@ion.IonValue]) -> @ion.SymbolTable raise @ion.I
 
 pub fn type_descriptor(IonTypeCode, Int) -> Int
 
+pub fn value_size(BytesView, Int) -> Int? raise @ion.IonError
+
 pub fn write_binary(Array[@ion.IonValue]) -> Bytes raise @ion.IonError
 
 pub fn write_binary_value(@ion.IonValue) -> Bytes raise @ion.IonError

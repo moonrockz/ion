@@ -102,13 +102,6 @@ fn Framer::note_top(self : Framer) -> Unit {
 /// step reads again between tokens.
 fn Framer::step(self : Framer, text : StringView, index : Int) -> Int? {
   let c = text[index]
-  let ahead = fn(offset : Int) -> UInt16? {
-    if index + offset < text.length() {
-      Some(text[index + offset])
-    } else {
-      None
-    }
-  }
   match self.mode {
     LineComment => {
       if c == '\n' || c == '\r' {
@@ -120,7 +113,7 @@ fn Framer::step(self : Framer, text : StringView, index : Int) -> Int? {
       if c != '*' {
         Some(1)
       } else {
-        match ahead(1) {
+        match unit_at(text, index + 1) {
           None => None
           Some('/') => {
             self.mode = Normal
@@ -135,7 +128,7 @@ fn Framer::step(self : Framer, text : StringView, index : Int) -> Int? {
       if self.escaped || c == '\\' {
         self.string_step(c, '\'')
       } else if c == '\'' {
-        match (ahead(1), ahead(2)) {
+        match (unit_at(text, index + 1), unit_at(text, index + 2)) {
           (Some('\''), Some('\'')) => {
             self.mode = Normal
             Some(3)
@@ -155,9 +148,9 @@ fn Framer::step(self : Framer, text : StringView, index : Int) -> Int? {
       }
     Normal =>
       if self.in_lob {
-        self.lob_step(c, ahead)
+        self.lob_step(text, index)
       } else {
-        self.normal_step(c, ahead)
+        self.normal_step(text, index)
       }
   }
 }
@@ -178,12 +171,8 @@ fn Framer::string_step(self : Framer, c : UInt16, close : UInt16) -> Int? {
 
 ///|
 /// Read a code unit between tokens, outside a lob.
-fn Framer::normal_step(
-  self : Framer,
-  c : UInt16,
-  ahead : (Int) -> UInt16?,
-) -> Int? {
-  match c {
+fn Framer::normal_step(self : Framer, text : StringView, index : Int) -> Int? {
+  match text[index] {
     '[' | '(' => {
       self.depth += 1
       Some(1)
@@ -195,7 +184,7 @@ fn Framer::normal_step(
       Some(1)
     }
     '{' =>
-      match ahead(1) {
+      match unit_at(text, index + 1) {
         None => None
         Some('{') => {
           self.depth += 1
@@ -211,9 +200,9 @@ fn Framer::normal_step(
       self.mode = ShortString
       Some(1)
     }
-    '\'' => self.quote_step(ahead, QuotedSymbol)
+    '\'' => self.quote_step(text, index, QuotedSymbol)
     '/' =>
-      match ahead(1) {
+      match unit_at(text, index + 1) {
         None => None
         Some('/') => {
           self.mode = LineComment
@@ -225,7 +214,7 @@ fn Framer::normal_step(
         }
         _ => Some(1)
       }
-    _ => {
+    c => {
       if self.depth == 0 && !ends_token(c) {
         self.mode = Token
       }
@@ -237,19 +226,15 @@ fn Framer::normal_step(
 ///|
 /// Read a code unit inside a lob, where only strings and the closing `}}`
 /// matter.
-fn Framer::lob_step(
-  self : Framer,
-  c : UInt16,
-  ahead : (Int) -> UInt16?,
-) -> Int? {
-  match c {
+fn Framer::lob_step(self : Framer, text : StringView, index : Int) -> Int? {
+  match text[index] {
     '"' => {
       self.mode = ShortString
       Some(1)
     }
-    '\'' => self.quote_step(ahead, Normal)
+    '\'' => self.quote_step(text, index, Normal)
     '}' =>
-      match ahead(1) {
+      match unit_at(text, index + 1) {
         None => None
         Some('}') => {
           self.in_lob = false
@@ -267,10 +252,11 @@ fn Framer::lob_step(
 /// otherwise enters `single`.
 fn Framer::quote_step(
   self : Framer,
-  ahead : (Int) -> UInt16?,
+  text : StringView,
+  index : Int,
   single : Mode,
 ) -> Int? {
-  match (ahead(1), ahead(2)) {
+  match (unit_at(text, index + 1), unit_at(text, index + 2)) {
     (Some('\''), Some('\'')) => {
       self.mode = LongString
       Some(3)
@@ -280,6 +266,16 @@ fn Framer::quote_step(
       self.mode = single
       Some(1)
     }
+  }
+}
+
+///|
+/// The code unit at `index`, or `None` when it has not arrived yet.
+fn unit_at(text : StringView, index : Int) -> UInt16? {
+  if index < text.length() {
+    Some(text[index])
+  } else {
+    None
   }
 }
 

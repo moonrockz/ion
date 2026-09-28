@@ -116,7 +116,7 @@ fn TextReader::append(self : TextReader, decoded : String) -> Unit {
 /// Read one more chunk from the source and append its text, keeping back the
 /// octets of a character that the chunk splits.
 async fn TextReader::fill(self : TextReader) -> Unit {
-  let chunk = self.source.read_some() catch {
+  let chunk = self.source.read_some(max_len=read_size) catch {
     _ => raise @ion.IonError::Syntax("the Ion text stream could not be read")
   }
   let octets = match chunk {
@@ -160,3 +160,8 @@ fn whole_characters(octets : Bytes) -> Int {
   }
   n
 }
+
+///|
+/// The most octets to ask the source for in one read. Without a limit, a read
+/// returns about one kilobyte, and the cost of each read dominates.
+let read_size : Int = 65536

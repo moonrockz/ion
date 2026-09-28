@@ -22,6 +22,19 @@ pub fn has_version_marker(bytes : BytesView, offset : Int) -> Bool {
 /// `offset` — the descriptor, its length field, and the representation — or
 /// `None` when the input does not hold all of them yet.
 fn frame(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
+  match value_size(bytes, offset) {
+    Some(total) if offset + total <= bytes.length() => Some(total)
+    _ => None
+  }
+}
+
+///|
+/// The total octets the value (or NOP padding) whose descriptor sits at
+/// `offset` spans — the descriptor, its length field, and the representation —
+/// once the descriptor and length field have arrived, even when the
+/// representation has not. `None` means the length field is still incomplete.
+/// A streaming reader uses it to wait for a whole value before decoding.
+pub fn value_size(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
   if offset >= bytes.length() {
     return None
   }
@@ -58,11 +71,7 @@ fn frame(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
   } else {
     length = nibble
   }
-  let total = header + length
-  if offset + total > bytes.length() {
-    return None
-  }
-  Some(total)
+  Some(header + length)
 }
 
 ///|

@@ -4,13 +4,24 @@
 // arrival, so memory stays proportional to the largest single value rather
 // than to the stream. A local symbol table updates the reader's symbol table
 // as it appears and is consumed rather than returned.
+//
+// Octets that arrive while a value is incomplete wait in a growable buffer and
+// join the pending octets only once the whole value has arrived, so a large
+// value costs time linear in its length. Decoded values are skipped by offset
+// rather than copied away.
 
 ///|
 /// A reader that pulls Ion binary values from an async byte source.
-pub struct BinaryReader {
+struct BinaryReader {
   source : &@io.Reader
   table : @ion.SymbolTable
+  /// Octets not yet decoded, from `start` on, and then `arrived`.
   mut buffer : Bytes
+  mut start : Int
+  /// Octets read since `buffer` was last built.
+  arrived : @buffer.Buffer
+  /// The octets the next value needs before a decode is worth trying.
+  mut needed : Int
   mut eof : Bool
 }
 
@@ -22,6 +33,9 @@ pub fn BinaryReader::new(source : &@io.Reader) -> BinaryReader {
     source,
     table: @ion.SymbolTable::system(),
     buffer: Bytes::new(0),
+    start: 0,
+    arrived: @buffer.Buffer(),
+    needed: 1,
     eof: false,
   }
 }
@@ -30,61 +44,89 @@ pub fn BinaryReader::new(source : &@io.Reader) -> BinaryReader {
 /// The next value, or `None` at the end of the stream. A version marker and
 /// local symbol tables update the reader's symbol table and are not returned.
 pub async fn BinaryReader::next(self : BinaryReader) -> @ion.IonValue? {
-  let mut result : @ion.IonValue? = None
-  while result is None {
-    if self.buffer.length() == 0 {
-      if self.eof {
-        break
-      }
+  while true {
+    if !self.eof && self.available() < self.needed {
       self.fill()
       continue
     }
-    if self.buffer[0].to_int() == 0xE0 {
-      while self.buffer.length() < 4 && !self.eof {
-        self.fill()
+    let bytes = self.pending()
+    if bytes.length() == 0 {
+      if self.eof {
+        return None
       }
-      if self.buffer.length() >= 4 &&
-        @binary.has_version_marker(self.buffer[:], 0) {
-        self.buffer = self.buffer[4:].to_owned()
-        self.table.reset()
-        continue
-      }
+      self.needed = 1
+      continue
     }
-    match @binary.decode_value(self.buffer[:], 0, self.table) {
+    if bytes[0].to_int() == 0xE0 && bytes.length() < 4 && !self.eof {
+      // Possibly the start of a version marker.
+      self.needed = 4
+      continue
+    }
+    if @binary.has_version_marker(bytes, 0) {
+      self.start += 4
+      self.table.reset()
+      continue
+    }
+    match @binary.decode_value(bytes, 0, self.table) {
       Some((value, consumed)) => {
-        self.buffer = self.buffer[consumed:].to_owned()
+        self.start += consumed
+        self.needed = 0
         match @binary.accept_value(self.table, value) {
-          Some(value) => result = Some(value)
+          Some(value) => return Some(value)
           None => ()
         }
       }
-      None =>
+      None => {
         if self.eof {
-          if @binary.is_padding_only(self.buffer[:], 0) {
-            break
+          if @binary.is_padding_only(bytes, 0) {
+            return None
           }
           raise @ion.IonError::Syntax("truncated Ion binary value")
-        } else {
-          self.fill()
         }
+        // Wait for the whole value, or at least one more octet when its
+        // length is not known yet or padding comes before it.
+        let size = @binary.value_size(bytes, 0).unwrap_or(0)
+        self.needed = if size > bytes.length() {
+          size
+        } else {
+          bytes.length() + 1
+        }
+      }
     }
   }
-  result
+  None
 }
 
 ///|
-/// Read one more chunk from the source into the buffer.
+/// The number of octets read and not yet decoded.
+fn BinaryReader::available(self : BinaryReader) -> Int {
+  self.buffer.length() - self.start + self.arrived.length()
+}
+
+///|
+/// The octets not yet decoded, joining the octets that have arrived.
+fn BinaryReader::pending(self : BinaryReader) -> BytesView {
+  if !self.arrived.is_empty() {
+    self.buffer = self.buffer[self.start:].to_owned() + self.arrived.to_bytes()
+    self.start = 0
+    self.arrived.reset()
+  }
+  self.buffer[self.start:]
+}
+
+///|
+/// Read one more chunk from the source into the arrived octets.
 async fn BinaryReader::fill(self : BinaryReader) -> Unit {
-  let chunk = self.source.read_some() catch {
+  let chunk = self.source.read_some(max_len=read_size) catch {
     _ => raise @ion.IonError::Syntax("the Ion binary stream could not be read")
   }
   match chunk {
-    Some(bytes) =>
-      if bytes.length() == 0 {
-        self.eof = true
-      } else {
-        self.buffer = self.buffer + bytes
-      }
-    None => self.eof = true
+    Some(bytes) if bytes.length() > 0 => self.arrived.write_bytes(bytes)
+    _ => self.eof = true
   }
 }
+
+///|
+/// The most octets to ask the source for in one read. Without a limit, a read
+/// returns about one kilobyte, and the cost of each read dominates.
+let read_size : Int = 65536
