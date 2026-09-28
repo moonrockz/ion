@@ -35,11 +35,28 @@ fn eprintln(message : String) -> Unit {
 
 ///|
 /// Read a file, or stdin when the path is `-`.
-fn read_input(path : String) -> String raise {
-  if path == "-" {
-    @fs.read_file_to_string("/dev/stdin")
+async fn read_input(path : String) -> String {
+  let data = if path == "-" {
+    @stdio.stdin.read_all() catch {
+      _ => raise CliError("stdin: cannot be read")
+    }
   } else {
-    @fs.read_file_to_string(path)
+    @async_fs.read_file(path) catch {
+      error => raise open_failure(path, error)
+    }
+  }
+  data.text() catch {
+    _ => raise CliError("\{describe_path(path)}: is not UTF-8 text")
+  }
+}
+
+///|
+/// How error messages name an input path: `stdin` for `-`.
+fn describe_path(path : String) -> String {
+  if path == "-" {
+    "stdin"
+  } else {
+    path
   }
 }
 
@@ -159,8 +176,7 @@ async fn do_validate(
   input : String,
 ) -> Result[Unit, String] {
   let schema_text = read_input(schema_path) catch {
-    @fs.IOError(message) => return Err(message)
-    _ => return Err("failed to read " + schema_path)
+    error => return Err(describe(error))
   }
   let schema = @schema.Schema::load_from_text(schema_text) catch {
     error => return Err(error.message())
@@ -234,11 +250,8 @@ async fn do_json(path : String) -> Result[Unit, String] {
 
 ///|
 /// Read a JSON document and print its canonical Ion text.
-fn do_from_json(path : String) -> Result[Unit, String] {
-  let text = read_input(path) catch {
-    @fs.IOError(message) => return Err(message)
-    _ => return Err("failed to read " + path)
-  }
+async fn do_from_json(path : String) -> Result[Unit, String] {
+  let text = read_input(path) catch { error => return Err(describe(error)) }
   let value = @json.read_json(text) catch {
     error => return Err(error.message())
   }
