@@ -6,5 +6,6 @@ import {
 }
 
 import {
+  "moonrockz/ion/text",
   "moonbitlang/core/quickcheck",
 } for "test"

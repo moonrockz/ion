@@ -19,4 +19,5 @@ import {
   "moonrockz/ion/text",
   "moonbitlang/async",
   "moonbitlang/async/io",
+  "moonbitlang/core/cmp",
 } for "test"

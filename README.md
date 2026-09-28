@@ -19,17 +19,19 @@ moon add moonrockz/ion
 
 ## Packages
 
+Each package has a README with checked examples, linked below.
+
 | Package       | Source        | Import path            | Purpose |
 | ------------- | ------------- | ---------------------- | ------- |
-| `@ion` (core) | `pkgs/ion`    | `moonrockz/ion/ion`    | Core data model: Ion types, values, annotations, decimals, timestamps, symbol tokens |
-| `@text`       | `pkgs/text`   | `moonrockz/ion/text`   | Ion text reader and writer                              |
-| `@text/stream` | `pkgs/text/stream` | `moonrockz/ion/text/stream` | Ion text readers and writers over asynchronous IO (`moonbitlang/async`) |
-| `@hash`       | `pkgs/hash`   | `moonrockz/ion/hash`   | Ion Hash 1.0: an encoding-independent hash of an Ion value |
-| `@binary`     | `pkgs/binary` | `moonrockz/ion/binary` | Ion binary codec: values, containers, annotations, and local symbol tables |
-| `@binary/stream` | `pkgs/binary/stream` | `moonrockz/ion/binary/stream` | The Ion binary codec over asynchronous IO (`moonbitlang/async`) |
-| `@schema`     | `pkgs/schema` | `moonrockz/ion/schema` | Ion Schema model, loader, and validator                 |
-| `@json`       | `pkgs/json`   | `moonrockz/ion/json`   | JSON interoperability: `IonValue` ⇄ core `Json`          |
-| `ion` CLI     | `pkgs`        | `moonrockz/ion`        | `ion print`, `ion json`, `ion fromjson`, `ion hash`, `ion validate` — the module root package is the executable |
+| `@ion` (core) | [`pkgs/ion`](pkgs/ion/README.md)    | `moonrockz/ion/ion`    | Core data model: Ion types, values, annotations, decimals, timestamps, symbol tokens |
+| `@text`       | [`pkgs/text`](pkgs/text/README.md)   | `moonrockz/ion/text`   | Ion text reader and writer                              |
+| `@text/stream` | [`pkgs/text/stream`](pkgs/text/stream/README.md) | `moonrockz/ion/text/stream` | Ion text readers and writers over asynchronous IO (`moonbitlang/async`) |
+| `@hash`       | [`pkgs/hash`](pkgs/hash/README.md)   | `moonrockz/ion/hash`   | Ion Hash 1.0: an encoding-independent hash of an Ion value |
+| `@binary`     | [`pkgs/binary`](pkgs/binary/README.md) | `moonrockz/ion/binary` | Ion binary codec: values, containers, annotations, and local symbol tables |
+| `@binary/stream` | [`pkgs/binary/stream`](pkgs/binary/stream/README.md) | `moonrockz/ion/binary/stream` | The Ion binary codec over asynchronous IO (`moonbitlang/async`) |
+| `@schema`     | [`pkgs/schema`](pkgs/schema/README.md) | `moonrockz/ion/schema` | Ion Schema model, loader, and validator                 |
+| `@json`       | [`pkgs/json`](pkgs/json/README.md)   | `moonrockz/ion/json`   | JSON interoperability: `IonValue` ⇄ core `Json`          |
+| `ion` CLI     | [`pkgs`](pkgs/README.md) | `moonrockz/ion`        | `ion print`, `ion json`, `ion fromjson`, `ion hash`, `ion validate` — the module root package is the executable |
 
 ## Repository layout
 
@@ -53,23 +55,23 @@ as `moonrockz/ion/ion`.
 Read and re-write Ion text:
 
 ```moonbit skip nocheck
-let value = @text.read_ion!("{ name: \"ion\", tags: [a, b] }")
-println(@text.write_ion!(value)) // {name: "ion", tags: [a, b]}
+let value = @text.read_ion("{ name: \"ion\", tags: [a, b] }")
+println(@text.write_ion(value)) // {name: "ion", tags: [a, b]}
 ```
 
 Read and write Ion **binary**:
 
 ```moonbit skip nocheck
-let values = @text.read_ion_datagram!("{ name: \"ion\" } 42")
-let bytes = @binary.write_binary!(values) // Ion binary, with a local symbol table
-let decoded = @binary.read_binary!(bytes) // back to the same values
+let values = @text.read_ion_datagram("{ name: \"ion\" } 42")
+let bytes = @binary.write_binary(values) // Ion binary, with a local symbol table
+let decoded = @binary.read_binary(bytes) // back to the same values
 ```
 
 Convert between Ion and JSON:
 
 ```moonbit skip nocheck
-let value = @text.read_ion!("{ name: \"ion\", tags: [a, b] }")
-let json = @json.to_json!(value) // {"name":"ion","tags":["a","b"]}
+let value = @text.read_ion("{ name: \"ion\", tags: [a, b] }")
+let json = @json.to_json(value) // {"name":"ion","tags":["a","b"]}
 let ion = @json.to_ion(json)     // back to the Ion data model
 ```
 
@@ -88,10 +90,10 @@ let value = @ion.IonValue::from_fields([
 Validate a value against an Ion Schema type:
 
 ```moonbit skip nocheck
-let schema = @schema.Schema::load_from_text!(
+let schema = @schema.Schema::load_from_text(
   "type::{ name: person, fields: { name: { type: string, occurs: required } } }",
 )
-let value = @text.read_ion!("{ name: \"Ada\" }")
+let value = @text.read_ion("{ name: \"Ada\" }")
 if schema.is_valid("person", value) {
   println("valid")
 }
@@ -138,11 +140,11 @@ data model):
 | Streaming text | `@text/stream.TextReader` (values), `@text/stream.TextEventReader` (events), `@text/stream.TextWriter` | Ion **text** over async byte sources and sinks, one top-level value at a time |
 
 ```moonbit skip nocheck
-let value = @text.read_ion!("{a: 1}")               // DOM / AST
-value.accept(visitor)                               // visitor
-let total = value.fold(0, @ion.IonFold::default())  // fold
-let tokens = @text.tokenize!("int32::12")           // CST tokens
-@text.parse_with_handler!("1 2 3", handler)         // SAX (push)
+let value = @text.read_ion("{a: 1}")               // DOM / AST
+value.accept(visitor)                              // visitor
+let total = value.fold(0, @ion.IonFold::default()) // fold
+let tokens = @text.tokenize("int32::12")           // CST tokens
+@text.parse_with_handler("1 2 3", handler)         // SAX (push)
 ```
 
 ### Streaming Ion text
@@ -155,7 +157,7 @@ not to the stream:
 ```moonbit skip nocheck
 let reader = @stream.TextReader::new(source) // moonrockz/ion/text/stream; any &@io.Reader
 while reader.next() is Some(value) {
-  println(@text.write_ion!(value))
+  println(@text.write_ion(value))
 }
 let writer = @stream.TextWriter::new(sink) // any &@io.Writer
 writer.write(value)                        // one value per line
@@ -186,9 +188,9 @@ depend on the encoding or on symbol IDs, then hashed. Struct fields are
 unordered, so their hashes are sorted, and timestamps are normalized to UTC.
 
 ```moonbit skip nocheck
-let value = @text.read_ion!("{ name: \"ion\", tags: [a, b] }")
-let digest = @hash.ion_hash_hex!(value) // lowercase SHA-256
-let bytes = @hash.ion_hash!(value)      // 32 raw bytes
+let value = @text.read_ion("{ name: \"ion\", tags: [a, b] }")
+let digest = @hash.ion_hash_hex(value) // lowercase SHA-256
+let bytes = @hash.ion_hash(value)      // 32 raw bytes
 ```
 
 The digest function is pluggable, as the specification requires:
@@ -209,8 +211,8 @@ both directions. JSON is a strict subset of Ion, so the two directions are not
 inverses:
 
 ```moonbit skip nocheck
-let value = @text.read_ion!("{ data: annot::{time: 1969-07-20T20:18Z}, n: 1.50 }")
-let json = @json.to_json!(value) // {"data":{"time":"1969-07-20T20:18Z"},"n":1.50}
+let value = @text.read_ion("{ data: annot::{time: 1969-07-20T20:18Z}, n: 1.50 }")
+let json = @json.to_json(value) // {"data":{"time":"1969-07-20T20:18Z"},"n":1.50}
 let ion = @json.to_ion(json)     // back into the Ion data model
 ```
 
@@ -236,8 +238,8 @@ let ion = @json.to_ion(json)     // back into the Ion data model
 `@json.read_json` and `@json.write_json` wrap the same rules for JSON text:
 
 ```moonbit skip nocheck
-let value = @json.read_json!("{\"a\": [1, 2]}") // {a: [1, 2]}
-let text = @json.write_json!(value)               // {"a":[1,2]}
+let value = @json.read_json("{\"a\": [1, 2]}") // {a: [1, 2]}
+let text = @json.write_json(value)               // {"a":[1,2]}
 ```
 
 The CLI exposes both directions: `ion json [file]` reads Ion (text or binary)
@@ -276,8 +278,9 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   the catalog does not hold, reserving `max_id` symbol IDs with unknown text.
   A catalog API would give those symbols their text.
 - Ion Schema: `ordered_elements`, `annotations`, `timestamp_precision`,
-  `regex`, `closed::` fields, imports, open content, and the decimal
-  `precision`/`exponent` constraints. The
+  `regex`, `closed::` fields, imports, open content, the decimal
+  `precision`/`exponent` constraints, `valid_values` ranges, and
+  `exclusive::` range bounds. The
   [Cookbook](https://amazon-ion.github.io/ion-schema/docs/cookbook/)'s
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
