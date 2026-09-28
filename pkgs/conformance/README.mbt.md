@@ -28,8 +28,15 @@ reader and writer, and compares them with the sync reader above:
 - the values survive the pretty writer;
 - the async writers write the same octets as the sync writers.
 
-Skip lists name the files, or `check:file` pairs, this implementation does
-not handle yet, each with its reason. A skipped file that starts to pass fails the test, so the
+The test in `dsl_test.mbt` runs ion-tests' `conformance/` directory, whose
+cases are written in a small declarative language: a document is built from
+`text`, `binary`, `ivm`, and `toplevel` fragments, branched with `then` and
+`each`, and checked with `produces`, `denotes`, or `signals`. Ion 1.1 tests,
+and documents that mix text and binary fragments (which the language
+forbids), are counted but not run.
+
+Skip lists name the files, `check:file` pairs, or DSL cases this
+implementation does not handle yet, each with its reason. A skipped file that starts to pass fails the test, so the
 list stays accurate.
 
 The package does not build for wasm-gc, where `moonbitlang/core`'s `BigInt`
