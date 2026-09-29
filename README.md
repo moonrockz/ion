@@ -287,7 +287,7 @@ label.
   keeps its symbol ID but not its place in that table, so any two such
   symbols compare as equal, as symbols with unknown text do.
 - Ion Schema ([#5](https://github.com/moonrockz/ion/issues/5)):
-  `ordered_elements`, `annotations`, `timestamp_precision`, `regex`,
+  `ordered_elements`, `annotations`, `timestamp_precision`,
   `closed::` fields, imports, open content, and the decimal
   `precision`/`exponent` constraints. The
   [Cookbook](https://amazon-ion.github.io/ion-schema/docs/cookbook/)'s

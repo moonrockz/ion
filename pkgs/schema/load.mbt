@@ -151,9 +151,11 @@ fn load_constraint(
     )
   }
   // These take a `range::` annotation, which their loaders check.
+  // These take annotations of their own, which their loaders check.
   if key != "container_length" &&
     key != "codepoint_length" &&
-    key != "valid_values" {
+    key != "valid_values" &&
+    key != "regex" {
     reject_unknown_annotations(value, "constraint '" + key + "'")
   }
   match key {
@@ -174,6 +176,7 @@ fn load_constraint(
     "all_of" => AllOf(load_constraint_list(value))
     "not" => Not(load_inline_type(value))
     "contains" => Contains(as_list(value))
+    "regex" => Matches(load_regex(value))
     _ => panic()
   }
 }
@@ -182,7 +185,7 @@ fn load_constraint(
 /// The constraints `load_constraint` loads.
 let implemented_constraints : Array[String] = [
   "type", "element", "fields", "valid_values", "container_length", "codepoint_length",
-  "one_of", "any_of", "all_of", "not", "contains",
+  "one_of", "any_of", "all_of", "not", "contains", "regex",
 ]
 
 ///|
@@ -492,4 +495,27 @@ fn load_constraint_list(
     result.push(load_inline_type(item))
   }
   result
+}
+
+///|
+/// Load a `regex`: a non-empty string, annotated with the flags `i` and `m`
+/// at most once each.
+fn load_regex(value : @ion.IonValue) -> Regex raise @ion.IonError {
+  let mut ignore_case = false
+  let mut multiline = false
+  for token in value.annotations() {
+    match token.text() {
+      Some("i") if !ignore_case => ignore_case = true
+      Some("m") if !multiline => multiline = true
+      _ =>
+        raise @ion.IonError::DataModel(
+          "a regex flag must be 'i' or 'm', each at most once",
+        )
+    }
+  }
+  match value.kind() {
+    @ion.IonValueKind::String(source) if source != "" =>
+      Regex::new(source, ignore_case~, multiline~)
+    _ => raise @ion.IonError::DataModel("a regex must be a non-empty string")
+  }
 }

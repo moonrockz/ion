@@ -32,7 +32,7 @@ let schema_root : String = "tests/ion-schema-tests/ion_schema_2_0"
 let schema_skipped : Map[String, String] = Map([
   ("constraints/all_of.isl", "inline imports"),
   ("constraints/annotations-simplified.isl", "annotations"),
-  ("constraints/annotations-standard.isl", "annotations; regex"),
+  ("constraints/annotations-standard.isl", "annotations"),
   ("constraints/any_of.isl", "inline imports"),
   ("constraints/byte_length.isl", "byte_length"),
   ("constraints/container_length.isl", "document:: values"),
@@ -50,8 +50,6 @@ let schema_skipped : Map[String, String] = Map([
   ("constraints/one_of.isl", "annotations; inline imports"),
   ("constraints/ordered_elements.isl", "ordered_elements"),
   ("constraints/precision.isl", "precision"),
-  ("constraints/regex-invalid.isl", "regex"),
-  ("constraints/regex.isl", "regex"),
   ("constraints/timestamp_offset.isl", "timestamp_offset"),
   ("constraints/timestamp_precision.isl", "timestamp_precision"),
   ("constraints/type.isl", "inline imports"),

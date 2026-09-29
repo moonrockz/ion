@@ -33,6 +33,7 @@ pub(all) enum Constraint {
   OneOf(Array[Constraint])
   Not(Constraint)
   Nothing
+  Matches(Regex)
   Contains(Array[@ion.IonValue])
 } derive(@debug.Debug)
 pub fn Constraint::any() -> Self
@@ -54,6 +55,19 @@ pub fn Occurs::new(Int, Int?) -> Self
 pub fn Occurs::optional() -> Self
 pub fn Occurs::required() -> Self
 pub fn Occurs::to_repr(Self) -> @debug.Repr
+
+pub struct Regex {
+  source : String
+  ignore_case : Bool
+  multiline : Bool
+  // private fields
+} derive(@debug.Debug)
+pub fn Regex::ignore_case(Self) -> Bool
+pub fn Regex::matches(Self, String) -> Bool
+pub fn Regex::multiline(Self) -> Bool
+pub fn Regex::new(String, ignore_case? : Bool, multiline? : Bool) -> Self raise @ion.IonError
+pub fn Regex::source(Self) -> String
+pub fn Regex::to_repr(Self) -> @debug.Repr
 
 pub struct Schema {
   types : Array[TypeDefinition]

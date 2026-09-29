@@ -163,6 +163,27 @@ fn check_constraint(
       if !range.contains(value) {
         out.push({ path, message: "value is not in the range", })
       }
+    Matches(regex) => {
+      let text = match value.kind() {
+        @ion.IonValueKind::String(text) => Some(text)
+        @ion.IonValueKind::Symbol(token) => token.text()
+        _ => None
+      }
+      match text {
+        Some(text) =>
+          if !regex.matches(text) {
+            out.push({
+              path,
+              message: "value does not match the regex \{regex.source()}",
+            })
+          }
+        None =>
+          out.push({
+            path,
+            message: "a regex constraint requires a string or symbol",
+          })
+      }
+    }
     ContainerLength(lower, upper) =>
       match container_length(value) {
         None =>

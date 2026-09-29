@@ -82,6 +82,8 @@ pub(all) enum Constraint {
   Not(Constraint)
   /// `nothing`: a constraint that no value satisfies.
   Nothing
+  /// `regex`: a string or symbol has a match for the regular expression.
+  Matches(Regex)
   /// `contains: [ ... ]`: the container holds every listed value.
   Contains(Array[@ion.IonValue])
 } derive(Debug)
