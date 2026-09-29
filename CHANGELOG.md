@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-29
+
+### Added
+
+- **cli:** Write Ion binary and pretty text, and test the commands (#28)
+- **ion:** Resolve shared symbol table imports through a catalog (#30)
+- **text:** Read Ion text in UTF-16 and UTF-32 (#31)
+- **schema:** Valid_values ranges and exclusive range bounds (#34)
+- **schema:** The regex constraint (#35)
+- **schema:** Schema headers, footers, and open content (#36)
+- **schema:** The remaining ISL 2.0 constraints, documents, and imports (#37)
+- **schema:** Ion Schema 1.0 (#40)
+
+### Changed
+
+- **cli:** Parse the arguments with moonbitlang/core/argparse (#29)
+
+### Fixed
+
+- **ion:** Make Timestamp::as_utc name the same instant (#24)
+- Conform to the ion-tests conformance DSL cases (#25)
+- **schema:** Reject the remaining schemas that ISL 2.0 does not allow (#38)
+
 ## [0.1.0] - 2026-09-28
 
 ### Added
