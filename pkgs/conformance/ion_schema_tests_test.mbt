@@ -1,10 +1,12 @@
-// Runs the ISL 2.0 test data from https://github.com/amazon-ion/ion-schema-tests,
-// checked out as the `tests/ion-schema-tests` submodule, as its README
-// describes. Each file is a schema with `$test::{...}` structs among its types:
+// Runs the ISL 1.0 and ISL 2.0 test data from
+// https://github.com/amazon-ion/ion-schema-tests, checked out as the
+// `tests/ion-schema-tests` submodule, as its README describes. Each file is a
+// schema with `$test::{...}` structs among its types:
 //
 // - the file's schema (its values other than the `$test` structs) must load;
 // - `type` with `should_accept_as_valid` and `should_reject_as_invalid`: each
-//   value must match the type, or not;
+//   value must match the type, or not. The type is one of the file's types, or
+//   a built-in type such as `int`;
 // - `valid_schemas` and `invalid_schemas`: each schema document, given as an
 //   S-expression, must load, or not;
 // - `invalid_types`: each type definition must be rejected.
@@ -15,39 +17,71 @@
 // an Ion document, `document::(...)`). A schema that is rejected as
 // unsupported does not count as correctly rejected.
 //
-// `schema_skipped` lists the files this implementation does not pass yet, each
-// with the reason. A listed file may have unsupported cases, but not wrong
-// answers, which fail the test wherever they are, unless listed by case in
-// `schema_known_failures`. A listed file whose cases all pass fails the test,
-// and so does a known failure that no longer fails, so the lists stay
-// accurate. ISL 1.0 is not implemented, and not run.
+// Each suite lists the files this implementation does not pass yet, each with
+// the reason, in `skipped`. A listed file may have unsupported cases, but not
+// wrong answers, which fail the test wherever they are, unless listed by case
+// in `known_failures`. A listed file whose cases all pass fails the test, and
+// so does a known failure that no longer fails, so the lists stay accurate.
 
 ///|
-/// The ISL 2.0 test data, relative to the module root.
-let schema_root : String = "tests/ion-schema-tests/ion_schema_2_0"
+/// The test data of one version of Ion Schema.
+priv struct Suite {
+  /// The name of the version, such as `ISL 2.0`.
+  name : String
+  /// The test data, relative to the module root. An import names a schema by
+  /// its path under the root.
+  root : String
+  /// The version marker, such as `$ion_schema_2_0`.
+  marker : String
+  /// Files this implementation does not pass yet, by path under `root`, with
+  /// what they need that is not supported.
+  skipped : Map[String, String]
+  /// Cases whose answer is wrong, with the reason. A key is a case ID, or the
+  /// ID of a `$test` struct (`<file> $test[<index>]`) for all of its cases.
+  known_failures : Map[String, String]
+}
 
 ///|
-/// Files this implementation does not pass yet, by path under `schema_root`,
-/// with what they need that is not supported.
-let schema_skipped : Map[String, String] = Map([
-  ("imports/cross_version/isl_1_0_importing_isl_2_0.isl", "Ion Schema 1.0"),
-  ("imports/cross_version/isl_1_0_schema.isl", "Ion Schema 1.0"),
-  ("imports/cross_version/isl_2_0_importing_isl_1_0.isl", "Ion Schema 1.0"),
-])
+/// The ISL 1.0 test data.
+let isl10_suite : Suite = {
+  name: "ISL 1.0",
+  root: "tests/ion-schema-tests/ion_schema_1_0",
+  marker: "$ion_schema_1_0",
+  skipped: Map([]),
+  // These ranges are valid, satisfiable, and allow at least one occurrence:
+  // `range::[1, exclusive::2]` allows 1, and `range::[exclusive::1, 2]`
+  // allows 2, as does `range::[exclusive::1, exclusive::3]`, which
+  // `constraints/occurs/fields_range_exclusive_nullable.isl` requires to load.
+  // ion-schema-rust does not run these two cases either.
+  known_failures: Map([
+    (
+      "constraints/occurs/invalid.isl $test[2] occurs for a field must be a positive integer or a non-empty, non-negative integer range invalid_types[6]",
+      "the test data contradicts itself: range::[1, exclusive::2] is a valid occurs",
+    ),
+    (
+      "constraints/occurs/invalid.isl $test[2] occurs for a field must be a positive integer or a non-empty, non-negative integer range invalid_types[7]",
+      "the test data contradicts itself: range::[exclusive::1, 2] is a valid occurs",
+    ),
+  ]),
+}
 
 ///|
-/// Cases whose answer is wrong, with the reason. A key is a case ID, or the
-/// ID of a `$test` struct (`<file> $test[<index>]`) for all of its cases.
-/// Most are schemas that ISL 2.0 does not allow but the loader accepts.
-let schema_known_failures : Map[String, String] = Map([])
+/// The ISL 2.0 test data.
+let isl20_suite : Suite = {
+  name: "ISL 2.0",
+  root: "tests/ion-schema-tests/ion_schema_2_0",
+  marker: "$ion_schema_2_0",
+  skipped: Map([]),
+  known_failures: Map([]),
+}
 
 ///|
-/// The `schema_known_failures` key that covers a case, if any.
-fn known_failure(id : String) -> String? {
-  if schema_known_failures.contains(id) {
+/// The `known_failures` key that covers a case, if any.
+fn Suite::known_failure(self : Suite, id : String) -> String? {
+  if self.known_failures.contains(id) {
     return Some(id)
   }
-  schema_known_failures.keys().find_first(key => id.has_prefix(key + " "))
+  self.known_failures.keys().find_first(key => id.has_prefix(key + " "))
 }
 
 ///|
@@ -60,9 +94,12 @@ priv enum SchemaOutcome {
 
 ///|
 /// Resolve a schema import: the test data names each schema by its path
-/// under `schema_root`.
-fn resolve_import(id : String) -> Array[@ion.IonValue] raise @ion.IonError {
-  read_file("\{schema_root}/\{id}") catch {
+/// under the suite's root.
+fn Suite::resolve_import(
+  self : Suite,
+  id : String,
+) -> Array[@ion.IonValue] raise @ion.IonError {
+  read_file("\{self.root}/\{id}") catch {
     @ion.IonError::DataModel(_) as error => raise error
     error =>
       raise @ion.IonError::DataModel("cannot read '\{id}': \{describe(error)}")
@@ -72,11 +109,14 @@ fn resolve_import(id : String) -> Array[@ion.IonValue] raise @ion.IonError {
 ///|
 /// The outcome of loading `values` as a schema that should load (`valid`) or
 /// should not, and the schema when it loads.
-fn load_outcome(
+fn Suite::load_outcome(
+  self : Suite,
   values : Array[@ion.IonValue],
   valid~ : Bool,
 ) -> (SchemaOutcome, @schema.Schema?) {
-  let schema = try @schema.Schema::load(values, resolver=resolve_import) catch {
+  let schema = try
+    @schema.Schema::load(values, resolver=id => self.resolve_import(id))
+  catch {
     @ion.IonError::Unsupported(message) =>
       return (SchemaUnsupported(message), None)
     error =>
@@ -131,6 +171,9 @@ fn elements(value : @ion.IonValue) -> Array[@ion.IonValue] {
 /// unsupported type does not hide the others, and why the others did not load.
 priv struct LoadedTypes {
   schema : @schema.Schema
+  /// The file's header and footer, if any.
+  header : Array[@ion.IonValue]
+  footer : Array[@ion.IonValue]
   /// Why a type cannot be used, by name: it did not load, or it refers to a
   /// type that did not.
   unusable : Map[String, String]
@@ -164,20 +207,25 @@ fn references(constraint : @schema.Constraint, out : Array[String]) -> Unit {
 
 ///|
 /// Load each type definition among `definitions` on its own.
-fn load_types(definitions : Array[@ion.IonValue]) -> LoadedTypes {
-  let whole = try
-    @schema.Schema::load(definitions, resolver=resolve_import)
-  catch {
+fn Suite::load_types(
+  self : Suite,
+  definitions : Array[@ion.IonValue],
+) -> LoadedTypes {
+  let resolver = id => self.resolve_import(id)
+  let header = definitions.filter(value => annotated(value, "schema_header"))
+  let footer = definitions.filter(value => annotated(value, "schema_footer"))
+  let whole = try @schema.Schema::load(definitions, resolver~) catch {
     _ => None
   } noraise {
     schema => Some(schema)
   }
   if whole is Some(schema) {
-    return { schema, unusable: Map([]), }
+    return { schema, header, footer, unusable: Map([]), }
   }
-  // Load each type with the version markers and the header, which decide how
-  // it loads, and an empty stand-in for each other type of the file, so its
-  // references resolve. A type that refers to an unusable type is unusable.
+  // Load each type with the version markers, the header, and the footer,
+  // which decide how it loads, and an empty stand-in for each other type of
+  // the file, so its references resolve. A type that refers to an unusable
+  // type is unusable.
   let prelude = definitions.filter(value => {
     annotated(value, "schema_header") ||
     (
@@ -208,8 +256,8 @@ fn load_types(definitions : Array[@ion.IonValue]) -> LoadedTypes {
       })
     let types = try
       @schema.Schema::load(
-        prelude + [definition] + stand_ins,
-        resolver=resolve_import,
+        prelude + [definition] + stand_ins + footer,
+        resolver~,
       ).types()
     catch {
       error => {
@@ -250,12 +298,13 @@ fn load_types(definitions : Array[@ion.IonValue]) -> LoadedTypes {
       }
     }
   }
-  { schema: @schema.Schema::from_types(loaded), unusable, }
+  { schema: @schema.Schema::from_types(loaded), header, footer, unusable, }
 }
 
 ///|
 /// Run one `$test` struct, adding an outcome for each of its cases.
-fn run_schema_test(
+fn Suite::run_schema_test(
+  self : Suite,
   test_case : @ion.IonValue,
   types : LoadedTypes,
   id : String,
@@ -275,6 +324,7 @@ fn run_schema_test(
         Symbol(token) => token.text().unwrap_or("")
         _ => ""
       }
+      let (schema, type_name) = self.test_type(types, type_name)
       for
         pair in [
           ("should_accept_as_valid", true),
@@ -289,9 +339,9 @@ fn run_schema_test(
             None => {
               // `document::(...)` stands for a document of those values.
               let valid = if annotated(value, "document") {
-                types.schema.is_valid_document(type_name, elements(value))
+                schema.is_valid_document(type_name, elements(value))
               } else {
-                types.schema.is_valid(type_name, value)
+                schema.is_valid(type_name, value)
               }
               if valid == accept {
                 SchemaPassed
@@ -315,7 +365,7 @@ fn run_schema_test(
   for pair in [("valid_schemas", true), ("invalid_schemas", false)] {
     let (key, valid) = pair
     for index, document in field_of(test_case, key).map(elements).unwrap_or([]) {
-      let (outcome, _) = load_outcome(elements(document), valid~)
+      let (outcome, _) = self.load_outcome(elements(document), valid~)
       outcomes.push(("\{id} \{description} \{key}[\{index}]", outcome))
     }
   }
@@ -338,8 +388,8 @@ fn run_schema_test(
     let type_definition = @ion.IonValue::from_fields(named).with_annotations([
       @ion.SymbolToken::new("type"),
     ])
-    let (outcome, _) = load_outcome(
-      [@ion.IonValue::symbol("$ion_schema_2_0"), type_definition],
+    let (outcome, _) = self.load_outcome(
+      [@ion.IonValue::symbol(self.marker), type_definition],
       valid=false,
     )
     outcomes.push(("\{id} \{description} invalid_types[\{index}]", outcome))
@@ -347,7 +397,44 @@ fn run_schema_test(
 }
 
 ///|
-test "ion-schema-tests (ISL 2.0)" {
+/// The schema and type name to test a value against. A `$test` may name a
+/// type that is not a type of the schema, such as the built-in `int` or an
+/// imported type; then the schema is one type of that type, with the
+/// file's header and footer, in the suite's version.
+fn Suite::test_type(
+  self : Suite,
+  types : LoadedTypes,
+  type_name : String,
+) -> (@schema.Schema, String) {
+  let schema = types.schema
+  if schema.find(type_name) is Some(_) {
+    return (schema, type_name)
+  }
+  let wrapper = @ion.IonValue::from_fields([
+    @ion.Field::new("name", @ion.IonValue::symbol("built_in_type")),
+    @ion.Field::new("type", @ion.IonValue::symbol(type_name)),
+  ]).with_annotations([@ion.SymbolToken::new("type")])
+  let built_in = try
+    @schema.Schema::load(
+      [@ion.IonValue::symbol(self.marker)] +
+      types.header +
+      [wrapper] +
+      types.footer,
+      resolver=id => self.resolve_import(id),
+    )
+  catch {
+    _ => return (schema, type_name)
+  } noraise {
+    built_in => built_in
+  }
+  (built_in, "built_in_type")
+}
+
+///|
+/// Run the suite's files, and fail when a case has an unexpected outcome or
+/// a list is out of date.
+fn Suite::run(self : Suite) -> Unit raise {
+  let schema_root = self.root
   if !@fs.path_exists(schema_root) {
     fail(
       "\{schema_root} is missing; run `git submodule update --init` to fetch the Ion Schema test data",
@@ -374,11 +461,16 @@ test "ion-schema-tests (ISL 2.0)" {
     }
     let tests = values.filter(value => annotated(value, "$test"))
     let definitions = values.filter(value => !annotated(value, "$test"))
-    let (outcome, _) = load_outcome(definitions, valid=true)
+    let (outcome, _) = self.load_outcome(definitions, valid=true)
     outcomes.push(("\{relative} schema", outcome))
-    let types = load_types(definitions)
+    let types = self.load_types(definitions)
     for index, test_case in tests {
-      run_schema_test(test_case, types, "\{relative} $test[\{index}]", outcomes)
+      self.run_schema_test(
+        test_case,
+        types,
+        "\{relative} $test[\{index}]",
+        outcomes,
+      )
     }
     files.push((relative, outcomes))
   }
@@ -398,7 +490,7 @@ test "ion-schema-tests (ISL 2.0)" {
         SchemaPassed => passed += 1
         SchemaFailed(reason) => {
           clean = false
-          match known_failure(id) {
+          match self.known_failure(id) {
             Some(key) => used.add(key)
             None => unexpected.push("\{id}: \{reason}")
           }
@@ -406,23 +498,23 @@ test "ion-schema-tests (ISL 2.0)" {
         SchemaUnsupported(reason) => {
           clean = false
           unsupported[reason] = unsupported.get(reason).unwrap_or(0) + 1
-          if !schema_skipped.contains(relative) {
+          if !self.skipped.contains(relative) {
             unexpected.push("\{id}: unsupported: \{reason}")
           }
         }
       }
     }
-    if clean && schema_skipped.contains(relative) {
+    if clean && self.skipped.contains(relative) {
       stale.push(relative)
     }
   }
-  for key, _ in schema_known_failures {
+  for key, _ in self.known_failures {
     if !used.contains(key) {
       stale.push(key)
     }
   }
   println(
-    "ion-schema-tests (ISL 2.0): \{files.length()} files, \{total} cases, \{passed} passed, \{unexpected.length()} unexpected",
+    "ion-schema-tests (\{self.name}): \{files.length()} files, \{total} cases, \{passed} passed, \{unexpected.length()} unexpected",
   )
   // The unsupported reasons help only when something is unexpected.
   if !unexpected.is_empty() {
@@ -439,4 +531,14 @@ test "ion-schema-tests (ISL 2.0)" {
     println("  PASSES BUT LISTED " + relative)
   }
   assert_true(unexpected.is_empty() && stale.is_empty())
+}
+
+///|
+test "ion-schema-tests (ISL 1.0)" {
+  isl10_suite.run()
+}
+
+///|
+test "ion-schema-tests (ISL 2.0)" {
+  isl20_suite.run()
 }

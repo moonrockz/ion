@@ -4,6 +4,8 @@
 // Exercised by pkgs/schema/cookbook_test.mbt. The `any_of` + `nothing` forms
 // express propositional logic, and `contains` reasons about list elements.
 
+$ion_schema_2_0
+
 type::{
   name: Address,
   fields: {

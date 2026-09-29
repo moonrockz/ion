@@ -247,6 +247,21 @@ fn load_value_range(value : @ion.IonValue) -> ValueRange raise @ion.IonError {
 }
 
 ///|
+/// Whether a bound of the range is a timestamp with the unknown offset.
+fn ValueRange::has_unknown_offset(self : ValueRange) -> Bool {
+  [self.lower, self.upper]
+  .iter()
+  .any(bound => {
+    match bound {
+      Inclusive(value) | Exclusive(value) =>
+        value.kind() is @ion.IonValueKind::Timestamp(timestamp) &&
+        timestamp.offset().unwrap_or(@ion.TimestampOffset::Unknown) is Unknown
+      Unbounded => false
+    }
+  })
+}
+
+///|
 /// The two bounds of a `range::[lower, upper]`.
 fn range_bounds(
   value : @ion.IonValue,

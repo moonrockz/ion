@@ -1,8 +1,21 @@
 // Black-box tests for the Ion Schema loader and validator.
 
 ///|
+/// ISL 2.0 schema text: `text` after the version marker `$ion_schema_2_0`,
+/// unless it has a version marker of its own. Without one, a schema is ISL 1.0.
+fn isl2(text : String) -> String {
+  if text.contains("$ion_schema_") {
+    text
+  } else {
+    "$ion_schema_2_0 " + text
+  }
+}
+
+///|
 fn load(text : String) -> @schema.Schema? {
-  let schema = @schema.Schema::load_from_text(text) catch { _ => return None }
+  let schema = @schema.Schema::load_from_text(isl2(text)) catch {
+    _ => return None
+  }
   Some(schema)
 }
 
@@ -158,18 +171,14 @@ test "length constraints" {
 
 ///|
 fn load_error(text : String) -> @ion.IonError? {
-  let _ = @schema.Schema::load_from_text(text) catch {
+  let _ = @schema.Schema::load_from_text(isl2(text)) catch {
     error => return Some(error)
   }
   None
 }
 
 ///|
-test "ISL 1.0, and imports without a resolver, raise Unsupported" {
-  assert_true(
-    load_error("$ion_schema_1_0 type::{ name: t }")
-    is Some(@ion.IonError::Unsupported(_)),
-  )
+test "imports without a resolver raise Unsupported" {
   assert_true(
     load_error("type::{ name: t, type: { id: \"a.isl\", type: a } }")
     is Some(@ion.IonError::Unsupported(_)),
@@ -200,6 +209,7 @@ test "ordered_elements matches types in order, as often as each occurs" {
 test "documents" {
   let schema = @schema.Schema::load_from_text(
     (
+      #|$ion_schema_2_0
       #|type::{ name: ints, element: int, container_length: range::[1, 3] }
       #|type::{ name: doc, type: document }
       #|type::{ name: tagged, annotations: closed::[] }
@@ -225,12 +235,12 @@ test "imports: scope, aliases, cycles, and self imports" {
   }
   let resolver = (id : String) => {
     match schemas.get(id) {
-      Some(text) => @text.read_ion_datagram(text)
+      Some(text) => @text.read_ion_datagram(isl2(text))
       None => raise @ion.IonError::DataModel("no schema " + id)
     }
   }
   let load_with = (text : String) => {
-    try @schema.Schema::load_from_text(text, resolver~) catch {
+    try @schema.Schema::load_from_text(isl2(text), resolver~) catch {
       _ => None
     } noraise {
       schema => Some(schema)
@@ -319,8 +329,6 @@ test "the top level: version marker, header, types, footer, and open content" {
   ).unwrap()
   assert_true(schema.find("t") is Some(_))
   assert_true(schema.find("after_the_footer") is None)
-  // A type without a version marker loads as ISL 2.0.
-  assert_true(load("type::{ name: t, type: int }") is Some(_))
   for
     bad in [
       "$ion_schema_2_0 $ion_schema_2_0", "type::{ name: t } $ion_schema_2_0", "$ion_schema_2_1",
@@ -332,9 +340,6 @@ test "the top level: version marker, header, types, footer, and open content" {
     ] {
     assert_true(load_error(bad) is Some(@ion.IonError::DataModel(_)), msg=bad)
   }
-  assert_true(
-    load_error("$ion_schema_1_0") is Some(@ion.IonError::Unsupported(_)),
-  )
   assert_true(
     load_error("schema_header::{ imports: [{ id: \"a.isl\" }] }")
     is Some(@ion.IonError::Unsupported(_)),
@@ -499,4 +504,139 @@ test "ieee754_float accepts the floats a format holds exactly" {
     load_error("type::{ name: t, ieee754_float: $null_or::binary16 }")
     is Some(@ion.IonError::DataModel(_)),
   )
+}
+
+///|
+/// Whether the ISL 1.0 schema `schema_text` loads, and its type `type_name`
+/// accepts the value `ion_text`.
+fn accepts_isl1(
+  schema_text : String,
+  type_name : String,
+  ion_text : String,
+) -> Bool {
+  let schema = @schema.Schema::load_from_text(schema_text) catch {
+    _ => return false
+  }
+  let value = @text.read_ion(ion_text) catch { _ => return false }
+  schema.is_valid(type_name, value)
+}
+
+///|
+test "ISL 1.0: a schema with no version marker, and the default type any" {
+  for marker in ["", "$ion_schema_1_0 "] {
+    let schema = marker + "type::{ name: t, codepoint_length: 1 }"
+    assert_true(accepts_isl1(schema, "t", "a"), msg=schema)
+    // The default type is any, which has no nulls, not ISL 2.0's $any.
+    assert_true(!accepts_isl1(schema, "t", "null"), msg=schema)
+    assert_true(!accepts_isl1(schema, "t", "null.symbol"), msg=schema)
+  }
+  let schema = @schema.Schema::load_from_text("type::{ name: t }")
+  assert_true(schema.is_valid("t", @ion.IonValue::int(1)))
+  // any covers documents too.
+  assert_true(schema.is_valid_document("t", []))
+}
+
+///|
+test "ISL 1.0: nullable:: allows null.null and the typed nulls of the base type" {
+  let schema =
+    #|$ion_schema_1_0
+    #|type::{ name: short, type: nullable::{ type: string, codepoint_length: 1 } }
+    #|type::{ name: counts, element: nullable::count }
+    #|type::{ name: count, type: int, valid_values: range::[1, max] }
+  for text in ["null", "a::null", "null.string", "\"a\""] {
+    assert_true(accepts_isl1(schema, "short", text), msg=text)
+  }
+  for text in ["null.symbol", "\"ab\"", "a"] {
+    assert_true(!accepts_isl1(schema, "short", text), msg=text)
+  }
+  assert_true(accepts_isl1(schema, "counts", "[1, null, null.int]"))
+  assert_true(!accepts_isl1(schema, "counts", "[0]"))
+  assert_true(!accepts_isl1(schema, "counts", "[null.float]"))
+}
+
+///|
+test "ISL 1.0: content: closed, scale, and occurs" {
+  let schema =
+    #|type::{ name: point, content: closed, fields: { x: int, y: int } }
+    #|type::{ name: cents, type: decimal, scale: 2 }
+    #|type::{ name: short_scale, scale: range::[0, 1] }
+    #|type::{ name: pair, element: { type: int, occurs: 2 } }
+  assert_true(accepts_isl1(schema, "point", "{ x: 1 }"))
+  assert_true(!accepts_isl1(schema, "point", "{ x: 1, z: 2 }"))
+  assert_true(accepts_isl1(schema, "cents", "1.23"))
+  assert_true(!accepts_isl1(schema, "cents", "1.2"))
+  assert_true(accepts_isl1(schema, "short_scale", "12."))
+  assert_true(accepts_isl1(schema, "short_scale", "1.2"))
+  assert_true(!accepts_isl1(schema, "short_scale", "1.23"))
+  // occurs has no meaning in element, but loads.
+  assert_true(accepts_isl1(schema, "pair", "[1, 2, 3]"))
+}
+
+///|
+test "ISL 1.0: annotations lists that are required, ordered, and closed" {
+  let schema =
+    #|type::{ name: some, annotations: [required::a, b] }
+    #|type::{ name: exact, annotations: closed::ordered::[a, optional::b, c] }
+    #|type::{ name: in_order, annotations: required::ordered::[a, b] }
+  assert_true(accepts_isl1(schema, "some", "x::a::1"))
+  assert_true(!accepts_isl1(schema, "some", "b::1"))
+  assert_true(accepts_isl1(schema, "exact", "a::c::1"))
+  assert_true(accepts_isl1(schema, "exact", "a::b::c::1"))
+  assert_true(!accepts_isl1(schema, "exact", "a::c::b::1"))
+  assert_true(!accepts_isl1(schema, "exact", "a::x::c::1"))
+  assert_true(accepts_isl1(schema, "in_order", "x::a::y::b::z::1"))
+  assert_true(!accepts_isl1(schema, "in_order", "b::a::1"))
+}
+
+///|
+test "ISL 1.0: schemas that ISL 1.0 does not allow do not load" {
+  for
+    bad in [
+      "schema_header::{}", "schema_footer::{}", "type::{ name: t, content: open }",
+      "type::{ name: t, type: $null_or::int }", "type::{ name: t, type: nullable::document }",
+      "type::{ name: t, fields: { a: nullable::{ type: int, occurs: 2 } } }", "type::{ name: t, occurs: 0 }",
+      "type::{ name: t, annotations: { container_length: 1 } }", "type::{ name: t, annotations: required::[a::b] }",
+      "type::{ name: t, valid_values: range::[2000T, max] }",
+    ] {
+    let error = try @schema.Schema::load_from_text(bad) catch {
+      error => Some(error)
+    } noraise {
+      _ => None
+    }
+    assert_true(error is Some(@ion.IonError::DataModel(_)), msg=bad)
+  }
+  // ISL 1.0 has no reserved symbols, so these are open content.
+  let open = @schema.Schema::load_from_text(
+    "schema_header::{ reserved_name: 1 } snake_case::1 type::{ name: t, exponent: 1, doc: 1 } schema_footer::{}",
+  )
+  assert_true(open.is_valid("t", @ion.IonValue::int(1)))
+}
+
+///|
+test "ISL 1.0 and ISL 2.0 schemas import each other, and keep their meaning" {
+  let schemas : Map[String, String] = {
+    "old.isl": "$ion_schema_1_0 type::{ name: no_nulls, not: struct }",
+    "new.isl": "$ion_schema_2_0 type::{ name: nulls, not: struct }",
+  }
+  let resolver = (id : String) => {
+    match schemas.get(id) {
+      Some(text) => @text.read_ion_datagram(text)
+      None => raise @ion.IonError::DataModel("no schema " + id)
+    }
+  }
+  for marker in ["$ion_schema_1_0", "$ion_schema_2_0"] {
+    let schema = @schema.Schema::load_from_text(
+      marker +
+      " schema_header::{ imports: [{ id: \"old.isl\" }, { id: \"new.isl\" }] } type::{ name: a, type: no_nulls } type::{ name: b, type: nulls } schema_footer::{}",
+      resolver~,
+    )
+    assert_true(
+      !schema.is_valid("a", @ion.IonValue::typed_null(@ion.IonType::Null)),
+      msg=marker,
+    )
+    assert_true(
+      schema.is_valid("b", @ion.IonValue::typed_null(@ion.IonType::Null)),
+      msg=marker,
+    )
+  }
 }

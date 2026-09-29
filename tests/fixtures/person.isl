@@ -1,3 +1,5 @@
+$ion_schema_2_0
+
 type::{
   name: person,
   fields: {

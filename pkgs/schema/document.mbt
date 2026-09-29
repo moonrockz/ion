@@ -1,25 +1,40 @@
-// The top level of an Ion Schema 2.0 document.
+// The top level of an Ion Schema document.
 //
-// A schema document is a sequence of Ion values: the version marker
-// `$ion_schema_2_0`, an optional `schema_header::{...}`, the
-// `type::{...}` definitions, and an optional `schema_footer::{...}`, after
-// which nothing counts. Any other top-level value is open content, which the
-// loader ignores, unless it is annotated with a reserved symbol.
+// A schema document is a sequence of Ion values: an optional version marker,
+// an optional `schema_header::{...}`, the `type::{...}` definitions, and an
+// optional `schema_footer::{...}`, after which nothing counts. The version
+// marker `$ion_schema_2_0` makes the document ISL 2.0; `$ion_schema_1_0`, or
+// no version marker, makes it ISL 1.0.
 //
-// The reserved symbols are those that match `$ion_schema(_.*)?` and those in
-// lower snake case, such as `type` or `foo_bar`. A header, a type definition,
-// and a footer may have fields whose names are not reserved; they are user
+// In ISL 2.0, any other top-level value is open content, which the loader
+// ignores, unless it is annotated with a reserved symbol. The reserved
+// symbols are those that match `$ion_schema(_.*)?` and those in lower snake
+// case, such as `type` or `foo_bar`. A header, a type definition, and a
+// footer may have fields whose names are not reserved; they are user
 // content. The header's `user_reserved_fields` can also declare reserved
 // symbols, other than ISL keywords, as user fields.
 //
-// A document with no version marker is ISL 1.0 by the specification. This
-// loader reads it as ISL 2.0 instead, so that a schema of type definitions
-// alone loads.
+// In ISL 1.0, there are no reserved symbols: any other top-level value, and
+// any field that is not a keyword, is open content. A document has a header
+// only if it has a footer.
 
 ///|
-/// Load a schema from a parsed schema document. A construct that ISL 2.0 does
-/// not allow raises `IonError::DataModel`, and one that this implementation
-/// does not implement raises `IonError::Unsupported`.
+/// The version of the Ion Schema Language that a schema document uses.
+priv enum IslVersion {
+  Isl10
+  Isl20
+} derive(Eq)
+
+///|
+/// Load a schema from a parsed schema document, in ISL 1.0 or ISL 2.0 as its
+/// version marker says. A construct that the version does not allow raises
+/// `IonError::DataModel`, and one that this implementation does not
+/// implement raises `IonError::Unsupported`.
+///
+/// The schema holds ISL 2.0 constraints: the loader translates each ISL 1.0
+/// construct into the ISL 2.0 constraints with the same meaning. For
+/// example, the ISL 1.0 `nullable::int` loads as `null.null`, `null.int`, or
+/// `int`.
 ///
 /// `resolver` returns the parsed values of the schema document that an
 /// import names by its `id`, such as a file under a base directory. Without
@@ -29,7 +44,12 @@ pub fn Schema::load(
   values : Array[@ion.IonValue],
   resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError,
 ) -> Schema raise @ion.IonError {
-  let loader : Loader = { resolver, documents: Map([]), types: [], }
+  let loader : Loader = {
+    resolver,
+    documents: Map([]),
+    definitions: Map([]),
+    types: [],
+  }
   let _ = loader.load_document(None, values)
   Schema::from_types(loader.types)
 }
@@ -37,6 +57,7 @@ pub fn Schema::load(
 ///|
 /// The parts of a schema document.
 priv struct Parsed {
+  version : IslVersion
   imports : Array[@ion.IonValue]
   definitions : Array[Array[@ion.Field]]
   user_fields : UserFields
@@ -50,10 +71,12 @@ fn parse_document(values : Array[@ion.IonValue]) -> Parsed raise @ion.IonError {
   let definitions : Array[Array[@ion.Field]] = []
   let mut imports : Array[@ion.IonValue] = []
   let mut user_fields = UserFields::none()
+  let mut version = Isl10
   let mut version_seen = false
   let mut header_seen = false
+  let mut footer_seen = false
   for value in values {
-    if version_marker(value) is Some(version) {
+    if version_marker(value) is Some(marker) {
       if value.has_annotations() {
         raise @ion.IonError::DataModel(
           "a version marker must not have annotations",
@@ -64,17 +87,15 @@ fn parse_document(values : Array[@ion.IonValue]) -> Parsed raise @ion.IonError {
           "a schema has one version marker, before its header and types",
         )
       }
-      match version {
-        "$ion_schema_2_0" => version_seen = true
-        "$ion_schema_1_0" =>
-          // ISL 1.0 gives the same names other meanings, such as nulls in
-          // core types, so it must not load as ISL 2.0.
-          raise @ion.IonError::Unsupported("Ion Schema 1.0 is not supported")
+      version = match marker {
+        "$ion_schema_2_0" => Isl20
+        "$ion_schema_1_0" => Isl10
         _ =>
           raise @ion.IonError::DataModel(
-            "unknown Ion Schema version: " + version,
+            "unknown Ion Schema version: " + marker,
           )
       }
+      version_seen = true
       continue
     }
     let annotations = value.annotations().map(token => token.text())
@@ -107,13 +128,16 @@ fn parse_document(values : Array[@ion.IonValue]) -> Parsed raise @ion.IonError {
               )
             }
             header_seen = true
-            let (declared, header_imports) = load_header(fields)
+            let (declared, header_imports) = load_header(fields, version)
             user_fields = declared
             imports = header_imports
           }
           "type" => definitions.push(fields)
           _ => {
-            check_user_fields(fields, user_fields.footer, "schema footer")
+            if version == Isl20 {
+              check_user_fields(fields, user_fields.footer, "schema footer")
+            }
+            footer_seen = true
             break
           }
         }
@@ -121,7 +145,7 @@ fn parse_document(values : Array[@ion.IonValue]) -> Parsed raise @ion.IonError {
       _ =>
         // Open content.
         for text in annotations {
-          if text is Some(text) && is_reserved(text) {
+          if version == Isl20 && text is Some(text) && is_reserved(text) {
             raise @ion.IonError::DataModel(
               "open content must not be annotated with the reserved symbol '\{text}'",
             )
@@ -129,7 +153,12 @@ fn parse_document(values : Array[@ion.IonValue]) -> Parsed raise @ion.IonError {
         }
     }
   }
-  { imports, definitions, user_fields, }
+  if version == Isl10 && header_seen != footer_seen {
+    raise @ion.IonError::DataModel(
+      "an Ion Schema 1.0 schema has a header only if it has a footer",
+    )
+  }
+  { version, imports, definitions, user_fields, }
 }
 
 ///|
@@ -139,6 +168,9 @@ priv struct Loader {
   /// The names of the types each document defines, by the document's id,
   /// known before its imports load, so that documents can import each other.
   documents : Map[String, Array[String]]
+  /// The type definitions of each document, by type key, with the scope
+  /// they are in, for what a type reference refers to before it loads.
+  definitions : Map[String, (Array[@ion.Field], Context)]
   types : Array[TypeDefinition]
 }
 
@@ -179,8 +211,12 @@ fn Loader::load_document(
   let ctx : Context = {
     loader: self,
     id,
+    version: parsed.version,
     scope,
     user_fields: parsed.user_fields.types,
+  }
+  for fields in parsed.definitions {
+    self.definitions[type_key(id, type_name(fields))] = (fields, ctx)
   }
   for import_ in parsed.imports {
     ctx.header_import(import_)
@@ -226,6 +262,7 @@ fn Loader::names_of(
 priv struct Context {
   loader : Loader
   id : String?
+  version : IslVersion
   scope : Map[String, String]
   user_fields : Array[String]
 }
@@ -299,12 +336,17 @@ fn Context::header_import(
 
 ///|
 /// The reference an inline import `{ id: ..., type: ... }` makes. It does not
-/// change the document's scope.
+/// change the document's scope. ISL 1.0 also allows an `as`, which has no
+/// effect.
 fn Context::inline_import(
   self : Context,
   fields : Array[@ion.Field],
 ) -> Constraint raise @ion.IonError {
-  let (id, name, _) = import_fields(fields, ["id", "type"])
+  let allowed = match self.version {
+    Isl10 => ["id", "type", "as"]
+    Isl20 => ["id", "type"]
+  }
+  let (id, name, _) = import_fields(fields, allowed)
   guard name is Some(name) else {
     raise @ion.IonError::DataModel("an inline import needs a 'type'")
   }
@@ -461,15 +503,24 @@ fn UserFields::none() -> UserFields {
 
 ///|
 /// Load the schema header: the user fields its `user_reserved_fields`
-/// declares, and its imports. Its other fields must be user content.
+/// declares, and its imports. In ISL 2.0, its other fields must be user
+/// content. In ISL 1.0, they are open content, and `user_reserved_fields` is
+/// one of them.
 fn load_header(
   fields : Array[@ion.Field],
+  version : IslVersion,
 ) -> (UserFields, Array[@ion.IonValue]) raise @ion.IonError {
   let user_fields = match field_value(fields, "user_reserved_fields") {
-    Some(declaration) => load_user_reserved_fields(declaration)
-    None => UserFields::none()
+    Some(declaration) if version == Isl20 =>
+      load_user_reserved_fields(declaration)
+    _ => UserFields::none()
   }
-  for key in ["user_reserved_fields", "imports"] {
+  let keys = if version == Isl20 {
+    ["user_reserved_fields", "imports"]
+  } else {
+    ["imports"]
+  }
+  for key in keys {
     if fields.filter(field => field.name().text() == Some(key)).length() > 1 {
       raise @ion.IonError::DataModel("a schema header has at most one '\{key}'")
     }
@@ -484,6 +535,9 @@ fn load_header(
             "imports must be a non-null list without annotations",
           )
       }
+  }
+  if version == Isl10 {
+    return (user_fields, imports)
   }
   check_user_fields(
     fields.filter(field => {
