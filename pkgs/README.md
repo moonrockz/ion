@@ -1,17 +1,20 @@
 # The `ion` command-line tool (`moonrockz/ion`)
 
 The module's root package is the `ion` executable, so a published version
-runs as `moonx moonrockz/ion`. From a checkout, run it with
+runs as `moonx moonrockz/ion`. The commands themselves live in
+[`moonrockz/ion/cli`](cli/README.md), which this package runs with the
+process's arguments and standard streams. From a checkout, run it with
 `moon run pkgs -- <command>`, or build a native binary with
 `mise run build:native`.
 
 ```
-ion print [file|-]                              Ion text or binary in, Ion text out
+ion print [--binary | --pretty] [file|-]        Ion text or binary in; Ion text, pretty text, or binary out
 ion json [file|-]                               Ion text or binary in, JSON out
 ion fromjson [file|-]                           JSON in, Ion text out
 ion hash [file|-]                               Ion Hash (SHA-256) of each value
 ion validate <schema-file> <type-name> [file|-] validate each value
 ion version
+ion help
 ```
 
 A missing file argument, or `-`, reads stdin. Ion input may be text or binary;
@@ -24,6 +27,11 @@ $ cat people.ion
 { name: "Ada", born: 1815 } { name: 42 }
 
 $ ion print people.ion
+{name: "Ada", born: 1815}
+{name: 42}
+
+$ ion print --binary people.ion > people.10n
+$ ion print people.10n
 {name: "Ada", born: 1815}
 {name: 42}
 
@@ -54,8 +62,12 @@ $ echo $?
   `moonrockz/ion/text/stream` and `moonrockz/ion/binary/stream`: each value
   is read, handled, and dropped in turn, so memory stays proportional to the
   largest value, not to the input.
+- `print --binary` writes each value as it arrives, declaring each new symbol
+  text once, in a local symbol table that appends to the ones before.
 - An error stops a command after the values before it are handled, prints a
   message to stderr, and exits with status 1. So does a validation failure.
+  Arguments that do not make a command print the usage to stderr and exit
+  with status 2.
 - `fromjson` reads its whole input, since a JSON document is one value.
 - The tool builds for the `native` and `wasm` targets, which
   `moonbitlang/async` supports for files and stdin.

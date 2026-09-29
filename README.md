@@ -31,6 +31,7 @@ Each package has a README with checked examples, linked below.
 | `@binary/stream` | [`pkgs/binary/stream`](pkgs/binary/stream/README.md) | `moonrockz/ion/binary/stream` | The Ion binary codec over asynchronous IO (`moonbitlang/async`) |
 | `@schema`     | [`pkgs/schema`](pkgs/schema/README.md) | `moonrockz/ion/schema` | Ion Schema model, loader, and validator                 |
 | `@json`       | [`pkgs/json`](pkgs/json/README.md)   | `moonrockz/ion/json`   | JSON interoperability: `IonValue` ⇄ core `Json`          |
+| `@cli`        | [`pkgs/cli`](pkgs/cli/README.md) | `moonrockz/ion/cli` | The command line's commands, runnable with any streams |
 | `ion` CLI     | [`pkgs`](pkgs/README.md) | `moonrockz/ion`        | `ion print`, `ion json`, `ion fromjson`, `ion hash`, `ion validate` — the module root package is the executable |
 
 ## Repository layout
@@ -103,6 +104,7 @@ Command line (from the repository root; the CLI is the module root package):
 
 ```bash
 moon run pkgs -- print data.ion
+moon run pkgs -- print --binary data.ion > data.10n
 moon run pkgs -- hash data.ion
 moon run pkgs -- validate schema.isl person data.ion
 ```

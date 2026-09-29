@@ -8,7 +8,11 @@ Runs the Ion binary codec over `moonbitlang/async` byte sources and sinks.
   than to the stream. Version markers and local symbol tables update the
   reader's symbol table and are not returned.
 - `write_all` writes a datagram to any `&@io.Writer`: the version marker, a
-  local symbol table when one is needed, and then each value in turn.
+  local symbol table when one is needed, and then each value in turn. It
+  builds the symbol table from all the values first.
+- `BinaryWriter` writes one value at a time without knowing the values
+  ahead: it declares each new symbol text once, in a local symbol table that
+  appends to the ones before (`imports: $ion_symbol_table`).
 
 ```mbt check
 ///|
@@ -55,3 +59,24 @@ async test "write a datagram and read it back one value at a time" {
 ```
 
 A stream that ends inside a value raises an `@ion.IonError` at its end.
+
+`BinaryWriter` suits a stream whose values are not known ahead, such as the
+output of `ion print --binary`:
+
+```mbt check
+///|
+async test "write values one at a time" {
+  let sink : Sink = { written: b"", }
+  let writer = @stream.BinaryWriter::new(sink)
+  for text in ["{ id: 1, tags: [new] }", "{ id: 2, tags: [new, sale] }"] {
+    writer.write(@text.read_ion(text))
+  }
+  inspect(
+    @text.write_all(@binary.read_binary(sink.written)),
+    content=(
+      #|{id: 1, tags: [new]}
+      #|{id: 2, tags: [new, sale]}
+    ),
+  )
+}
+```

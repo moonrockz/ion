@@ -1,0 +1,34 @@
+// The `ion` command line, as a library: `run` takes the arguments and the
+// standard streams, so tests drive it with in-memory streams, and the
+// module's root package runs it with the real ones.
+
+import {
+  "moonrockz/ion/ion" @core,
+  "moonrockz/ion/binary",
+  "moonrockz/ion/hash",
+  "moonrockz/ion/json",
+  "moonrockz/ion/schema",
+  "moonrockz/ion/text",
+  "moonrockz/ion/binary/stream" @binary_stream,
+  "moonrockz/ion/text/stream" @text_stream,
+  "moonbitlang/async/fs" @async_fs,
+  "moonbitlang/async/io",
+  "moonbitlang/async/os_error",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "moonrockz/ion/binary",
+  "moonrockz/ion/hash",
+  "moonrockz/ion/text",
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/fs",
+} for "test"
+
+// The command line reads files through `moonbitlang/async`, which supports
+// only these targets.
+
+supported_targets = "native+wasm"
