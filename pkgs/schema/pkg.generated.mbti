@@ -34,6 +34,13 @@ pub(all) enum Constraint {
   Not(Constraint)
   Nothing
   Matches(Regex)
+  ByteLength(Int, Int?)
+  Utf8ByteLength(Int, Int?)
+  Precision(Int, Int?)
+  Exponent(Int, Int?)
+  TimestampPrecision(Int, Int?)
+  TimestampOffsets(Array[@ion.TimestampOffset])
+  Ieee754Float(FloatFormat)
   Contains(Array[@ion.IonValue])
 } derive(@debug.Debug)
 pub fn Constraint::any() -> Self
@@ -45,6 +52,15 @@ pub struct FieldConstraint {
   occurs : Occurs
 } derive(@debug.Debug)
 pub fn FieldConstraint::to_repr(Self) -> @debug.Repr
+
+pub(all) enum FloatFormat {
+  Binary16
+  Binary32
+  Binary64
+} derive(Eq, @debug.Debug)
+pub fn FloatFormat::equal(Self, Self) -> Bool
+pub fn FloatFormat::not_equal(Self, Self) -> Bool
+pub fn FloatFormat::to_repr(Self) -> @debug.Repr
 
 pub struct Occurs {
   lower : Int

@@ -274,3 +274,73 @@ test "valid_values takes ranges of numbers and of timestamps" {
     assert_true(error is Some(@ion.IonError::DataModel(_)))
   }
 }
+
+///|
+test "byte, precision, exponent, and timestamp constraints" {
+  let schema =
+    #|type::{ name: blob5, byte_length: 5 }
+    #|type::{ name: utf8, utf8_byte_length: range::[3, exclusive::5] }
+    #|type::{ name: money, precision: range::[1, 5], exponent: -2 }
+    #|type::{ name: coarse, timestamp_precision: range::[min, day] }
+    #|type::{ name: fine, timestamp_precision: range::[exclusive::second, max] }
+    #|type::{ name: local, timestamp_offset: ["+01:00", "-00:00"] }
+  assert_true(accepts(schema, "blob5", "{{\"12345\"}}"))
+  assert_true(!accepts(schema, "blob5", "{{\"1234\"}}"))
+  assert_true(!accepts(schema, "blob5", "\"12345\""))
+  // é is two bytes and 😀 four.
+  assert_true(accepts(schema, "utf8", "\"aé\""))
+  assert_true(accepts(schema, "utf8", "abcd"))
+  assert_true(accepts(schema, "utf8", "\"😀\""))
+  assert_true(!accepts(schema, "utf8", "\"😀a\""))
+  assert_true(accepts(schema, "money", "123.45"))
+  assert_true(!accepts(schema, "money", "1234.56"))
+  assert_true(!accepts(schema, "money", "12.3"))
+  assert_true(!accepts(schema, "money", "12.30e0"))
+  assert_true(accepts(schema, "coarse", "2020-01T"))
+  assert_true(!accepts(schema, "coarse", "2020-01-01T00:00Z"))
+  assert_true(accepts(schema, "fine", "2020-01-01T00:00:00.0Z"))
+  assert_true(!accepts(schema, "fine", "2020-01-01T00:00:00Z"))
+  assert_true(accepts(schema, "local", "2020-01-01T00:00+01:00"))
+  assert_true(accepts(schema, "local", "2020T"))
+  assert_true(!accepts(schema, "local", "2020-01-01T00:00Z"))
+  for
+    bad in [
+      "precision: 0", "exponent: range::[2, 1]", "byte_length: -1", "timestamp_precision: hour",
+      "timestamp_precision: range::[day, month]", "timestamp_offset: []", "timestamp_offset: [\"+24:00\"]",
+      "timestamp_offset: [\"Z\"]",
+    ] {
+    assert_true(
+      load_error("type::{ name: t, \{bad} }")
+      is Some(@ion.IonError::DataModel(_)),
+      msg=bad,
+    )
+  }
+}
+
+///|
+test "ieee754_float accepts the floats a format holds exactly" {
+  let schema =
+    #|type::{ name: half, ieee754_float: binary16 }
+    #|type::{ name: single, ieee754_float: binary32 }
+  for
+    text in [
+      "nan", "+inf", "0e0", "-0e0", "2048e0", "65504e0", "5.960464477539063e-8",
+      "0.5e0",
+    ] {
+    assert_true(accepts(schema, "half", text), msg=text)
+  }
+  for
+    text in [
+      "2049e0", "65520e0", "2.9802322387695312e-8", "0.1e0", "1", "null.float",
+    ] {
+    assert_true(!accepts(schema, "half", text), msg=text)
+  }
+  assert_true(accepts(schema, "single", "16777216e0"))
+  assert_true(!accepts(schema, "single", "16777217e0"))
+  assert_true(accepts(schema, "single", "1.401298464324817e-45"))
+  assert_true(!accepts(schema, "single", "0.1e0"))
+  assert_true(
+    load_error("type::{ name: t, ieee754_float: $null_or::binary16 }")
+    is Some(@ion.IonError::DataModel(_)),
+  )
+}

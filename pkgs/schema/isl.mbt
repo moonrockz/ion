@@ -84,9 +84,35 @@ pub(all) enum Constraint {
   Nothing
   /// `regex`: a string or symbol has a match for the regular expression.
   Matches(Regex)
+  /// `byte_length`: the number of bytes in a blob or clob.
+  ByteLength(Int, Int?)
+  /// `utf8_byte_length`: the number of bytes in the UTF-8 encoding of a
+  /// string or symbol.
+  Utf8ByteLength(Int, Int?)
+  /// `precision`: the number of digits in a decimal's coefficient.
+  Precision(Int, Int?)
+  /// `exponent`: a decimal's exponent.
+  Exponent(Int, Int?)
+  /// `timestamp_precision`: a timestamp's precision, as an integer: `-4` for
+  /// year, `-3` month, `-2` day, `-1` minute, `0` second, and the number of
+  /// fractional digits beyond that (`3` is millisecond).
+  TimestampPrecision(Int, Int?)
+  /// `timestamp_offset`: a timestamp's offset is one of these. A timestamp
+  /// with no time has the unknown offset.
+  TimestampOffsets(Array[@ion.TimestampOffset])
+  /// `ieee754_float`: a float that the IEEE 754 format holds exactly.
+  Ieee754Float(FloatFormat)
   /// `contains: [ ... ]`: the container holds every listed value.
   Contains(Array[@ion.IonValue])
 } derive(Debug)
+
+///|
+/// An IEEE 754 binary interchange format.
+pub(all) enum FloatFormat {
+  Binary16
+  Binary32
+  Binary64
+} derive(Eq, Debug)
 
 ///|
 /// A constraint that always holds, used for `$any`.
@@ -102,3 +128,9 @@ pub extend FieldConstraint with @debug.Debug::{to_repr}
 
 ///|
 pub extend Constraint with @debug.Debug::{to_repr}
+
+///|
+pub extend FloatFormat with @debug.Debug::{to_repr}
+
+///|
+pub extend FloatFormat with Eq::{equal, not_equal}

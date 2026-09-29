@@ -108,13 +108,16 @@ validation never passes because a rule was skipped.
 test "an unsupported constraint is an error" {
   let message = try
     @schema.Schema::load_from_text(
-      "type::{ name: amount, type: decimal, precision: range::[1, 5] }",
+      "type::{ name: pair, ordered_elements: [int, string] }",
     )
   catch {
     error => error.message()
   } noraise {
     _ => "loaded"
   }
-  inspect(message, content="unsupported Ion Schema constraint: precision")
+  inspect(
+    message,
+    content="unsupported Ion Schema constraint: ordered_elements",
+  )
 }
 ```

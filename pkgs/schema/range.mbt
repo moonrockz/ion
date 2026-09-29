@@ -268,6 +268,29 @@ fn load_bound(
   value : @ion.IonValue,
   open : String,
 ) -> Bound raise @ion.IonError {
+  match bound_value(value, open) {
+    None => Unbounded
+    Some((bare, exclusive)) if kind_of(bare) is Some(_) =>
+      if exclusive {
+        Exclusive(bare)
+      } else {
+        Inclusive(bare)
+      }
+    _ =>
+      raise @ion.IonError::DataModel(
+        "a range bound must be a number, a timestamp, or '\{open}'",
+      )
+  }
+}
+
+///|
+/// One bound of a range, without its annotations, and whether it is
+/// `exclusive::`; `None` for `open` (`min` or `max`), which cannot be
+/// exclusive.
+fn bound_value(
+  value : @ion.IonValue,
+  open : String,
+) -> (@ion.IonValue, Bool)? raise @ion.IonError {
   let annotations = value.annotations().map(token => token.text())
   let exclusive = match annotations {
     [] => false
@@ -282,20 +305,9 @@ fn load_bound(
       if exclusive {
         raise @ion.IonError::DataModel("'\{open}' cannot be exclusive")
       } else {
-        Unbounded
+        None
       }
-    _ if kind_of(value) is Some(_) => {
-      let bare = value.with_annotations([])
-      if exclusive {
-        Exclusive(bare)
-      } else {
-        Inclusive(bare)
-      }
-    }
-    _ =>
-      raise @ion.IonError::DataModel(
-        "a range bound must be a number, a timestamp, or '\{open}'",
-      )
+    _ => Some((value.with_annotations([]), exclusive))
   }
 }
 

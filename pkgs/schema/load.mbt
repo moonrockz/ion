@@ -112,10 +112,7 @@ fn load_constraint(
     )
   }
   // These take annotations of their own, which their loaders check.
-  if key != "container_length" &&
-    key != "codepoint_length" &&
-    key != "valid_values" &&
-    key != "regex" {
+  if !checks_own_annotations.contains(key) {
     reject_unknown_annotations(value, "constraint '" + key + "'")
   }
   match key {
@@ -137,6 +134,28 @@ fn load_constraint(
     "not" => Not(load_inline_type(value, user_fields))
     "contains" => Contains(as_list(value))
     "regex" => Matches(load_regex(value))
+    "byte_length" => {
+      let (lower, upper) = load_range(value)
+      ByteLength(lower, upper)
+    }
+    "utf8_byte_length" => {
+      let (lower, upper) = load_range(value)
+      Utf8ByteLength(lower, upper)
+    }
+    "precision" => {
+      let (lower, upper) = load_ordered_range(value, Some(1), int_of)
+      Precision(lower, upper)
+    }
+    "exponent" => {
+      let (lower, upper) = load_ordered_range(value, None, int_of)
+      Exponent(lower, upper)
+    }
+    "timestamp_precision" => {
+      let (lower, upper) = load_ordered_range(value, None, precision_of)
+      TimestampPrecision(lower, upper)
+    }
+    "timestamp_offset" => TimestampOffsets(load_offsets(value))
+    "ieee754_float" => Ieee754Float(load_float_format(value))
     _ => panic()
   }
 }
@@ -145,8 +164,106 @@ fn load_constraint(
 /// The constraints `load_constraint` loads.
 let implemented_constraints : Array[String] = [
   "type", "element", "fields", "valid_values", "container_length", "codepoint_length",
-  "one_of", "any_of", "all_of", "not", "contains", "regex",
+  "one_of", "any_of", "all_of", "not", "contains", "regex", "byte_length", "utf8_byte_length",
+  "precision", "exponent", "timestamp_precision", "timestamp_offset", "ieee754_float",
 ]
+
+///|
+/// The constraints whose loaders check their own annotations.
+let checks_own_annotations : Array[String] = [
+  "container_length", "codepoint_length", "valid_values", "regex", "byte_length",
+  "utf8_byte_length", "precision", "exponent", "timestamp_precision", "timestamp_offset",
+  "ieee754_float",
+]
+
+///|
+/// The integer for a named timestamp precision, as `TimestampPrecision`
+/// counts it.
+fn precision_of(value : @ion.IonValue) -> Int raise @ion.IonError {
+  let name = match value.kind() {
+    @ion.IonValueKind::Symbol(token) => token.text()
+    _ => None
+  }
+  match name {
+    Some("year") => -4
+    Some("month") => -3
+    Some("day") => -2
+    Some("minute") => -1
+    Some("second") => 0
+    Some("millisecond") => 3
+    Some("microsecond") => 6
+    Some("nanosecond") => 9
+    _ =>
+      raise @ion.IonError::DataModel(
+        "a timestamp precision must be year, month, day, minute, second, millisecond, microsecond, or nanosecond",
+      )
+  }
+}
+
+///|
+/// Load a `timestamp_offset` list: one or more strings `[+|-]hh:mm`, where
+/// `-00:00` is the unknown offset.
+fn load_offsets(
+  value : @ion.IonValue,
+) -> Array[@ion.TimestampOffset] raise @ion.IonError {
+  let invalid = @ion.IonError::DataModel(
+    "timestamp_offset must be a non-empty list of offsets such as \"+01:30\" or \"-00:00\"",
+  )
+  let items = match value.kind() {
+    @ion.IonValueKind::List(items) if !value.has_annotations() &&
+      !items.is_empty() => items
+    _ => raise invalid
+  }
+  items.map(item => {
+    let text = match item.kind() {
+      @ion.IonValueKind::String(text) if !item.has_annotations() => text
+      _ => raise invalid
+    }
+    let chars : Array[Char] = text.iter().collect()
+    let digit = (index : Int) => {
+      let c = chars[index]
+      if c >= '0' && c <= '9' {
+        c.to_int() - '0'.to_int()
+      } else {
+        raise invalid
+      }
+    }
+    if chars.length() != 6 ||
+      !(chars[0] == '+' || chars[0] == '-') ||
+      chars[3] != ':' {
+      raise invalid
+    }
+    let hours = digit(1) * 10 + digit(2)
+    let minutes = digit(4) * 10 + digit(5)
+    if hours > 23 || minutes > 59 {
+      raise invalid
+    }
+    if text == "-00:00" {
+      @ion.TimestampOffset::Unknown
+    } else {
+      let total = hours * 60 + minutes
+      @ion.TimestampOffset::Known(if chars[0] == '-' { -total } else { total })
+    }
+  })
+}
+
+///|
+/// Load an `ieee754_float` format: `binary16`, `binary32`, or `binary64`.
+fn load_float_format(value : @ion.IonValue) -> FloatFormat raise @ion.IonError {
+  let name = match value.kind() {
+    @ion.IonValueKind::Symbol(token) if !value.has_annotations() => token.text()
+    _ => None
+  }
+  match name {
+    Some("binary16") => Binary16
+    Some("binary32") => Binary32
+    Some("binary64") => Binary64
+    _ =>
+      raise @ion.IonError::DataModel(
+        "ieee754_float must be binary16, binary32, or binary64",
+      )
+  }
+}
 
 ///|
 /// Load a `type:` constraint, honoring the `$null_or::` annotation.
@@ -358,57 +475,55 @@ fn load_occurs(value : @ion.IonValue) -> Occurs raise @ion.IonError {
 }
 
 ///|
-/// Load a length or count: a non-negative integer, or a `range::[lower,
-/// upper]` of integers, where a bound may be `exclusive::`, `lower` may be
-/// `min`, and `upper` may be `max`. The result is the inclusive range, with
-/// `None` for no upper bound.
+/// Load a length or count: a non-negative integer, or a range of them.
 fn load_range(value : @ion.IonValue) -> (Int, Int?) raise @ion.IonError {
+  load_ordered_range(value, Some(0), int_of)
+}
+
+///|
+/// Load an exact value or a `range::[lower, upper]` of values that `read`
+/// turns into integers, where a bound may be `exclusive::`, `lower` may be
+/// `min`, and `upper` may be `max`. The result is the inclusive range, with
+/// `None` for no upper bound. No value may be below `floor`.
+fn load_ordered_range(
+  value : @ion.IonValue,
+  floor : Int?,
+  read : (@ion.IonValue) -> Int raise @ion.IonError,
+) -> (Int, Int?) raise @ion.IonError {
+  let too_low = () => {
+    @ion.IonError::DataModel(
+      "the value is below the lowest allowed, \{floor.unwrap_or(0)}",
+    )
+  }
   if !value.has_annotations() {
-    let single = int_of(value)
-    if single < 0 {
-      raise @ion.IonError::DataModel("a length or count must not be negative")
+    let single = read(value)
+    if floor is Some(floor) && single < floor {
+      raise too_low()
     }
     return (single, Some(single))
   }
   let (lower_value, upper_value) = range_bounds(value)
-  let lower = load_int_bound(lower_value, "min")
-  let upper = load_int_bound(upper_value, "max")
+  let lower = bound_value(lower_value, "min")
+  let upper = bound_value(upper_value, "max")
   if lower is None && upper is None {
     raise @ion.IonError::DataModel("a range needs at least one bound")
   }
   let lower = match lower {
-    Some((n, exclusive)) => if exclusive { n + 1 } else { n }
-    None => 0
+    Some((bound, exclusive)) => read(bound) + (if exclusive { 1 } else { 0 })
+    None => floor.unwrap_or(-2_147_483_648)
   }
-  let upper = upper.map(bound => if bound.1 { bound.0 - 1 } else { bound.0 })
-  if lower < 0 {
-    raise @ion.IonError::DataModel("a length or count must not be negative")
+  let upper = match upper {
+    Some((bound, exclusive)) =>
+      Some(read(bound) - (if exclusive { 1 } else { 0 }))
+    None => None
+  }
+  if floor is Some(floor) && lower < floor {
+    raise too_low()
   }
   if upper is Some(upper) && upper < lower {
     raise @ion.IonError::DataModel("the range contains no value")
   }
   (lower, upper)
-}
-
-///|
-/// Load one bound of an integer range: the integer and whether it is
-/// exclusive, or `None` for `min` or `max`.
-fn load_int_bound(
-  value : @ion.IonValue,
-  open : String,
-) -> (Int, Bool)? raise @ion.IonError {
-  let (bound, exclusive) = match load_bound(value, open) {
-    Unbounded => return None
-    Inclusive(bound) => (bound, false)
-    Exclusive(bound) => (bound, true)
-  }
-  match bound.kind() {
-    @ion.IonValueKind::Int(n) => Some((n.to_int(), exclusive))
-    _ =>
-      raise @ion.IonError::DataModel(
-        "the bounds of this range must be integers",
-      )
-  }
 }
 
 ///|
