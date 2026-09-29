@@ -43,6 +43,20 @@ The loader does not reject every schema that ISL 2.0 does not allow: it does
 not check, for example, that a referenced type exists or that type names are
 unique.
 
+## Schema documents
+
+A schema document has the version marker `$ion_schema_2_0`, an optional
+`schema_header::{...}`, the `type::{...}` definitions, and an optional
+`schema_footer::{...}`, after which nothing counts. Other top-level values are
+open content, which the loader ignores, unless they are annotated with a
+reserved symbol: `$ion_schema`, a symbol that starts with `$ion_schema_`, or a
+symbol in lower snake case. The header, the footer, and each type may have
+fields whose names are not reserved. The header's `user_reserved_fields`
+declares reserved symbols, other than ISL keywords, as more such fields.
+Header `imports` raise `Unsupported`. A document with no version marker is ISL
+1.0 by the specification; this loader reads it as ISL 2.0, so that a document
+of type definitions alone loads.
+
 ## Validating values
 
 `Schema::load_from_text` reads the `type::{...}` definitions of a schema
