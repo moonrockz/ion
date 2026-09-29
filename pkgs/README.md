@@ -21,6 +21,10 @@ ion help [command]                              also `ion --help` or `ion <comma
 names an Ion file of `$ion_shared_symbol_table::{...}` structs; imports of
 those shared tables in the input then resolve to their symbols' text.
 
+`validate` loads the schemas that the schema file imports. An import's `id`
+is a path relative to the schema file's directory, or to the directory that
+`--schema-root <dir>` names.
+
 A missing file argument, or `-`, reads stdin. Ion input may be text or binary;
 the Ion binary version marker at its start decides.
 
