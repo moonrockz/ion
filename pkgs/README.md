@@ -55,6 +55,7 @@ $ ion hash people.ion
 be93d3daaf4fe159a03cfe8e4b0c02394de41c4b2a690257f4d194e0ba1fc21e
 
 $ cat person.isl
+$ion_schema_2_0
 type::{ name: person, type: struct, fields: { name: { type: string, occurs: required }, born: int } }
 
 $ ion validate person.isl person people.ion

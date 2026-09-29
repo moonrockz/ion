@@ -1,16 +1,23 @@
 // Loading Ion Schema documents into the constraint model.
 
 ///|
-/// Reject the annotations of a constraint or an inline type, other than
-/// `$null_or::`. The constraints that take other modifiers, such as
-/// `distinct::` or `range::`, check their own.
+/// Reject the annotations of a constraint or an inline type, other than those
+/// a type reference may have: `$null_or::` in ISL 2.0, and `nullable::` in
+/// ISL 1.0, where an inline type may also be `type::`. The constraints that
+/// take other modifiers, such as `distinct::` or `range::`, check their own.
 fn reject_unknown_annotations(
   value : @ion.IonValue,
   context : String,
+  ctx : Context,
 ) -> Unit raise @ion.IonError {
+  let allowed = match (ctx.version, value.kind()) {
+    (Isl10, @ion.IonValueKind::Struct(_)) => ["nullable", "type"]
+    (Isl10, _) => ["nullable"]
+    (Isl20, _) => ["$null_or"]
+  }
   for token in value.annotations() {
     let name = token.require_text()
-    if name != "$null_or" {
+    if !allowed.contains(name) {
       raise @ion.IonError::DataModel(
         "the annotation '\{name}' is not allowed on " + context,
       )
@@ -64,17 +71,135 @@ fn load_type_definition(
   fields : Array[@ion.Field],
   ctx : Context,
 ) -> TypeDefinition raise @ion.IonError {
-  let name = type_name(fields)
+  { name: type_name(fields), constraints: load_type_fields(fields, ctx), }
+}
+
+///|
+/// Load the constraints of a type definition, named or inline. An inline type
+/// has no name. It may have an `occurs` when it is `variably_occurring`, in
+/// `fields` or `ordered_elements`, and not `nullable`; ISL 1.0 allows a valid
+/// `occurs` in any type, and ignores it where it does not apply.
+///
+/// In ISL 1.0, a type with no `type` constraint has `type: any`, and a field
+/// that is not an ISL 1.0 keyword is open content. `content: closed` loads as
+/// the names of the type's `fields`, which are the only fields allowed.
+fn load_type_fields(
+  fields : Array[@ion.Field],
+  ctx : Context,
+  inline? : Bool = false,
+  variably_occurring? : Bool = false,
+  nullable? : Bool = false,
+) -> Array[Constraint] raise @ion.IonError {
   let constraints : Array[Constraint] = []
+  let mut closed = false
   for field in fields {
     let key = field.name().require_text()
-    if key == "name" || is_user_field(key, ctx.user_fields) {
+    let value = field.value()
+    if key == "name" {
+      if inline {
+        raise @ion.IonError::DataModel("an inline type must not have a name")
+      }
       continue
     }
-    constraints.push(load_constraint(key, field.value(), ctx))
+    match ctx.version {
+      Isl10 =>
+        match key {
+          "occurs" => {
+            let occurs = load_occurs(value)
+            if occurs.upper == Some(0) {
+              raise @ion.IonError::DataModel("occurs must allow at least 1")
+            }
+            if nullable {
+              raise @ion.IonError::DataModel(
+                "a type with 'occurs' cannot be 'nullable::'",
+              )
+            }
+          }
+          "content" => {
+            if !(value.kind() is @ion.IonValueKind::Symbol(token) &&
+              token.text() == Some("closed") &&
+              !value.has_annotations()) {
+              raise @ion.IonError::DataModel(
+                "content must be the symbol closed",
+              )
+            }
+            closed = true
+          }
+          _ =>
+            if isl10_constraints.contains(key) {
+              constraints.push(load_constraint(key, value, ctx))
+            }
+        }
+      Isl20 => {
+        if key == "occurs" {
+          if !variably_occurring {
+            raise @ion.IonError::DataModel(
+              "'occurs' is allowed only in 'fields' and 'ordered_elements'",
+            )
+          }
+          if nullable {
+            raise @ion.IonError::DataModel(
+              "a type with 'occurs' cannot be '$null_or::'",
+            )
+          }
+          continue
+        }
+        if is_user_field(key, ctx.user_fields) {
+          continue
+        }
+        constraints.push(load_constraint(key, value, ctx))
+      }
+    }
   }
-  { name, constraints, }
+  if ctx.version == Isl10 {
+    if field_value(fields, "type") is None {
+      constraints.insert(0, isl10_any())
+    }
+    if closed {
+      let names = match
+        field_value(fields, "fields").map(value => value.kind()) {
+        Some(@ion.IonValueKind::Struct(declared)) =>
+          declared.map(field => field.name().require_text())
+        _ => []
+      }
+      constraints.push(ClosedFields(names))
+    }
+  }
+  constraints
 }
+
+///|
+/// The ISL 1.0 constraints, which `load_constraint` loads. `occurs` and
+/// `content` are keywords too, which `load_type_fields` loads.
+let isl10_constraints : Array[String] = [
+  "all_of", "annotations", "any_of", "byte_length", "codepoint_length", "container_length",
+  "contains", "element", "fields", "not", "one_of", "ordered_elements", "precision",
+  "regex", "scale", "timestamp_offset", "timestamp_precision", "type", "utf8_byte_length",
+  "valid_values",
+]
+
+///|
+/// The ISL 1.0 core type `any`: any value that is not null, or a document.
+fn isl10_any() -> Constraint {
+  AnyOf([IsType(all_ion_types), IsDocument])
+}
+
+///|
+/// The Ion types other than null.
+let all_ion_types : Array[@ion.IonType] = [
+  @ion.IonType::Bool,
+  @ion.IonType::Int,
+  @ion.IonType::Float,
+  @ion.IonType::Decimal,
+  @ion.IonType::Timestamp,
+  @ion.IonType::Symbol,
+  @ion.IonType::String,
+  @ion.IonType::Clob,
+  @ion.IonType::Blob,
+  @ion.IonType::List,
+  @ion.IonType::Sexp,
+  @ion.IonType::Struct,
+]
 
 ///|
 /// Load one constraint by its field name.
@@ -83,7 +208,7 @@ fn load_constraint(
   value : @ion.IonValue,
   ctx : Context,
 ) -> Constraint raise @ion.IonError {
-  if !implemented_constraints.contains(key) {
+  if ctx.version == Isl20 && !implemented_constraints.contains(key) {
     if isl_keywords.contains(key) {
       raise @ion.IonError::Unsupported(
         "unsupported Ion Schema constraint: " + key,
@@ -95,10 +220,30 @@ fn load_constraint(
   }
   // These take annotations of their own, which their loaders check.
   if !checks_own_annotations.contains(key) {
-    reject_unknown_annotations(value, "constraint '" + key + "'")
+    reject_unknown_annotations(value, "constraint '" + key + "'", ctx)
   }
   match key {
     "type" => load_type_constraint(value, ctx)
+    "element" if ctx.version == Isl10 => Element(load_inline_type(value, ctx))
+    "fields" if ctx.version == Isl10 => {
+      if value.has_annotations() {
+        raise @ion.IonError::DataModel("'fields' takes no annotation")
+      }
+      Fields(load_fields(value, ctx))
+    }
+    "annotations" if ctx.version == Isl10 => load_isl10_annotations(value)
+    "scale" => {
+      // The scale is the number of digits after the decimal point: the
+      // negated exponent.
+      let (lower, upper) = load_range(value)
+      Exponent(
+        match upper {
+          Some(upper) => -upper
+          None => -2_147_483_648
+        },
+        Some(-lower),
+      )
+    }
     "element" => {
       let (bare, distinct) = take_modifier(value, "distinct")
       let element = Element(load_inline_type(bare, ctx))
@@ -151,7 +296,7 @@ fn load_constraint(
       }
       OrderedElements(slots)
     }
-    "valid_values" => load_valid_values(value)
+    "valid_values" => load_valid_values(value, ctx.version)
     "container_length" => {
       let (lower, upper) = load_range(value)
       ContainerLength(lower, upper)
@@ -207,6 +352,7 @@ let checks_own_annotations : Array[String] = [
   "container_length", "codepoint_length", "valid_values", "regex", "byte_length",
   "utf8_byte_length", "precision", "exponent", "timestamp_precision", "timestamp_offset",
   "ieee754_float", "element", "field_names", "fields", "annotations", "ordered_elements",
+  "scale",
 ]
 
 ///|
@@ -273,6 +419,107 @@ fn load_annotations(
   } else {
     AllOf(parts)
   }
+}
+
+///|
+/// Load an ISL 1.0 `annotations` constraint: a list of symbols, each
+/// optionally `required::` or `optional::`, annotated with any of
+/// `required::`, `ordered::`, and `closed::`. A symbol is required when it is
+/// `required::`, or when the list is `required::` and the symbol is not
+/// `optional::`.
+///
+/// - Without `ordered`, each required symbol is an annotation of the value,
+///   and, when `closed`, the value has no annotation but these symbols.
+/// - With `ordered` and `closed`, the value's annotations are the symbols in
+///   order, each once, or not at all if it is not required.
+/// - With `ordered` alone, the required symbols are among the value's
+///   annotations in order, with any others before, between, or after them.
+fn load_isl10_annotations(
+  value : @ion.IonValue,
+) -> Constraint raise @ion.IonError {
+  let items = match value.kind() {
+    @ion.IonValueKind::List(items) => items
+    _ =>
+      raise @ion.IonError::DataModel(
+        "annotations must be a non-null list of symbols",
+      )
+  }
+  let modifiers : Array[String] = []
+  for token in value.annotations() {
+    let name = token.require_text()
+    if !["required", "ordered", "closed"].contains(name) ||
+      modifiers.contains(name) {
+      raise @ion.IonError::DataModel(
+        "an annotations list takes required::, ordered::, and closed::, each at most once",
+      )
+    }
+    modifiers.push(name)
+  }
+  let symbols : Array[(@ion.IonValue, Bool)] = []
+  for item in items {
+    let required = match item.annotations().map(token => token.text()) {
+      [] => modifiers.contains("required")
+      [Some("required")] => true
+      [Some("optional")] => false
+      _ =>
+        raise @ion.IonError::DataModel(
+          "an annotation may be only required:: or optional::",
+        )
+    }
+    match item.kind() {
+      @ion.IonValueKind::Symbol(_) =>
+        symbols.push((item.with_annotations([]), required))
+      _ =>
+        raise @ion.IonError::DataModel(
+          "an annotations list holds non-null symbols",
+        )
+    }
+  }
+  let one = (symbol : @ion.IonValue) => ValidValues([symbol])
+  let any_number = (Constraint::any(), Occurs::new(0, None))
+  let constraint = match
+    (modifiers.contains("ordered"), modifiers.contains("closed")) {
+    (true, true) =>
+      OrderedElements(
+        symbols.map(pair => {
+          let (symbol, required) = pair
+          (
+            one(symbol),
+            if required {
+              Occurs::required()
+            } else {
+              Occurs::optional()
+            },
+          )
+        }),
+      )
+    (true, false) => {
+      let slots = [any_number]
+      for pair in symbols {
+        if pair.1 {
+          slots.push((one(pair.0), Occurs::required()))
+          slots.push(any_number)
+        }
+      }
+      OrderedElements(slots)
+    }
+    (false, closed) => {
+      let parts : Array[Constraint] = []
+      let required = symbols.filter(pair => pair.1).map(pair => pair.0)
+      if !required.is_empty() {
+        parts.push(Contains(required))
+      }
+      if closed {
+        parts.push(Element(ValidValues(symbols.map(pair => pair.0))))
+      }
+      if parts.length() == 1 {
+        parts[0]
+      } else {
+        AllOf(parts)
+      }
+    }
+  }
+  Annotations(constraint)
 }
 
 ///|
@@ -384,6 +631,7 @@ fn load_type_constraint_bare(
     @ion.IonValueKind::Symbol(token) => {
       let name = token.require_text()
       match built_in_type(name) {
+        _ if name == "any" && ctx.version == Isl10 => isl10_any()
         Some(constraint) => constraint
         None => ctx.resolve(name)
       }
@@ -403,21 +651,7 @@ fn built_in_ion_types(name : String) -> Array[@ion.IonType]? {
     "lob" => Some([@ion.IonType::Blob, @ion.IonType::Clob])
     "number" =>
       Some([@ion.IonType::Int, @ion.IonType::Float, @ion.IonType::Decimal])
-    "any" =>
-      Some([
-        @ion.IonType::Bool,
-        @ion.IonType::Int,
-        @ion.IonType::Float,
-        @ion.IonType::Decimal,
-        @ion.IonType::Timestamp,
-        @ion.IonType::Symbol,
-        @ion.IonType::String,
-        @ion.IonType::Clob,
-        @ion.IonType::Blob,
-        @ion.IonType::List,
-        @ion.IonType::Sexp,
-        @ion.IonType::Struct,
-      ])
+    "any" => Some(all_ion_types)
     "null" | "$null" => None
     _ =>
       match @ion.IonType::from_text(name) {
@@ -456,16 +690,29 @@ fn built_in_type(name : String) -> Constraint? {
 
 ///|
 /// Load a `valid_values` constraint: a list of values and ranges, or one
-/// range. No other value in the list may have annotations.
-fn load_valid_values(value : @ion.IonValue) -> Constraint raise @ion.IonError {
+/// range. No other value in the list may have annotations. In ISL 1.0, no
+/// bound of a timestamp range may have the unknown offset.
+fn load_valid_values(
+  value : @ion.IonValue,
+  version : IslVersion,
+) -> Constraint raise @ion.IonError {
+  let load = (range : @ion.IonValue) => {
+    let loaded = load_value_range(range)
+    if version == Isl10 && loaded.has_unknown_offset() {
+      raise @ion.IonError::DataModel(
+        "an Ion Schema 1.0 timestamp range bound must have a known offset",
+      )
+    }
+    InRange(loaded)
+  }
   if value.has_annotations() {
-    return InRange(load_value_range(value))
+    return load(value)
   }
   let values : Array[@ion.IonValue] = []
   let ranges : Array[Constraint] = []
   for item in as_list(value) {
     if has_annotation(item, "range") {
-      ranges.push(InRange(load_value_range(item)))
+      ranges.push(load(item))
     } else if item.has_annotations() {
       raise @ion.IonError::DataModel(
         "a value in 'valid_values' must not have annotations",
@@ -490,36 +737,25 @@ fn load_inline_type(
   ctx : Context,
   variably_occurring? : Bool = false,
 ) -> Constraint raise @ion.IonError {
-  reject_unknown_annotations(value, "inline type")
-  let nullable = has_annotation(value, "$null_or")
+  reject_unknown_annotations(value, "inline type", ctx)
+  let nullable = has_annotation(
+    value,
+    match ctx.version {
+      Isl10 => "nullable"
+      Isl20 => "$null_or"
+    },
+  )
   let inner = match value.kind() {
     @ion.IonValueKind::Struct(fields) if field_value(fields, "id") is Some(_) =>
       ctx.inline_import(fields)
     @ion.IonValueKind::Struct(fields) => {
-      let constraints : Array[Constraint] = []
-      for field in fields {
-        let key = field.name().require_text()
-        if key == "name" {
-          raise @ion.IonError::DataModel("an inline type must not have a name")
-        }
-        if key == "occurs" {
-          if !variably_occurring {
-            raise @ion.IonError::DataModel(
-              "'occurs' is allowed only in 'fields' and 'ordered_elements'",
-            )
-          }
-          if nullable {
-            raise @ion.IonError::DataModel(
-              "a type with 'occurs' cannot be '$null_or::'",
-            )
-          }
-          continue
-        }
-        if is_user_field(key, ctx.user_fields) {
-          continue
-        }
-        constraints.push(load_constraint(key, field.value(), ctx))
-      }
+      let constraints = load_type_fields(
+        fields,
+        ctx,
+        inline=true,
+        variably_occurring~,
+        nullable~,
+      )
       if constraints.length() == 1 {
         constraints[0]
       } else {
@@ -528,10 +764,16 @@ fn load_inline_type(
     }
     _ => load_type_constraint_bare(value, ctx)
   }
-  if nullable {
-    NullOr(inner)
-  } else {
-    inner
+  match (nullable, ctx.version) {
+    (false, _) => inner
+    (true, Isl20) => NullOr(inner)
+    (true, Isl10) => {
+      let nulls = [@ion.IonValue::typed_null(@ion.IonType::Null)]
+      for ion_type in ctx.base_types(value, Set([])) {
+        nulls.push(@ion.IonValue::typed_null(ion_type))
+      }
+      AnyOf([ValidValues(nulls), inner])
+    }
   }
 }
 
@@ -708,5 +950,69 @@ fn load_regex(value : @ion.IonValue) -> Regex raise @ion.IonError {
     @ion.IonValueKind::String(source) if source != "" =>
       Regex::new(source, ignore_case~, multiline~)
     _ => raise @ion.IonError::DataModel("a regex must be a non-empty string")
+  }
+}
+
+///|
+/// The Ion types whose typed nulls the ISL 1.0 `nullable::` of a type
+/// reference allows: those of the type's base type, which is the type its
+/// `type` constraint names, or `any` without one. `visiting` holds the type
+/// keys on the path, so that a cycle of references ends.
+fn Context::base_types(
+  self : Context,
+  reference : @ion.IonValue,
+  visiting : Set[String],
+) -> Array[@ion.IonType] raise @ion.IonError {
+  let definition = match reference.kind() {
+    @ion.IonValueKind::Symbol(token) => {
+      let name = token.require_text()
+      match name {
+        "document" =>
+          raise @ion.IonError::DataModel("a document cannot be nullable")
+        "any" | "$any" => return all_ion_types
+        "nothing" | "$null" => return []
+        _ => ()
+      }
+      let ion_name = if name.has_prefix("$") {
+        name.view(start_offset=1).to_owned()
+      } else {
+        name
+      }
+      if built_in_ion_types(ion_name) is Some(types) {
+        return types
+      }
+      match self.scope.get(name) {
+        Some(key) => key
+        None =>
+          raise @ion.IonError::DataModel(
+            "no type named '\{name}' is defined or imported",
+          )
+      }
+    }
+    @ion.IonValueKind::Struct(fields) =>
+      match field_value(fields, "id") {
+        Some(_) => {
+          let (id, name, _) = import_fields(fields, ["id", "type", "as"])
+          type_key(Some(id), name.unwrap_or(""))
+        }
+        None =>
+          return match field_value(fields, "type") {
+            Some(inner) => self.base_types(inner, visiting)
+            None => all_ion_types
+          }
+      }
+    _ => return all_ion_types
+  }
+  if visiting.contains(definition) {
+    return []
+  }
+  visiting.add(definition)
+  match self.loader.definitions.get(definition) {
+    Some((fields, ctx)) =>
+      match field_value(fields, "type") {
+        Some(inner) => ctx.base_types(inner, visiting)
+        None => all_ion_types
+      }
+    None => all_ion_types
   }
 }

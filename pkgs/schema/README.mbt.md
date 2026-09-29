@@ -1,11 +1,11 @@
 # Ion Schema (`moonrockz/ion/schema`)
 
-Loads [Ion Schema 2.0](https://amazon-ion.github.io/ion-schema/) schemas and
-validates Ion values and documents against their types. It implements every
-ISL 2.0 constraint and schema imports. ISL 1.0 is not implemented: a schema
-with the `$ion_schema_1_0` version marker raises
-`@ion.IonError::Unsupported`, since ISL 1.0 gives the same names other
-meanings.
+Loads [Ion Schema](https://amazon-ion.github.io/ion-schema/) 1.0 and 2.0
+schemas and validates Ion values and documents against their types. It
+implements every constraint of both versions, and schema imports. The loaded
+schema holds ISL 2.0 constraints: the loader translates each ISL 1.0
+construct into ISL 2.0 constraints with the same meaning (see
+[ISL 1.0](#isl-10)).
 
 Constraints: `type`, `all_of`, `any_of`, `one_of`, `not`, `valid_values`,
 `element` (with `distinct::`), `ordered_elements`, `contains`, `fields` (with
@@ -35,7 +35,7 @@ which takes time linear in the input, so no expression makes it backtrack
 without end. `Regex` is public, so the same expressions can be used on their
 own.
 
-Types follow ISL 2.0. A core type such as `int` or `struct` matches only the
+In ISL 2.0, a core type such as `int` or `struct` matches only the
 non-null values of its Ion type, and `$int` or `$struct` also matches its
 typed null. `text`, `lob`, `number`, and `any` cover several Ion types, and
 `$text`, `$lob`, `$number`, and `$any` add their nulls. `$null` matches
@@ -54,12 +54,12 @@ A document is a stream of top-level values. `validate_document` and
 `container_length`, and `contains` apply to its values, and the built-in type
 `document` matches it. No other constraint applies to a document.
 
-A schema that ISL 2.0 does not allow raises `IonError::DataModel` when it
-loads, as the ion-schema-tests suite's invalid schemas and types require.
+A schema that its version of ISL does not allow raises `IonError::DataModel`
+when it loads, as the ion-schema-tests suite's invalid schemas and types require.
 
 ## Schema documents
 
-A schema document has the version marker `$ion_schema_2_0`, an optional
+An ISL 2.0 schema document has the version marker `$ion_schema_2_0`, an optional
 `schema_header::{...}`, the `type::{...}` definitions, and an optional
 `schema_footer::{...}`, after which nothing counts. Other top-level values are
 open content, which the loader ignores, unless they are annotated with a
@@ -67,9 +67,8 @@ reserved symbol: `$ion_schema`, a symbol that starts with `$ion_schema_`, or a
 symbol in lower snake case. The header, the footer, and each type may have
 fields whose names are not reserved. The header's `user_reserved_fields`
 declares reserved symbols, other than ISL keywords, as more such fields.
-A document with no version marker is ISL 1.0 by the specification; this
-loader reads it as ISL 2.0, so that a document of type definitions alone
-loads.
+A document with the version marker `$ion_schema_1_0`, or with no version
+marker, is ISL 1.0.
 
 A type reference must name a type that the schema defines or imports.
 Imports name other schemas by an `id`, which the `resolver` given to
@@ -80,7 +79,69 @@ or one type, optionally under another name with `as`; an inline import
 Types that an imported schema imports in turn are not in scope. Schemas may
 import each other in a cycle, but not themselves. Without a resolver, an
 import raises `Unsupported`. `types()` lists an imported type as
-`<id>#<name>`.
+`<id>#<name>`. An ISL 1.0 schema and an ISL 2.0 schema may import each
+other, and each type keeps the meaning of its own version.
+
+## ISL 1.0
+
+ISL 1.0 gives some of the same names other meanings, so the version marker
+decides how a document loads. The differences from ISL 2.0 are:
+
+- A type with no `type` constraint has `type: any`, so it matches no null.
+  `any` also matches a document. In ISL 2.0, such a type matches any value.
+- `nullable::T` matches `null.null`, the typed nulls of the Ion types of `T`'s
+  base type, and the values of `T`. The base type is the type that `T`'s
+  `type` constraint names, or `any`. For example, `nullable::int` matches
+  `null`, `null.int`, and `5`, but not `null.string`. There is no
+  `$null_or::`.
+- `content: closed` allows only the fields in the type's `fields`, which
+  have no `closed::`.
+- `scale` is the number of digits after the decimal point: `scale: 2` is
+  `exponent: -2`. There is no `exponent`, `field_names`, or
+  `ieee754_float`.
+- `annotations` takes only a list of symbols, annotated with any of
+  `required::`, `ordered::`, and `closed::`. Each symbol can be
+  `required::` or `optional::`. With `ordered`, the required symbols must
+  appear in order; with `closed` too, the value's annotations must be the
+  symbols in order, the optional ones at most once.
+- A valid `occurs` is allowed in any type, and has no effect outside
+  `fields` and `ordered_elements`. `element` takes no `distinct::`.
+- An inline type may be annotated `type::`, and an inline import may have an
+  `as`, which has no effect.
+- A bound of a timestamp range in `valid_values` must have a known offset.
+- There are no reserved symbols: a top-level value that is not a header, a
+  type, or a footer, and a field that is not an ISL 1.0 keyword, are open
+  content. The header's `imports` is its only field with a meaning. A
+  schema has a header only if it has a footer.
+
+```mbt check
+///|
+test "load an ISL 1.0 schema" {
+  let schema = @schema.Schema::load_from_text(
+    (
+      #|$ion_schema_1_0
+      #|type::{
+      #|  name: price,
+      #|  content: closed,
+      #|  fields: {
+      #|    amount: { type: decimal, scale: 2, occurs: required },
+      #|    note: nullable::string,
+      #|  },
+      #|}
+    ),
+  )
+  assert_true(
+    schema.is_valid("price", @text.read_ion("{ amount: 9.99, note: null }")),
+  )
+  // 9.9 has a scale of 1, `tax` is not a field of the type, and the default
+  // type `any` has no null.
+  assert_true(!schema.is_valid("price", @text.read_ion("{ amount: 9.9 }")))
+  assert_true(
+    !schema.is_valid("price", @text.read_ion("{ amount: 9.99, tax: 1.00 }")),
+  )
+  assert_true(!schema.is_valid("price", @text.read_ion("null.struct")))
+}
+```
 
 ## Validating values
 
@@ -92,6 +153,7 @@ with the path to the value that broke it.
 ///|
 test "validate records against a type" {
   let definition =
+    #|$ion_schema_2_0
     #|type::{
     #|  name: person,
     #|  type: struct,
@@ -150,7 +212,7 @@ test "import a type from another schema" {
   // Without a resolver, the import cannot load.
   let message = try
     @schema.Schema::load_from_text(
-      "schema_header::{ imports: [{ id: \"common.isl\" }] }",
+      "$ion_schema_2_0 schema_header::{ imports: [{ id: \"common.isl\" }] }",
     )
   catch {
     error => error.message()

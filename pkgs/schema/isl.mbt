@@ -1,6 +1,7 @@
 // The Ion Schema Language constraint model.
 //
-// This is a focused subset of ISL 2.0. Constructs the loader does not
+// The model is ISL 2.0: the loader translates each ISL 1.0 construct into the
+// ISL 2.0 constraints with the same meaning. Constructs the loader does not
 // recognize are reported as unsupported rather than silently ignored, as the
 // specification requires.
 
