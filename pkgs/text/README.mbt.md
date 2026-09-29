@@ -203,6 +203,26 @@ test "push events to a handler" {
 }
 ```
 
+## Text in octets
+
+The readers take decoded strings. `decode_ion_text` decodes Ion text in
+octets: UTF-8, as usual, or UTF-16 or UTF-32, big- or little-endian. A byte
+order mark decides when there is one, and is skipped; otherwise the zero
+octets of the first character do, since Ion text starts with an ASCII
+character. `detect_encoding` reports the choice.
+
+```mbt check
+///|
+test "decode UTF-16 text" {
+  let octets = b"\x00\x7B\x00\x61\x00\x3A\x00\x31\x00\x7D"
+  debug_inspect(@text.detect_encoding(octets), content="(UTF16BE, 0)")
+  inspect(
+    @text.write_ion(@text.read_ion(@text.decode_ion_text(octets))),
+    content="{a: 1}",
+  )
+}
+```
+
 ## Text that arrives in pieces
 
 `read_ion_prefix` reads the first value of text that may be cut short, as a

@@ -4,8 +4,10 @@ Reads and writes Ion text over `moonbitlang/async` byte sources and sinks, one
 top-level value at a time, so memory stays proportional to the largest value
 rather than to the stream.
 
-- `TextReader` pulls `IonValue`s from any `&@io.Reader`, decoding UTF-8 as it
-  arrives, including characters split across reads.
+- `TextReader` pulls `IonValue`s from any `&@io.Reader`, decoding the text as
+  it arrives, including characters split across reads. Its first octets show
+  the encoding: UTF-8, UTF-16, or UTF-32, with or without a byte order mark
+  (see `@text.detect_encoding`).
 - `TextEventReader` pulls the `@text.IonEvent` stream instead.
 - `TextWriter` and `write_all` encode values as UTF-8 text to any
   `&@io.Writer`.

@@ -262,3 +262,24 @@ async test "--catalog supplies the shared tables that imports name" {
     "no-such-catalog.ion: no such file or directory\n",
   )
 }
+
+///|
+async test "Ion text in UTF-16 and UTF-32 reads like UTF-8" {
+  for encoding in ["utf16", "utf32"] {
+    let run = ion(["print", "tests/ion-tests/iontestdata/good/\{encoding}.ion"])
+    assert_eq(run.status, 0)
+    assert_eq(run.out(), "{foo: \"bar\"}\n")
+  }
+  let run = ion(["print"], stdin=@utf16.encode("a::[1, 2] b", bom=true))
+  assert_eq(run.out(), "a::[1, 2]\nb\n")
+  // A schema in UTF-16 validates like one in UTF-8.
+  let schema = @fs.read_file_to_string("tests/fixtures/person.isl")
+  let validate = ion(
+    ["validate", "-", "person", "tests/fixtures/person.ion"],
+    stdin=@utf16.encode(schema, endianness=Big),
+  )
+  assert_eq(validate.status, 1)
+  assert_true(
+    validate.stderr.has_prefix("value 1: $.name: expected one of [string]"),
+  )
+}

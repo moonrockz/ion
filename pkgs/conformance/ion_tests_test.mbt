@@ -21,14 +21,7 @@ let root : String = "tests/ion-tests/iontestdata"
 ///|
 /// Files this implementation does not handle yet, by path under `root`, with
 /// the reason.
-let skipped : Map[String, String] = Map([
-  (
-    "good/utf16.ion", "UTF-16 text: the text readers take decoded strings, and the CLI and stream readers decode only UTF-8",
-  ),
-  (
-    "good/utf32.ion", "UTF-32 text: the text readers take decoded strings, and the CLI and stream readers decode only UTF-8",
-  ),
-])
+let skipped : Map[String, String] = Map([])
 
 ///|
 /// Every file under `dir`, recursively, in a stable order.
@@ -48,17 +41,14 @@ fn files_under(dir : String) -> Array[String] raise {
 }
 
 ///|
-/// The values of a test file: Ion binary for `.10n`, and UTF-8 Ion text
-/// otherwise.
+/// The values of a test file: Ion binary for `.10n`, and Ion text otherwise,
+/// in the encoding its first octets show.
 fn read_file(path : String) -> Array[@ion.IonValue] raise {
   let bytes = @fs.read_file_to_bytes(path)
   if path.has_suffix(".10n") {
     @binary.read_binary(bytes[:])
   } else {
-    let text = @utf8.decode(bytes) catch {
-      _ => raise @ion.IonError::Syntax("the file is not UTF-8")
-    }
-    @text.read_ion_datagram(text)
+    @text.read_ion_datagram(@text.decode_ion_text(bytes))
   }
 }
 

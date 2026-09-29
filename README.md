@@ -294,9 +294,6 @@ label.
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
   the constraints above.
-- UTF-16 and UTF-32 Ion text ([#6](https://github.com/moonrockz/ion/issues/6)):
-  the text readers take decoded strings, and the CLI and stream readers decode
-  only UTF-8, so the two ion-tests files in those encodings are skipped.
 - Ion 1.1 ([#7](https://github.com/moonrockz/ion/issues/7)): only Ion 1.0 is
   implemented.
 - Ion binary output from the CLI ([#8](https://github.com/moonrockz/ion/issues/8)).
@@ -332,9 +329,10 @@ writer, and the async writers, which must agree with the sync reader. And it
 runs the Ion 1.0 cases of ion-tests' `conformance/` directory, written in its
 test language, which cover version markers, symbol tables, imports, and the
 data model.
-The two files skipped, each with its reason, are listed in
-`pkgs/conformance/ion_tests_test.mbt`; a skipped file that starts to pass fails
-the test.
+Every Ion 1.0 file passes. The conformance tests keep skip lists, each entry
+with its reason, and a skipped case that starts to pass fails the test, so the
+lists stay accurate; two DSL cases are skipped today, both over problems in
+ion-tests itself.
 
 Besides the example and snapshot tests, several packages carry property tests
 (`property_test.mbt`) using the built-in QuickCheck: text round-trips, decimal

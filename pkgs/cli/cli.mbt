@@ -379,8 +379,8 @@ async fn load_catalog(
 }
 
 ///|
-/// Read a whole file, or stdin when the path is `-`, as UTF-8 text.
-async fn read_text(streams : Streams, path : String) -> String {
+/// Read a whole file, or stdin when the path is `-`.
+async fn read_all(streams : Streams, path : String) -> Bytes {
   let data = if path == "-" {
     streams.stdin.read_all() catch {
       _ => raise CliError("stdin: cannot be read")
@@ -390,8 +390,25 @@ async fn read_text(streams : Streams, path : String) -> String {
       error => raise open_failure(path, error)
     }
   }
-  data.text() catch {
+  data.binary()
+}
+
+///|
+/// Read a whole file, or stdin when the path is `-`, as UTF-8 text.
+async fn read_text(streams : Streams, path : String) -> String {
+  @utf8.decode(read_all(streams, path)) catch {
     _ => raise CliError("\{describe_path(path)}: is not UTF-8 text")
+  }
+}
+
+///|
+/// Read a whole file, or stdin when the path is `-`, as Ion text in the
+/// encoding its first octets show: UTF-8, UTF-16, or UTF-32.
+async fn read_ion_text(streams : Streams, path : String) -> String {
+  @text.decode_ion_text(read_all(streams, path)) catch {
+    @core.IonError::Syntax(message) =>
+      raise CliError("\{describe_path(path)}: \{message}")
+    error => raise error
   }
 }
 
@@ -516,7 +533,9 @@ async fn validate(
   type_name : String,
   path : String,
 ) -> Int {
-  let schema = @schema.Schema::load_from_text(read_text(streams, schema_path))
+  let schema = @schema.Schema::load_from_text(
+    read_ion_text(streams, schema_path),
+  )
   if schema.find(type_name) is None {
     raise CliError("\{describe_path(schema_path)}: no type named \{type_name}")
   }

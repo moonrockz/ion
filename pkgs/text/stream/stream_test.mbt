@@ -251,3 +251,47 @@ async test "a text reader reads the octets it is given before its source" {
     ])
   }
 }
+
+///|
+/// UTF-32 octets of `text`, big-endian.
+fn utf32_be(text : String) -> Bytes {
+  let octets : Array[Byte] = []
+  for c in text {
+    let code = c.to_int()
+    for shift in [24, 16, 8, 0] {
+      octets.push(((code >> shift) & 0xFF).to_byte())
+    }
+  }
+  Bytes::from_array(octets)
+}
+
+///|
+async test "a text reader reads UTF-16 and UTF-32 as well as UTF-8" {
+  let text = "{ city: \"Zürich 😀\" } [1, 2] 'last' 12"
+  let expected = @text.read_ion_datagram(text).map(value => {
+    @text.write_ion(value) catch {
+      _ => ""
+    }
+  })
+  let encodings = [
+    @utf8.encode(text, bom=true),
+    @utf16.encode(text, endianness=Big),
+    @utf16.encode(text, endianness=Little),
+    @utf16.encode(text, bom=true, endianness=Little),
+    utf32_be(text),
+  ]
+  for bytes in encodings {
+    // Chunks that split code units, surrogate pairs, and the first octets
+    // the encoding is detected from.
+    for chunk in 1..<6 {
+      let reader = @stream.TextReader::new(reader_of(bytes, chunk~))
+      assert_eq(read_all(reader).map(value => @text.write_ion(value)), expected)
+    }
+    // As a prefix the caller already read.
+    let reader = @stream.TextReader::new(
+      reader_of(bytes[3:].to_owned()),
+      prefix=bytes[:3].to_owned(),
+    )
+    assert_eq(read_all(reader).map(value => @text.write_ion(value)), expected)
+  }
+}

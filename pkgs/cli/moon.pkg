@@ -27,6 +27,7 @@ import {
   "moonbitlang/async/io",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/x/fs",
+  "moonbitlang/core/encoding/utf16",
 } for "test"
 
 // The command line reads files through `moonbitlang/async`, which supports

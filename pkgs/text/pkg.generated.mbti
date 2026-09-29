@@ -8,6 +8,14 @@ import {
 }
 
 // Values
+pub fn complete_length(TextEncoding, BytesView) -> Int
+
+pub fn decode_ion_text(BytesView) -> String raise @ion.IonError
+
+pub fn decode_text(TextEncoding, BytesView) -> String raise @ion.IonError
+
+pub fn detect_encoding(BytesView) -> (TextEncoding, Int)
+
 pub fn dispatch_event(IonEvent, &IonHandler) -> Unit
 
 pub fn dispatch_value(@ion.IonValue, &IonHandler) -> Unit
@@ -136,6 +144,17 @@ pub(all) enum IonTokenKind {
 } derive(@debug.Debug)
 pub fn IonTokenKind::to_repr(Self) -> @debug.Repr
 pub fn IonTokenKind::to_text(Self) -> String
+
+pub(all) enum TextEncoding {
+  UTF8
+  UTF16BE
+  UTF16LE
+  UTF32BE
+  UTF32LE
+} derive(Eq, @debug.Debug)
+pub fn TextEncoding::equal(Self, Self) -> Bool
+pub fn TextEncoding::not_equal(Self, Self) -> Bool
+pub fn TextEncoding::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
