@@ -86,21 +86,28 @@ fn check_constraint(
   match constraint {
     IsType(types) => {
       let actual = value.ion_type()
+      // A typed null is not a value of its type; `$int` and `$null_or::`
+      // admit nulls.
       let mut ok = false
       for allowed in types {
         if allowed == actual {
           ok = true
         }
       }
-      if !ok {
+      if !ok || value.is_null() {
+        let found = if value.is_null() {
+          "null.\{actual.to_text()}"
+        } else {
+          actual.to_text()
+        }
         out.push({
           path,
-          message: "expected \{describe_types(types)} but found \{actual.to_text()}",
+          message: "expected \{describe_types(types)} but found \{found}",
         })
       }
     }
     NullOr(inner) =>
-      if !value.is_null() {
+      if !(value.is_null() && value.ion_type() == @ion.IonType::Null) {
         check_constraint(schema, inner, value, path, out)
       }
     TypeRef(name) =>
@@ -117,10 +124,19 @@ fn check_constraint(
           check_elements(schema, inner, occurs, items, path, out)
         @ion.IonValueKind::Sexp(items) =>
           check_elements(schema, inner, occurs, items, path, out)
+        @ion.IonValueKind::Struct(fields) =>
+          check_elements(
+            schema,
+            inner,
+            occurs,
+            fields.map(field => field.value()),
+            path,
+            out,
+          )
         _ =>
           out.push({
             path,
-            message: "an element constraint requires a list or sexp",
+            message: "an element constraint requires a list, sexp, or struct",
           })
       }
     Fields(field_constraints) =>
@@ -131,9 +147,11 @@ fn check_constraint(
           out.push({ path, message: "a fields constraint requires a struct", })
       }
     ValidValues(values) => {
+      // The value's own annotations do not count.
+      let bare = value.with_annotations([])
       let mut ok = false
       for candidate in values {
-        if value.equals(candidate) {
+        if bare.equals(candidate) {
           ok = true
         }
       }

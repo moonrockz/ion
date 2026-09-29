@@ -17,12 +17,54 @@ fn accepts(schema_text : String, type_name : String, ion_text : String) -> Bool 
 }
 
 ///|
-test "type constraint matches typed nulls but not untyped null" {
-  let schema = "type::{ name: my_int, type: int }"
+test "a core type does not match nulls, and its $ type matches its typed null" {
+  let schema = "type::{ name: my_int, type: int } type::{ name: maybe_int, type: $int }"
   assert_true(accepts(schema, "my_int", "42"))
-  assert_true(accepts(schema, "my_int", "null.int"))
+  assert_true(!accepts(schema, "my_int", "null.int"))
   assert_true(!accepts(schema, "my_int", "\"x\""))
   assert_true(!accepts(schema, "my_int", "null"))
+  assert_true(accepts(schema, "maybe_int", "42"))
+  assert_true(accepts(schema, "maybe_int", "null.int"))
+  assert_true(!accepts(schema, "maybe_int", "null"))
+  assert_true(!accepts(schema, "maybe_int", "null.string"))
+}
+
+///|
+test "$null_or admits null.null but no other null" {
+  let schema = "type::{ name: t, type: $null_or::string }"
+  assert_true(accepts(schema, "t", "null"))
+  assert_true(accepts(schema, "t", "a::null"))
+  assert_true(accepts(schema, "t", "\"x\""))
+  assert_true(!accepts(schema, "t", "null.string"))
+}
+
+///|
+test "text, lob, number, and any cover several Ion types" {
+  let schema = "type::{ name: t, type: text } type::{ name: n, type: number } type::{ name: a, type: any }"
+  assert_true(accepts(schema, "t", "sym"))
+  assert_true(accepts(schema, "t", "\"str\""))
+  assert_true(!accepts(schema, "t", "1"))
+  assert_true(accepts(schema, "n", "1.5"))
+  assert_true(!accepts(schema, "n", "null.int"))
+  assert_true(accepts(schema, "a", "{}"))
+  assert_true(!accepts(schema, "a", "null"))
+}
+
+///|
+test "element applies to the field values of a struct" {
+  let schema = "type::{ name: ints, element: int }"
+  assert_true(accepts(schema, "ints", "{a: 1, b: 2}"))
+  assert_true(!accepts(schema, "ints", "{a: 1, b: x}"))
+  assert_true(!accepts(schema, "ints", "null.struct"))
+}
+
+///|
+test "valid_values ignores the value's annotations" {
+  let schema = "type::{ name: t, valid_values: [true] }"
+  assert_true(accepts(schema, "t", "foo::true"))
+  // A range in valid_values is not supported, and annotations are not allowed.
+  assert_true(load("type::{ name: t, valid_values: [range::[1, 2]] }") is None)
+  assert_true(load("type::{ name: t, valid_values: [a::1] }") is None)
 }
 
 ///|

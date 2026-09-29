@@ -20,6 +20,12 @@ pub fn Schema::load(
           )
       }
     } else if is_schema_version_marker(value) {
+      // ISL 1.0 gives the same names other meanings, such as nulls in core
+      // types, so it must not load as ISL 2.0.
+      if value.kind() is @ion.IonValueKind::Symbol(token) &&
+        token.text() == Some("$ion_schema_1_0") {
+        raise @ion.IonError::Unsupported("Ion Schema 1.0 is not supported")
+      }
       continue
     } else {
       raise @ion.IonError::Unsupported(
@@ -143,7 +149,7 @@ fn load_constraint(
     "type" => load_type_constraint(value)
     "element" => Element(load_inline_type(value), occurs_of(value))
     "fields" => Fields(load_fields(value))
-    "valid_values" => ValidValues(as_list(value))
+    "valid_values" => ValidValues(load_valid_values(value))
     "container_length" => {
       let (lower, upper) = load_range(value)
       ContainerLength(lower, upper)
@@ -184,14 +190,9 @@ fn load_type_constraint_bare(
   match value.kind() {
     @ion.IonValueKind::Symbol(token) => {
       let name = token.require_text()
-      match @ion.IonType::from_text(name) {
-        Some(t) => IsType([t])
-        None =>
-          match name {
-            "$any" => Constraint::any()
-            "nothing" => Nothing
-            _ => TypeRef(name)
-          }
+      match built_in_type(name) {
+        Some(constraint) => constraint
+        None => TypeRef(name)
       }
     }
     @ion.IonValueKind::List(items) => {
@@ -214,11 +215,92 @@ fn load_type_constraint_bare(
       }
       IsType(types)
     }
+    @ion.IonValueKind::Struct(_) => load_inline_type(value)
     _ =>
       raise @ion.IonError::DataModel(
-        "a type constraint must be a symbol or a list of symbols",
+        "a type constraint must be a symbol, a list of symbols, or an inline type",
       )
   }
+}
+
+///|
+/// The Ion types that a built-in type name without a `$` covers.
+fn built_in_ion_types(name : String) -> Array[@ion.IonType]? {
+  match name {
+    "text" => Some([@ion.IonType::String, @ion.IonType::Symbol])
+    "lob" => Some([@ion.IonType::Blob, @ion.IonType::Clob])
+    "number" =>
+      Some([@ion.IonType::Int, @ion.IonType::Float, @ion.IonType::Decimal])
+    "any" =>
+      Some([
+        @ion.IonType::Bool,
+        @ion.IonType::Int,
+        @ion.IonType::Float,
+        @ion.IonType::Decimal,
+        @ion.IonType::Timestamp,
+        @ion.IonType::Symbol,
+        @ion.IonType::String,
+        @ion.IonType::Clob,
+        @ion.IonType::Blob,
+        @ion.IonType::List,
+        @ion.IonType::Sexp,
+        @ion.IonType::Struct,
+      ])
+    "null" | "$null" => None
+    _ =>
+      match @ion.IonType::from_text(name) {
+        Some(t) => Some([t])
+        None => None
+      }
+  }
+}
+
+///|
+/// The constraint of an ISL 2.0 built-in type. A name without a `$`, such as
+/// `int` or `text`, covers the non-null values of its Ion types. A name with a
+/// `$`, such as `$int` or `$text`, also covers the typed nulls of those types.
+/// `$null` covers `null.null`, `$any` every value, and `nothing` no value.
+fn built_in_type(name : String) -> Constraint? {
+  match name {
+    "$any" => Some(Constraint::any())
+    "$null" =>
+      Some(ValidValues([@ion.IonValue::typed_null(@ion.IonType::Null)]))
+    "nothing" => Some(Nothing)
+    _ if name.has_prefix("$") =>
+      match built_in_ion_types(name.view(start_offset=1).to_owned()) {
+        Some(types) =>
+          Some(
+            AnyOf([
+              IsType(types),
+              ValidValues(types.map(t => @ion.IonValue::typed_null(t))),
+            ]),
+          )
+        _ => None
+      }
+    _ => built_in_ion_types(name).map(types => IsType(types))
+  }
+}
+
+///|
+/// Load the list of a `valid_values` constraint. Ranges are not supported yet,
+/// and no other value in the list may have annotations.
+fn load_valid_values(
+  value : @ion.IonValue,
+) -> Array[@ion.IonValue] raise @ion.IonError {
+  let items = as_list(value)
+  for item in items {
+    if has_annotation(item, "range") {
+      raise @ion.IonError::Unsupported(
+        "ranges in 'valid_values' are not supported",
+      )
+    }
+    if item.has_annotations() {
+      raise @ion.IonError::DataModel(
+        "a value in 'valid_values' must not have annotations",
+      )
+    }
+  }
+  items
 }
 
 ///|

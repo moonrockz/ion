@@ -293,7 +293,8 @@ label.
   [Cookbook](https://amazon-ion.github.io/ion-schema/docs/cookbook/)'s
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
-  the constraints above.
+  the constraints above. The loader also accepts some schemas that ISL 2.0
+  does not allow; the ion-schema-tests harness lists them.
 - Ion 1.1 ([#7](https://github.com/moonrockz/ion/issues/7)): only Ion 1.0 is
   implemented.
 - Ion binary output from the CLI ([#8](https://github.com/moonrockz/ion/issues/8)).
@@ -306,7 +307,7 @@ label.
 Tooling is configured with [mise](https://mise.jdx.dev):
 
 ```bash
-mise run setup       # fetch the ion-tests submodule and install dependencies
+mise run setup       # fetch the test-data submodules and install dependencies
 mise run test:check  # moon check
 mise run test:unit   # moon test (unit, doc, snapshot, conformance, QuickCheck)
 mise run test:all    # check + test
@@ -333,6 +334,13 @@ Every Ion 1.0 file passes. The conformance tests keep skip lists, each entry
 with its reason, and a skipped case that starts to pass fails the test, so the
 lists stay accurate; two DSL cases are skipped today, both over problems in
 ion-tests itself.
+
+The [ion-schema-tests](https://github.com/amazon-ion/ion-schema-tests) suite
+is a second submodule, at `tests/ion-schema-tests`, and `pkgs/conformance`
+runs its ISL 2.0 files: each schema must load, each `$test` value must match
+its type or not, and each invalid schema or type must fail to load. Cases that
+need a construct the schema package does not implement are counted as
+unsupported, and each file with such cases is listed with what it needs.
 
 Besides the example and snapshot tests, several packages carry property tests
 (`property_test.mbt`) using the built-in QuickCheck: text round-trips, decimal
