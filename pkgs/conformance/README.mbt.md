@@ -56,9 +56,8 @@ not implemented.
 Skip lists name the files, `check:file` pairs, or DSL cases this
 implementation does not handle yet, each with its reason. A skipped file that
 starts to pass fails the test, so the list stays accurate. The schema test
-also lists its known wrong answers, by case or by `$test` struct: most are
-schemas that ISL 2.0 does not allow but the loader accepts. A known failure
-that starts to pass fails the test too.
+can also list known wrong answers, by case or by `$test` struct; the list is
+empty today. A known failure that starts to pass fails the test too.
 
 The package does not build for wasm-gc, where `moonbitlang/core`'s `BigInt`
 converts a number of about 5,000 digits to and from a string incorrectly.

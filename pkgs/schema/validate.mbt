@@ -118,17 +118,14 @@ fn check_constraint(
             check_constraint(schema, inner, value, path, out)
           }
       }
-    Element(inner, occurs) =>
+    Element(inner) =>
       match value.kind() {
-        @ion.IonValueKind::List(items) =>
-          check_elements(schema, inner, occurs, items, path, out)
-        @ion.IonValueKind::Sexp(items) =>
-          check_elements(schema, inner, occurs, items, path, out)
+        @ion.IonValueKind::List(items) | @ion.IonValueKind::Sexp(items) =>
+          check_elements(schema, inner, items, path, out)
         @ion.IonValueKind::Struct(fields) =>
           check_elements(
             schema,
             inner,
-            occurs,
             fields.map(field => field.value()),
             path,
             out,
@@ -443,21 +440,10 @@ fn check_constraint(
 fn check_elements(
   schema : Schema,
   inner : Constraint,
-  occurs : Occurs?,
   items : Array[@ion.IonValue],
   path : String,
   out : Array[Violation],
 ) -> Unit {
-  match occurs {
-    Some(occurs) =>
-      if !occurs.allows(items.length()) {
-        out.push({
-          path,
-          message: "element count \{items.length()} is out of range",
-        })
-      }
-    None => ()
-  }
   for index in 0..<items.length() {
     check_constraint(
       schema,
@@ -807,8 +793,7 @@ fn check_document(
       if satisfied(inner) {
         out.push({ path, message: "value satisfies a 'not' constraint", })
       }
-    Element(inner, occurs) =>
-      check_elements(schema, inner, occurs, values, path, out)
+    Element(inner) => check_elements(schema, inner, values, path, out)
     DistinctElements
     | OrderedElements(_)
     | ContainerLength(_, _)
