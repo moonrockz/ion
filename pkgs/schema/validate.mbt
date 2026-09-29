@@ -335,6 +335,21 @@ fn check_constraint(
       )
       check_constraint(schema, inner, symbols, path + "::", out)
     }
+    OrderedElements(slots) =>
+      match value.kind() {
+        @ion.IonValueKind::List(items) | @ion.IonValueKind::Sexp(items) =>
+          if !matches_in_order(schema, slots, items) {
+            out.push({
+              path,
+              message: "the elements do not match ordered_elements",
+            })
+          }
+        _ =>
+          out.push({
+            path,
+            message: "an ordered_elements constraint requires a list or sexp",
+          })
+      }
     ContainerLength(lower, upper) =>
       match container_length(value) {
         None =>
@@ -398,6 +413,7 @@ fn check_constraint(
       if satisfies(schema, inner, value) {
         out.push({ path, message: "value satisfies a 'not' constraint", })
       }
+    IsDocument => out.push({ path, message: "a value is not a document", })
     Nothing =>
       out.push({ path, message: "no value satisfies a 'nothing' constraint", })
     Contains(required) =>
@@ -671,4 +687,141 @@ fn fits_format(f : Double, format : FloatFormat) -> Bool {
   let top = width - 1 + exponent
   let step = (if top < lowest { lowest } else { top }) - (bits - 1)
   top <= highest && exponent >= step
+}
+
+///|
+/// Whether `items` are the slots in order, each repeated as its range
+/// allows. `reached[j]` is true when the slots so far can match exactly the
+/// first `j` items, so an ambiguous match never backtracks.
+fn matches_in_order(
+  schema : Schema,
+  slots : Array[(Constraint, Occurs)],
+  items : Array[@ion.IonValue],
+) -> Bool {
+  let n = items.length()
+  let mut reached = Array::make(n + 1, false)
+  reached[0] = true
+  for slot in slots {
+    let (constraint, occurs) = slot
+    let next = Array::make(n + 1, false)
+    for start in 0..<=n {
+      if !reached[start] {
+        continue
+      }
+      // Take `count` more items for this slot while each one matches.
+      let mut count = 0
+      while true {
+        if occurs.allows(count) {
+          next[start + count] = true
+        }
+        if start + count == n ||
+          (occurs.upper is Some(upper) && count >= upper) ||
+          !satisfies(schema, constraint, items[start + count]) {
+          break
+        }
+        count += 1
+      }
+    }
+    reached = next
+  }
+  reached[n]
+}
+
+///|
+/// Validate a document, a stream of top-level Ion values, against the named
+/// schema type, returning every violation found. ISL treats a document like
+/// an S-expression without annotations for `element`, `ordered_elements`,
+/// `container_length`, and `contains`, and the built-in type `document`
+/// matches it. No other constraint applies to a document, and no value is a
+/// document.
+pub fn Schema::validate_document(
+  self : Schema,
+  type_name : String,
+  values : Array[@ion.IonValue],
+) -> Array[Violation] {
+  let out : Array[Violation] = []
+  match self.find(type_name) {
+    None =>
+      out.push({ path: "$", message: "unknown schema type: " + type_name, })
+    Some(definition) =>
+      for constraint in definition.constraints() {
+        check_document(self, constraint, values, "$", out)
+      }
+  }
+  out
+}
+
+///|
+/// Whether a document satisfies the named schema type.
+pub fn Schema::is_valid_document(
+  self : Schema,
+  type_name : String,
+  values : Array[@ion.IonValue],
+) -> Bool {
+  self.validate_document(type_name, values).is_empty()
+}
+
+///|
+/// Check a document against `constraint`, appending violations to `out`.
+fn check_document(
+  schema : Schema,
+  constraint : Constraint,
+  values : Array[@ion.IonValue],
+  path : String,
+  out : Array[Violation],
+) -> Unit {
+  let satisfied = (inner : Constraint) => {
+    let violations : Array[Violation] = []
+    check_document(schema, inner, values, path, violations)
+    violations.is_empty()
+  }
+  match constraint {
+    IsDocument => ()
+    NullOr(inner) => check_document(schema, inner, values, path, out)
+    TypeRef(name) =>
+      match schema.find(name) {
+        None => out.push({ path, message: "unknown schema type: " + name, })
+        Some(definition) =>
+          for inner in definition.constraints() {
+            check_document(schema, inner, values, path, out)
+          }
+      }
+    AllOf(constraints) =>
+      for inner in constraints {
+        check_document(schema, inner, values, path, out)
+      }
+    AnyOf(constraints) =>
+      if !constraints.iter().any(satisfied) {
+        out.push({ path, message: "value does not satisfy any_of", })
+      }
+    OneOf(constraints) => {
+      let count = constraints.filter(satisfied).length()
+      if count != 1 {
+        out.push({
+          path,
+          message: "value satisfies \{count} of the one_of constraints, expected exactly 1",
+        })
+      }
+    }
+    Not(inner) =>
+      if satisfied(inner) {
+        out.push({ path, message: "value satisfies a 'not' constraint", })
+      }
+    Element(inner, occurs) =>
+      check_elements(schema, inner, occurs, values, path, out)
+    DistinctElements
+    | OrderedElements(_)
+    | ContainerLength(_, _)
+    | Contains(_) =>
+      // As for an S-expression of the values.
+      check_constraint(
+        schema,
+        constraint,
+        @ion.IonValue::sexp(values),
+        path,
+        out,
+      )
+    _ =>
+      out.push({ path, message: "the constraint does not apply to a document", })
+  }
 }

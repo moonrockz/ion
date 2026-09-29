@@ -144,9 +144,110 @@ fn load_error(text : String) -> @ion.IonError? {
 }
 
 ///|
-test "unsupported constructs raise Unsupported" {
-  let ordered = load_error("type::{ name: t, ordered_elements: [int] }")
-  assert_true(ordered is Some(@ion.IonError::Unsupported(_)))
+test "ISL 1.0, and imports without a resolver, raise Unsupported" {
+  assert_true(
+    load_error("$ion_schema_1_0 type::{ name: t }")
+    is Some(@ion.IonError::Unsupported(_)),
+  )
+  assert_true(
+    load_error("type::{ name: t, type: { id: \"a.isl\", type: a } }")
+    is Some(@ion.IonError::Unsupported(_)),
+  )
+}
+
+///|
+test "ordered_elements matches types in order, as often as each occurs" {
+  let schema =
+    #|type::{
+    #|  name: row,
+    #|  ordered_elements: [symbol, { type: int, occurs: optional }, { type: number, occurs: range::[0, max] }, bool],
+    #|}
+  for
+    text in ["[a, true]", "[a, 1, true]", "(a 1 2 3.5 false)", "[a, 1.5, true]"] {
+    assert_true(accepts(schema, "row", text), msg=text)
+  }
+  for
+    text in ["[]", "[a]", "[1, true]", "[a, true, true]", "{a: 1}", "null.list"] {
+    assert_true(!accepts(schema, "row", text), msg=text)
+  }
+  // Long input needs no backtracking.
+  let many = "[a, " + "1, ".repeat(2000) + "true]"
+  assert_true(accepts(schema, "row", many))
+}
+
+///|
+test "documents" {
+  let schema = @schema.Schema::load_from_text(
+    (
+      #|type::{ name: ints, element: int, container_length: range::[1, 3] }
+      #|type::{ name: doc, type: document }
+      #|type::{ name: tagged, annotations: closed::[] }
+    ),
+  )
+  let values = [@ion.IonValue::int(1), @ion.IonValue::int(2)]
+  assert_true(schema.is_valid_document("ints", values))
+  assert_true(!schema.is_valid_document("ints", []))
+  assert_true(!schema.is_valid_document("ints", [@ion.IonValue::symbol("a")]))
+  assert_true(schema.is_valid_document("doc", values))
+  assert_true(!schema.is_valid("doc", @ion.IonValue::sexp(values)))
+  // A document has no annotations to constrain.
+  assert_true(!schema.is_valid_document("tagged", values))
+}
+
+///|
+test "imports: scope, aliases, cycles, and self imports" {
+  let schemas : Map[String, String] = {
+    "a.isl": "schema_header::{ imports: [{ id: \"b.isl\" }] } type::{ name: a, fields: { b: b } }",
+    "b.isl": "schema_header::{ imports: [{ id: \"a.isl\" }, { id: \"c.isl\" }] } type::{ name: b, type: $null_or::a }",
+    "c.isl": "type::{ name: c, type: int }",
+    "self.isl": "schema_header::{ imports: [{ id: \"self.isl\" }] } type::{ name: s }",
+  }
+  let resolver = (id : String) => {
+    match schemas.get(id) {
+      Some(text) => @text.read_ion_datagram(text)
+      None => raise @ion.IonError::DataModel("no schema " + id)
+    }
+  }
+  let load_with = (text : String) => {
+    try @schema.Schema::load_from_text(text, resolver~) catch {
+      _ => None
+    } noraise {
+      schema => Some(schema)
+    }
+  }
+  // a and b import each other.
+  let schema = load_with(
+    "schema_header::{ imports: [{ id: \"a.isl\", type: a, as: top }] } type::{ name: t, type: top }",
+  ).unwrap()
+  assert_true(schema.is_valid("t", @text.read_ion("{ b: { b: null } }")))
+  assert_true(!schema.is_valid("t", @text.read_ion("{ b: 1 }")))
+  assert_true(schema.find("a.isl#a") is Some(_))
+  // Inline imports, and whole-schema imports.
+  assert_true(
+    load_with("type::{ name: t, type: { id: \"c.isl\", type: c } }") is Some(_),
+  )
+  assert_true(
+    load_with(
+      "schema_header::{ imports: [{ id: \"c.isl\" }] } type::{ name: t, type: c }",
+    )
+    is Some(_),
+  )
+  // c is imported by b, not by this schema.
+  assert_true(
+    load_with(
+      "schema_header::{ imports: [{ id: \"b.isl\" }] } type::{ name: t, type: c }",
+    )
+    is None,
+  )
+  for
+    bad in [
+      "schema_header::{ imports: [{ id: \"self.isl\" }] }", "schema_header::{ imports: [{ id: \"none.isl\" }] }",
+      "schema_header::{ imports: [{ id: \"c.isl\", type: d }] }", "schema_header::{ imports: [{ id: \"c.isl\", as: d }] }",
+      "schema_header::{ imports: [{ id: \"c.isl\" }] } type::{ name: c }", "type::{ name: t, type: { id: \"c.isl\", type: c, as: d } }",
+      "type::{ name: t, type: missing }", "type::{ name: t } type::{ name: t }",
+    ] {
+    assert_true(load_with(bad) is None, msg=bad)
+  }
 }
 
 ///|
@@ -220,9 +321,13 @@ test "the top level: version marker, header, types, footer, and open content" {
 }
 
 ///|
-test "unknown type references are reported" {
-  let schema = load("type::{ name: t, type: missing }").unwrap()
-  assert_true(!schema.is_valid("t", @ion.IonValue::int(1)))
+test "a reference to a type that does not exist is an error" {
+  assert_true(
+    load_error("type::{ name: t, type: missing }")
+    is Some(@ion.IonError::DataModel(_)),
+  )
+  let schema = load("type::{ name: t, type: int }").unwrap()
+  assert_true(!schema.is_valid("missing", @ion.IonValue::int(1)))
 }
 
 ///|

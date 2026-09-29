@@ -82,6 +82,8 @@ pub(all) enum Constraint {
   Not(Constraint)
   /// `nothing`: a constraint that no value satisfies.
   Nothing
+  /// `document`: a document, not a value; see `Schema::validate_document`.
+  IsDocument
   /// `regex`: a string or symbol has a match for the regular expression.
   Matches(Regex)
   /// `byte_length`: the number of bytes in a blob or clob.
@@ -115,6 +117,9 @@ pub(all) enum Constraint {
   /// `annotations`: the value's annotations, as a list of symbols, satisfy
   /// the constraint.
   Annotations(Constraint)
+  /// `ordered_elements`: the elements of a list or S-expression, in order,
+  /// are each type repeated as many times as its range allows.
+  OrderedElements(Array[(Constraint, Occurs)])
   /// `contains: [ ... ]`: the container holds every listed value.
   Contains(Array[@ion.IonValue])
 } derive(Debug)

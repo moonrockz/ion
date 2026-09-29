@@ -30,51 +30,9 @@ let schema_root : String = "tests/ion-schema-tests/ion_schema_2_0"
 /// Files this implementation does not pass yet, by path under `schema_root`,
 /// with what they need that is not supported.
 let schema_skipped : Map[String, String] = Map([
-  ("constraints/all_of.isl", "inline imports"),
-  ("constraints/annotations-simplified.isl", "annotations"),
-  ("constraints/annotations-standard.isl", "annotations"),
-  ("constraints/any_of.isl", "inline imports"),
-  ("constraints/container_length.isl", "document:: values"),
-  ("constraints/contains.isl", "document:: values"),
-  (
-    "constraints/element.isl", "distinct:: on element; inline imports; document:: values",
-  ),
-  ("constraints/field_names.isl", "field_names"),
-  ("constraints/fields.isl", "closed:: on fields"),
-  ("constraints/not.isl", "inline imports"),
-  ("constraints/one_of.isl", "annotations; inline imports"),
-  ("constraints/ordered_elements.isl", "ordered_elements"),
-  ("constraints/type.isl", "inline imports"),
-  ("constraints/valid_values.isl", "document:: values"),
   ("imports/cross_version/isl_1_0_importing_isl_2_0.isl", "Ion Schema 1.0"),
   ("imports/cross_version/isl_1_0_schema.isl", "Ion Schema 1.0"),
-  ("imports/cross_version/isl_2_0_importing_isl_1_0.isl", "imports"),
-  ("imports/cycles/header_import_a.isl", "imports"),
-  ("imports/cycles/header_import_b.isl", "imports"),
-  ("imports/cycles/header_import_by_type_a.isl", "imports"),
-  ("imports/cycles/header_import_by_type_b.isl", "imports"),
-  ("imports/cycles/header_import_by_type_with_alias_a.isl", "imports"),
-  ("imports/cycles/header_import_by_type_with_alias_b.isl", "imports"),
-  ("imports/cycles/inline_import_a.isl", "inline imports"),
-  ("imports/cycles/inline_import_b.isl", "inline imports"),
-  ("imports/diamond/header_import_a.isl", "imports"),
-  ("imports/diamond/header_import_b.isl", "imports"),
-  ("imports/diamond/header_import_c.isl", "imports"),
-  (
-    "imports/diamond/inline_import_a.isl", "inline imports; ordered_elements; imports",
-  ),
-  ("imports/diamond/inline_import_b.isl", "inline imports"),
-  ("imports/diamond/inline_import_c.isl", "inline imports"),
-  ("imports/header_imports.isl", "imports"),
-  ("imports/inline_imports.isl", "inline imports; distinct:: on element"),
-  ("imports/invalid_imports.isl", "imports; inline imports"),
-  ("imports/self_import/self_import.isl", "imports"),
-  ("imports/tree/header_import_a.isl", "annotations; imports"),
-  ("imports/tree/header_import_c.isl", "imports"),
-  ("imports/tree/inline_import_a.isl", "annotations"),
-  ("imports/tree/inline_import_c.isl", "annotations"),
-  ("null_or.isl", "imports; inline imports; ordered_elements"),
-  ("schema/schema_with_recursive_type.isl", "ordered_elements"),
+  ("imports/cross_version/isl_2_0_importing_isl_1_0.isl", "Ion Schema 1.0"),
 ])
 
 ///|
@@ -92,25 +50,16 @@ let schema_known_failures : Map[String, String] = Map([
     "constraints/field_names.isl $test[6]", "the loader ignores 'name' in an inline type",
   ),
   (
-    "constraints/annotations-standard.isl $test[3]", "the loader does not check that a referenced type exists",
-  ),
-  (
     "constraints/annotations-standard.isl $test[4]", "the loader ignores 'occurs' outside 'fields'",
   ),
   (
     "constraints/annotations-standard.isl $test[5]", "the loader ignores 'name' in an inline type",
   ),
   (
-    "constraints/all_of.isl $test[6]", "the loader does not check that a referenced type exists",
-  ),
-  (
     "constraints/all_of.isl $test[7]", "the loader ignores 'occurs' outside 'fields'",
   ),
   (
     "constraints/all_of.isl $test[8]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/any_of.isl $test[6]", "the loader does not check that a referenced type exists",
   ),
   (
     "constraints/any_of.isl $test[7]", "the loader ignores 'occurs' outside 'fields'",
@@ -148,9 +97,6 @@ let schema_known_failures : Map[String, String] = Map([
     "constraints/not.isl $test[5]", "the loader ignores 'name' in an inline type",
   ),
   (
-    "constraints/one_of.isl $test[6]", "the loader does not check that a referenced type exists",
-  ),
-  (
     "constraints/one_of.isl $test[7]", "the loader ignores 'occurs' outside 'fields'",
   ),
   (
@@ -165,26 +111,7 @@ let schema_known_failures : Map[String, String] = Map([
   (
     "constraints/type.isl $test[5]", "the loader ignores 'name' in an inline type",
   ),
-  (
-    "imports/diamond/header_import_a.isl $test[1]", "the loader does not check that a referenced type exists",
-  ),
-  (
-    "imports/diamond/inline_import_a.isl $test[1]", "the loader does not check that a referenced type exists",
-  ),
-  (
-    "imports/tree/header_import_a.isl $test[1]", "the loader does not check that a referenced type exists",
-  ),
-  (
-    "imports/tree/inline_import_a.isl $test[1]", "the loader does not check that a referenced type exists",
-  ),
   ("null_or.isl $test[7]", "the loader ignores 'occurs' outside 'fields'"),
-  (
-    "schema/type.isl $test[2]", "the loader accepts a type definition with no name, or with more than one",
-  ),
-  (
-    "schema/type.isl $test[3]", "the loader accepts a type name that is a string, null, or annotated",
-  ),
-  ("schema/type.isl $test[4]", "the loader accepts a type name twice"),
 ])
 
 ///|
@@ -205,13 +132,24 @@ priv enum SchemaOutcome {
 }
 
 ///|
+/// Resolve a schema import: the test data names each schema by its path
+/// under `schema_root`.
+fn resolve_import(id : String) -> Array[@ion.IonValue] raise @ion.IonError {
+  read_file("\{schema_root}/\{id}") catch {
+    @ion.IonError::DataModel(_) as error => raise error
+    error =>
+      raise @ion.IonError::DataModel("cannot read '\{id}': \{describe(error)}")
+  }
+}
+
+///|
 /// The outcome of loading `values` as a schema that should load (`valid`) or
 /// should not, and the schema when it loads.
 fn load_outcome(
   values : Array[@ion.IonValue],
   valid~ : Bool,
 ) -> (SchemaOutcome, @schema.Schema?) {
-  let schema = try @schema.Schema::load(values) catch {
+  let schema = try @schema.Schema::load(values, resolver=resolve_import) catch {
     @ion.IonError::Unsupported(message) =>
       return (SchemaUnsupported(message), None)
     error =>
@@ -285,6 +223,10 @@ fn references(constraint : @schema.Constraint, out : Array[String]) -> Unit {
       for item in items {
         references(item, out)
       }
+    OrderedElements(slots) =>
+      for slot in slots {
+        references(slot.0, out)
+      }
     Fields(fields) =>
       for field in fields {
         references(field.ty, out)
@@ -296,34 +238,53 @@ fn references(constraint : @schema.Constraint, out : Array[String]) -> Unit {
 ///|
 /// Load each type definition among `definitions` on its own.
 fn load_types(definitions : Array[@ion.IonValue]) -> LoadedTypes {
-  let loaded : Array[@schema.TypeDefinition] = []
-  let unusable : Map[String, String] = Map([])
-  // The version markers and the header go with each type, since they decide
-  // how it loads. The header's imports do not: a type that refers to an
-  // imported type is unusable, and the others can load.
-  let prelude : Array[@ion.IonValue] = []
-  for value in definitions {
-    match value.kind() {
-      Symbol(token) if token.text().unwrap_or("").has_prefix("$ion_schema_") =>
-        prelude.push(value)
-      Struct(fields) if annotated(value, "schema_header") =>
-        prelude.push(
-          @ion.IonValue::from_fields(
-            fields.filter(field => field.name().text() != Some("imports")),
-          ).with_annotations(value.annotations()),
-        )
-      _ => ()
+  let whole = try
+    @schema.Schema::load(definitions, resolver=resolve_import)
+  catch {
+    _ => None
+  } noraise {
+    schema => Some(schema)
+  }
+  if whole is Some(schema) {
+    return { schema, unusable: Map([]), }
+  }
+  // Load each type with the version markers and the header, which decide how
+  // it loads, and an empty stand-in for each other type of the file, so its
+  // references resolve. A type that refers to an unusable type is unusable.
+  let prelude = definitions.filter(value => {
+    annotated(value, "schema_header") ||
+    (
+      value.kind() is Symbol(token) &&
+      token.text().unwrap_or("").has_prefix("$ion_schema_")
+    )
+  })
+  let name_of = (definition : @ion.IonValue) => {
+    match field_of(definition, "name").map(value => value.kind()) {
+      Some(Symbol(token)) => token.text().unwrap_or("?")
+      _ => "?"
     }
   }
+  let names = definitions.filter(value => annotated(value, "type")).map(name_of)
+  let loaded : Array[@schema.TypeDefinition] = []
+  let unusable : Map[String, String] = Map([])
   for definition in definitions {
     if !annotated(definition, "type") {
       continue
     }
-    let name = match field_of(definition, "name").map(value => value.kind()) {
-      Some(Symbol(token)) => token.text().unwrap_or("?")
-      _ => "?"
-    }
-    let types = try @schema.Schema::load(prelude + [definition]).types() catch {
+    let name = name_of(definition)
+    let stand_ins = names
+      .filter(other => other != name)
+      .map(other => {
+        @ion.IonValue::from_fields([
+          @ion.Field::new("name", @ion.IonValue::symbol(other)),
+        ]).with_annotations([@ion.SymbolToken::new("type")])
+      })
+    let types = try
+      @schema.Schema::load(
+        prelude + [definition] + stand_ins,
+        resolver=resolve_import,
+      ).types()
+    catch {
       error => {
         unusable[name] = "type \{name} does not load: \{describe(error)}"
         continue
@@ -331,10 +292,17 @@ fn load_types(definitions : Array[@ion.IonValue]) -> LoadedTypes {
     } noraise {
       types => types
     }
-    loaded.append(types)
+    // Keep the type and the imported types, but not the stand-ins.
+    for loaded_type in types {
+      if loaded_type.name() == name ||
+        (
+          loaded_type.name().contains("#") &&
+          !loaded.iter().any(other => other.name() == loaded_type.name())
+        ) {
+        loaded.push(loaded_type)
+      }
+    }
   }
-  // A type that refers to an unusable or undefined type is unusable too.
-  let defined = loaded.map(definition => definition.name())
   let mut changed = true
   while changed {
     changed = false
@@ -347,7 +315,7 @@ fn load_types(definitions : Array[@ion.IonValue]) -> LoadedTypes {
         references(constraint, refs)
       }
       for name in refs {
-        if unusable.contains(name) || !defined.contains(name) {
+        if unusable.contains(name) {
           unusable[definition.name()] = "type \{definition.name()} refers to \{name}, which is not usable"
           changed = true
           break
@@ -391,10 +359,14 @@ fn run_schema_test(
           let case_id = "\{id} \{type_name} \{key}[\{index}]"
           let outcome = match types.unusable.get(type_name) {
             Some(reason) => SchemaUnsupported(reason)
-            None if annotated(value, "document") =>
-              SchemaUnsupported("validating an Ion document")
-            None =>
-              if types.schema.is_valid(type_name, value) == accept {
+            None => {
+              // `document::(...)` stands for a document of those values.
+              let valid = if annotated(value, "document") {
+                types.schema.is_valid_document(type_name, elements(value))
+              } else {
+                types.schema.is_valid(type_name, value)
+              }
+              if valid == accept {
                 SchemaPassed
               } else {
                 SchemaFailed(
@@ -405,6 +377,7 @@ fn run_schema_test(
                   },
                 )
               }
+            }
           }
           outcomes.push((case_id, outcome))
         }

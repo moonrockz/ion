@@ -33,6 +33,7 @@ pub(all) enum Constraint {
   OneOf(Array[Constraint])
   Not(Constraint)
   Nothing
+  IsDocument
   Matches(Regex)
   ByteLength(Int, Int?)
   Utf8ByteLength(Int, Int?)
@@ -46,6 +47,7 @@ pub(all) enum Constraint {
   DistinctElements
   ClosedFields(Array[String])
   Annotations(Constraint)
+  OrderedElements(Array[(Constraint, Occurs)])
   Contains(Array[@ion.IonValue])
 } derive(@debug.Debug)
 pub fn Constraint::any() -> Self
@@ -97,11 +99,13 @@ pub fn Schema::empty() -> Self
 pub fn Schema::find(Self, String) -> TypeDefinition?
 pub fn Schema::from_types(Array[TypeDefinition]) -> Self
 pub fn Schema::is_valid(Self, String, @ion.IonValue) -> Bool
-pub fn Schema::load(Array[@ion.IonValue]) -> Self raise @ion.IonError
-pub fn Schema::load_from_text(StringView) -> Self raise @ion.IonError
+pub fn Schema::is_valid_document(Self, String, Array[@ion.IonValue]) -> Bool
+pub fn Schema::load(Array[@ion.IonValue], resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError) -> Self raise @ion.IonError
+pub fn Schema::load_from_text(StringView, resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError) -> Self raise @ion.IonError
 pub fn Schema::to_repr(Self) -> @debug.Repr
 pub fn Schema::types(Self) -> Array[TypeDefinition]
 pub fn Schema::validate(Self, String, @ion.IonValue) -> Array[Violation]
+pub fn Schema::validate_document(Self, String, Array[@ion.IonValue]) -> Array[Violation]
 
 pub struct TypeDefinition {
   name : String
