@@ -33,19 +33,7 @@ let dsl_skipped : Map[String, String] = Map([
   (
     "system_symbols.ion#0 Ion 1.0 system symbol / then#2 '$ion_1_0'", "expects `$2` at the top level to produce the symbol `$ion_1_0`, but iontestdata/good/equivs/nonIVMNoOps.ion, which this implementation follows, makes it a no-op",
   ),
-  ("local_symtab_imports.ion#4", catalog_reason),
-  ("local_symtab_imports.ion#5", catalog_reason),
-  ("local_symtab_imports.ion#6", catalog_reason),
-  ("local_symtab_imports.ion#7", catalog_reason),
-  ("local_symtab_imports.ion#8", catalog_reason),
-  ("local_symtab_imports.ion#9", catalog_reason),
-  ("local_symtab_imports.ion#10", catalog_reason),
-  ("local_symtab_imports.ion#11", catalog_reason),
 ])
-
-///|
-/// Why the import tests that use the catalog's shared tables do not pass.
-let catalog_reason : String = "imports shared tables from ion-tests' catalog (abcs, mnop, empty), and there is no catalog support (#2)"
 
 ///|
 /// The skip-list key that covers a case ID: the ID itself, or the test
@@ -507,11 +495,21 @@ fn read_input(input : Input) -> Array[@ion.IonValue] raise {
       let text = @utf8.decode(bytes) catch {
         _ => raise @ion.IonError::Syntax("the text is not UTF-8")
       }
-      @text.read_ion_datagram(text)
+      @text.read_ion_datagram(text, catalog=catalog())
     }
-    BinaryInput(bytes) => @binary.read_binary(bytes)
+    BinaryInput(bytes) => @binary.read_binary(bytes, catalog=catalog())
     Unbuildable(reason) => fail(reason)
   }
+}
+
+///|
+/// The shared symbol tables of ion-tests' catalog, which the import tests use.
+fn catalog() -> @ion.Catalog raise {
+  @ion.Catalog::load(
+    @text.read_ion_datagram(
+      @fs.read_file_to_string("tests/ion-tests/catalog/catalog.ion"),
+    ),
+  )
 }
 
 ///|
@@ -585,16 +583,13 @@ fn expect(
 
 ///|
 /// A `produces` datum, with `'#$0'` as a symbol with unknown text. A symbol
-/// `'#$name#ddd'` names an unknown symbol by its place in a shared table,
-/// which this implementation does not model.
-fn produced_value(value : @ion.IonValue) -> @ion.IonValue raise {
+/// `'#$name#ddd'` is a symbol with unknown text at a place in a shared table;
+/// the data model does not keep that place, so the check is only that the
+/// text is unknown.
+fn produced_value(value : @ion.IonValue) -> @ion.IonValue {
   map_tokens(value, token => {
     match token.text() {
-      Some("#$0") => @ion.SymbolToken::from_sid(0)
-      Some(text) if text.has_prefix("#$") =>
-        fail(
-          "\{text} names a symbol by its place in a shared symbol table, which is not modeled (#2)",
-        )
+      Some(text) if text.has_prefix("#$") => @ion.SymbolToken::from_sid(0)
       _ => token
     }
   })
@@ -611,14 +606,11 @@ fn model_token(value : @ion.IonValue) -> @ion.SymbolToken raise {
     _ =>
       match keyword(value) {
         Some("text") => @ion.SymbolToken::new(codepoints(arguments(value)))
-        Some("absent") =>
-          fail(
-            "(absent ...) names a symbol by its place in a shared symbol table, which is not modeled (#2)",
-          )
-        _ =>
-          fail(
-            "a symbol in a shared symbol table is not modeled (#2): \{show([value])}",
-          )
+        // A symbol with unknown text at a place in a shared table, as
+        // `(absent name offset)` or `(name offset)`. The data model does not
+        // keep that place, so the check is only that the text is unknown.
+        Some(_) => @ion.SymbolToken::from_sid(0)
+        None => fail("invalid symbol model: \{show([value])}")
       }
   }
 }

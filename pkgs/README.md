@@ -17,6 +17,10 @@ ion version                                     also `ion --version` or `ion -V`
 ion help [command]                              also `ion --help` or `ion <command> --help`
 ```
 
+`--catalog <file>`, before or after the command and as many times as needed,
+names an Ion file of `$ion_shared_symbol_table::{...}` structs; imports of
+those shared tables in the input then resolve to their symbols' text.
+
 A missing file argument, or `-`, reads stdin. Ion input may be text or binary;
 the Ion binary version marker at its start decides.
 

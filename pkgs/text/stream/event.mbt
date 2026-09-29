@@ -15,10 +15,14 @@ struct TextEventReader {
 
 ///|
 /// An event reader over `source`, holding no text until the first event is
-/// asked for.
-pub fn TextEventReader::new(source : &@io.Reader) -> TextEventReader {
+/// asked for. `catalog` supplies the shared symbol tables that local symbol
+/// tables import.
+pub fn TextEventReader::new(
+  source : &@io.Reader,
+  catalog? : @ion.Catalog = @ion.Catalog::new(),
+) -> TextEventReader {
   {
-    values: TextReader::new(source),
+    values: TextReader::new(source, catalog~),
     events: [],
     index: 0,
     started: false,

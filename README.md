@@ -267,9 +267,11 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   symbols in effect in a stream. The text and binary readers apply a version
   marker (`$ion_1_0` unquoted at the top level, or the binary marker) and a
   top-level `$ion_symbol_table::{...}` struct to it instead of returning them,
-  and resolve each symbol ID against it. A symbol ID beyond the table is an
-  error; one whose slot has no text keeps only its ID, and the writers keep
-  that ID by reserving it in the symbol table they write.
+  and resolve each symbol ID against it. Imports of shared symbol tables
+  resolve against an `@ion.Catalog`, which the readers and the CLI's
+  `--catalog` option take. A symbol ID beyond the table is an error; one whose
+  slot has no text keeps only its ID, and the writers keep that ID by
+  reserving it in the symbol table they write.
 - **Unsupported is an error.** The schema loader raises
   `IonError::Unsupported` for constructs it does not implement, rather than
   silently ignoring them.
@@ -281,10 +283,9 @@ test-suite work carries the
 [`testing`](https://github.com/moonrockz/ion/issues?q=is%3Aissue+label%3Atesting)
 label.
 
-- Shared symbol tables ([#2](https://github.com/moonrockz/ion/issues/2)):
-  there is no catalog, so an import resolves as a table the catalog does not
-  hold, reserving `max_id` symbol IDs with unknown text. A catalog API would
-  give those symbols their text.
+- Shared symbol tables: a symbol whose text a shared table leaves unknown
+  keeps its symbol ID but not its place in that table, so any two such
+  symbols compare as equal, as symbols with unknown text do.
 - Ion Schema ([#5](https://github.com/moonrockz/ion/issues/5)):
   `ordered_elements`, `annotations`, `timestamp_precision`, `regex`,
   `closed::` fields, imports, open content, the decimal `precision`/`exponent`

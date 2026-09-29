@@ -14,11 +14,11 @@ pub async fn write_all(&@io.Writer, Array[@ion.IonValue], pretty? : Bool) -> Uni
 
 // Types and methods
 type TextEventReader
-pub fn TextEventReader::new(&@io.Reader) -> Self
+pub fn TextEventReader::new(&@io.Reader, catalog? : @ion.Catalog) -> Self
 pub async fn TextEventReader::next(Self) -> @text.IonEvent?
 
 type TextReader
-pub fn TextReader::new(&@io.Reader) -> Self
+pub fn TextReader::new(&@io.Reader, prefix? : Bytes, catalog? : @ion.Catalog) -> Self
 pub async fn TextReader::next(Self) -> @ion.IonValue?
 
 type TextWriter

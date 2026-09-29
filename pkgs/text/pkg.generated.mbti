@@ -18,9 +18,9 @@ pub fn parse_cst(StringView) -> CstDocument raise @ion.IonError
 
 pub fn parse_with_handler(StringView, &IonHandler) -> Unit raise @ion.IonError
 
-pub fn read_ion(StringView) -> @ion.IonValue raise @ion.IonError
+pub fn read_ion(StringView, catalog? : @ion.Catalog) -> @ion.IonValue raise @ion.IonError
 
-pub fn read_ion_datagram(StringView) -> Array[@ion.IonValue] raise @ion.IonError
+pub fn read_ion_datagram(StringView, catalog? : @ion.Catalog) -> Array[@ion.IonValue] raise @ion.IonError
 
 pub fn read_ion_prefix(StringView, symbols~ : @ion.SymbolTable, end_of_input~ : Bool) -> (@ion.IonValue?, Int)? raise @ion.IonError
 

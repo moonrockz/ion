@@ -455,3 +455,38 @@ test "symbols with unknown text keep their IDs apart from the writer's own" {
   assert_true(read_back[1].equals(values[1]))
   assert_true(read_back[2].equals(values[2]))
 }
+
+///|
+test "binary imports resolve against a catalog" {
+  let catalog = @ion.Catalog::load([
+    @ion.IonValue::from_fields([
+      @ion.Field::new("name", @ion.IonValue::string("colors")),
+      @ion.Field::new(
+        "symbols",
+        @ion.IonValue::list([
+          @ion.IonValue::string("red"),
+          @ion.IonValue::string("green"),
+        ]),
+      ),
+    ]).with_annotations([@ion.SymbolToken::new("$ion_shared_symbol_table")]),
+  ])
+  let table = @ion.IonValue::from_fields([
+    @ion.Field::new(
+      "imports",
+      @ion.IonValue::list([
+        @ion.IonValue::from_fields([
+          @ion.Field::new("name", @ion.IonValue::string("colors")),
+        ]),
+      ]),
+    ),
+  ]).with_annotations([@ion.SymbolToken::new("$ion_symbol_table")])
+  // The table imports `colors` (IDs 10 and 11), then symbol 11.
+  let bytes = @binary.write_binary([table, sid_symbol(11)])
+  assert_eq(read_back_text_with(bytes, catalog), "green")
+}
+
+///|
+/// The text of the values `bytes` read to against `catalog`.
+fn read_back_text_with(bytes : Bytes, catalog : @ion.Catalog) -> String raise {
+  @text.write_all(@binary.read_binary(bytes, catalog~))
+}

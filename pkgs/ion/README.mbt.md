@@ -195,6 +195,32 @@ test "a symbol table resolves symbol IDs" {
 }
 ```
 
+A local symbol table can import shared symbol tables by name and version.
+The readers resolve them against a `Catalog`, which a program loads from its
+`$ion_shared_symbol_table::{...}` structs:
+
+```mbt check
+///|
+test "imports resolve against a catalog" {
+  let catalog = @ion.Catalog::load(
+    @text.read_ion_datagram(
+      "$ion_shared_symbol_table::{ name: \"colors\", version: 1, symbols: [\"red\", \"green\"] }",
+    ),
+  )
+  let values = @text.read_ion_datagram(
+    "$ion_symbol_table::{ imports: [{ name: \"colors\", version: 1 }], symbols: [\"local\"] } $11 $12",
+    catalog~,
+  )
+  inspect(
+    @text.write_all(values),
+    content=(
+      #|green
+      #|local
+    ),
+  )
+}
+```
+
 ## Traversal
 
 `IonValue::accept` walks a value depth-first with an `IonVisitor`, whose

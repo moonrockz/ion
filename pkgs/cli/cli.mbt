@@ -101,6 +101,8 @@ priv struct Streams {
   stdin : &@io.Reader
   out : Output
   err : Output
+  /// The shared symbol tables of the `--catalog` files.
+  mut catalog : @core.Catalog
 }
 
 ///|
@@ -117,6 +119,7 @@ pub async fn run(
     stdin,
     out: { sink: stdout, buffer: @buffer.Buffer(), },
     err: { sink: stderr, buffer: @buffer.Buffer(), },
+    catalog: @core.Catalog::new(),
   }
   let status = dispatch(args, streams) catch {
     error => {
@@ -239,6 +242,14 @@ fn command_line() -> @argparse.Command {
       ),
       @argparse.FlagArg("version", short='V', about="Show the version."),
     ],
+    options=[
+      @argparse.OptionArg(
+        "catalog",
+        about="An Ion file of $ion_shared_symbol_table structs, for the shared tables that input imports. May be given more than once.",
+        action=Append,
+        global=true,
+      ),
+    ],
     subcommands=command_names.map(name => subcommand(name, "")),
   )
 }
@@ -283,6 +294,19 @@ async fn dispatch(args : Array[String], streams : Streams) -> Int {
     streams.out.line(version)
     return 0
   }
+  // A global option may land on the command line or on its command.
+  let catalogs : Array[String] = []
+  for found in [Some(matches), matches.subcommand.map(pair => pair.1)] {
+    for
+      path in found
+      .map(m => m.values.get("catalog").unwrap_or([]))
+      .unwrap_or([]) {
+      if !catalogs.contains(path) {
+        catalogs.push(path)
+      }
+    }
+  }
+  streams.catalog = load_catalog(streams, catalogs)
   match matches.subcommand {
     None => print(streams, "-", Text)
     Some(("print", sub)) => {
@@ -341,6 +365,20 @@ priv enum Format {
 }
 
 ///|
+/// A catalog of the shared symbol tables in the files at `paths`, each Ion
+/// text or binary.
+async fn load_catalog(
+  streams : Streams,
+  paths : Array[String],
+) -> @core.Catalog {
+  let values : Array[@core.IonValue] = []
+  for path in paths {
+    each_value(streams, path, value => values.push(value))
+  }
+  @core.Catalog::load(values)
+}
+
+///|
 /// Read a whole file, or stdin when the path is `-`, as UTF-8 text.
 async fn read_text(streams : Streams, path : String) -> String {
   let data = if path == "-" {
@@ -366,24 +404,25 @@ async fn each_value(
   visit : async (@core.IonValue) -> Unit,
 ) -> Unit {
   if path == "-" {
-    each_value_of("stdin", streams.stdin, visit)
+    each_value_of("stdin", streams.stdin, streams.catalog, visit)
   } else {
     let file = @async_fs.open(path, mode=ReadOnly) catch {
       error => raise open_failure(path, error)
     }
     defer file.close()
-    each_value_of(path, file, visit)
+    each_value_of(path, file, streams.catalog, visit)
   }
 }
 
 ///|
 /// Call `visit` on every value of `source`, which `name` names in errors: Ion
 /// binary when the source begins with the version marker, and Ion text
-/// otherwise. The first octets decide, and then go to the reader ahead of the
+/// otherwise. The first octets decide, and the reader reads them before the
 /// rest of the source.
 async fn each_value_of(
   name : String,
   source : &@io.Reader,
+  catalog : @core.Catalog,
   visit : async (@core.IonValue) -> Unit,
 ) -> Unit {
   let mut head = Bytes::new(0)
@@ -396,21 +435,13 @@ async fn each_value_of(
       _ => break
     }
   }
-  let input = @io.MemoryReader(async fn(writer) {
-    writer.write(head)
-    // Large reads keep the number of hand-offs through the pipe small.
-    while source.read_some(max_len=65536) is Some(chunk) {
-      writer.write(chunk)
-    }
-  })
-  defer input.close()
   if @binary.has_version_marker(head[:], 0) {
-    let reader = @binary_stream.BinaryReader::new(input)
+    let reader = @binary_stream.BinaryReader::new(source, prefix=head, catalog~)
     while reader.next() is Some(value) {
       visit(value)
     }
   } else {
-    let reader = @text_stream.TextReader::new(input)
+    let reader = @text_stream.TextReader::new(source, prefix=head, catalog~)
     while reader.next() is Some(value) {
       visit(value)
     }

@@ -236,3 +236,18 @@ async test "the async writer round-trips through the async reader" {
     }
   }
 }
+
+///|
+async test "a text reader reads the octets it is given before its source" {
+  let bytes = @utf8.encode("{ city: \"Zürich\" } [1, 2] last")
+  // Split inside the two octets of `ü`, and inside a value.
+  for split in [0, 1, 11, 12, bytes.length()] {
+    let reader = @stream.TextReader::new(
+      reader_of(bytes[split:].to_owned(), chunk=3),
+      prefix=bytes[:split].to_owned(),
+    )
+    assert_eq(read_all(reader).map(value => @text.write_ion(value)), [
+      "{city: \"Zürich\"}", "[1, 2]", "last",
+    ])
+  }
+}

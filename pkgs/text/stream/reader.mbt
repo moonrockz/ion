@@ -35,17 +35,25 @@ struct TextReader {
 
 ///|
 /// A reader over `source`, holding no text until the first value is asked
-/// for.
-pub fn TextReader::new(source : &@io.Reader) -> TextReader {
+/// for. `prefix` holds octets the caller already read from `source`, such as
+/// the first few it looked at to choose a reader; they are read first.
+/// `catalog` supplies the shared symbol tables that local symbol tables
+/// import.
+pub fn TextReader::new(
+  source : &@io.Reader,
+  prefix? : Bytes = b"",
+  catalog? : @ion.Catalog = @ion.Catalog::new(),
+) -> TextReader {
   {
     source,
     text: "",
     start: 0,
     arrived: StringBuilder(),
     framer: Framer::new(),
-    symbols: @ion.SymbolTable::system(),
+    symbols: @ion.SymbolTable::system(catalog~),
     unscanned: "",
-    partial: Bytes::new(0),
+    // Decoded with the first chunk, as octets a read left over would be.
+    partial: prefix,
     eof: false,
   }
 }
@@ -123,12 +131,13 @@ async fn TextReader::fill(self : TextReader) -> Unit {
     Some(bytes) if bytes.length() > 0 => self.partial + bytes
     _ => {
       self.eof = true
-      if self.partial.length() > 0 {
+      // What is left must be whole characters.
+      if whole_characters(self.partial) < self.partial.length() {
         raise @ion.IonError::Syntax(
           "the Ion text stream ends inside a UTF-8 character",
         )
       }
-      return
+      self.partial
     }
   }
   let whole = whole_characters(octets)

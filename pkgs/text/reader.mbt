@@ -61,10 +61,14 @@ fn is_base64_char(c : UInt16) -> Bool {
 ///|
 /// Parse exactly one Ion value, requiring that only whitespace and comments
 /// follow it. Version markers and local symbol tables before the value are
-/// applied rather than returned.
-pub fn read_ion(text : StringView) -> @ion.IonValue raise @ion.IonError {
+/// applied rather than returned; `catalog` supplies the shared symbol tables
+/// they import.
+pub fn read_ion(
+  text : StringView,
+  catalog? : @ion.Catalog = @ion.Catalog::new(),
+) -> @ion.IonValue raise @ion.IonError {
   let parser = Parser::new(text)
-  let symbols = @ion.SymbolTable::system()
+  let symbols = @ion.SymbolTable::system(catalog~)
   let mut result : @ion.IonValue? = None
   parser.skip_ws()
   while result is None {
@@ -84,11 +88,13 @@ pub fn read_ion(text : StringView) -> @ion.IonValue raise @ion.IonError {
 /// Parse a whole Ion datagram: a whitespace-separated sequence of values.
 /// Version markers and local symbol tables are applied rather than returned,
 /// so every symbol ID a local symbol table defines comes back with its text.
+/// `catalog` supplies the shared symbol tables they import.
 pub fn read_ion_datagram(
   text : StringView,
+  catalog? : @ion.Catalog = @ion.Catalog::new(),
 ) -> Array[@ion.IonValue] raise @ion.IonError {
   let parser = Parser::new(text)
-  let symbols = @ion.SymbolTable::system()
+  let symbols = @ion.SymbolTable::system(catalog~)
   let values : Array[@ion.IonValue] = []
   parser.skip_ws()
   while !parser.at_end() {

@@ -27,14 +27,23 @@ struct BinaryReader {
 
 ///|
 /// A reader over `source`, holding no octets until the first value is asked
-/// for.
-pub fn BinaryReader::new(source : &@io.Reader) -> BinaryReader {
+/// for. `prefix` holds octets the caller already read from `source`, such as
+/// the first few it looked at to choose a reader; they are read first.
+/// `catalog` supplies the shared symbol tables that local symbol tables
+/// import.
+pub fn BinaryReader::new(
+  source : &@io.Reader,
+  prefix? : Bytes = b"",
+  catalog? : @ion.Catalog = @ion.Catalog::new(),
+) -> BinaryReader {
+  let arrived = @buffer.Buffer()
+  arrived.write_bytes(prefix)
   {
     source,
-    table: @ion.SymbolTable::system(),
+    table: @ion.SymbolTable::system(catalog~),
     buffer: Bytes::new(0),
     start: 0,
-    arrived: @buffer.Buffer(),
+    arrived,
     needed: 1,
     eof: false,
   }
