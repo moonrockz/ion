@@ -144,13 +144,144 @@ fn load_error(text : String) -> @ion.IonError? {
 }
 
 ///|
-test "unsupported constructs raise Unsupported" {
-  let annotations = load_error("type::{ name: t, annotations: [foo] }")
-  assert_true(annotations is Some(@ion.IonError::Unsupported(_)))
-  let ordered = load_error("type::{ name: t, ordered_elements: [int] }")
-  assert_true(ordered is Some(@ion.IonError::Unsupported(_)))
-  let closed = load_error("type::{ name: t, fields: closed::{ a: int } }")
-  assert_true(closed is Some(@ion.IonError::Unsupported(_)))
+test "ISL 1.0, and imports without a resolver, raise Unsupported" {
+  assert_true(
+    load_error("$ion_schema_1_0 type::{ name: t }")
+    is Some(@ion.IonError::Unsupported(_)),
+  )
+  assert_true(
+    load_error("type::{ name: t, type: { id: \"a.isl\", type: a } }")
+    is Some(@ion.IonError::Unsupported(_)),
+  )
+}
+
+///|
+test "ordered_elements matches types in order, as often as each occurs" {
+  let schema =
+    #|type::{
+    #|  name: row,
+    #|  ordered_elements: [symbol, { type: int, occurs: optional }, { type: number, occurs: range::[0, max] }, bool],
+    #|}
+  for
+    text in ["[a, true]", "[a, 1, true]", "(a 1 2 3.5 false)", "[a, 1.5, true]"] {
+    assert_true(accepts(schema, "row", text), msg=text)
+  }
+  for
+    text in ["[]", "[a]", "[1, true]", "[a, true, true]", "{a: 1}", "null.list"] {
+    assert_true(!accepts(schema, "row", text), msg=text)
+  }
+  // Long input needs no backtracking.
+  let many = "[a, " + "1, ".repeat(2000) + "true]"
+  assert_true(accepts(schema, "row", many))
+}
+
+///|
+test "documents" {
+  let schema = @schema.Schema::load_from_text(
+    (
+      #|type::{ name: ints, element: int, container_length: range::[1, 3] }
+      #|type::{ name: doc, type: document }
+      #|type::{ name: tagged, annotations: closed::[] }
+    ),
+  )
+  let values = [@ion.IonValue::int(1), @ion.IonValue::int(2)]
+  assert_true(schema.is_valid_document("ints", values))
+  assert_true(!schema.is_valid_document("ints", []))
+  assert_true(!schema.is_valid_document("ints", [@ion.IonValue::symbol("a")]))
+  assert_true(schema.is_valid_document("doc", values))
+  assert_true(!schema.is_valid("doc", @ion.IonValue::sexp(values)))
+  // A document has no annotations to constrain.
+  assert_true(!schema.is_valid_document("tagged", values))
+}
+
+///|
+test "imports: scope, aliases, cycles, and self imports" {
+  let schemas : Map[String, String] = {
+    "a.isl": "schema_header::{ imports: [{ id: \"b.isl\" }] } type::{ name: a, fields: { b: b } }",
+    "b.isl": "schema_header::{ imports: [{ id: \"a.isl\" }, { id: \"c.isl\" }] } type::{ name: b, type: $null_or::a }",
+    "c.isl": "type::{ name: c, type: int }",
+    "self.isl": "schema_header::{ imports: [{ id: \"self.isl\" }] } type::{ name: s }",
+  }
+  let resolver = (id : String) => {
+    match schemas.get(id) {
+      Some(text) => @text.read_ion_datagram(text)
+      None => raise @ion.IonError::DataModel("no schema " + id)
+    }
+  }
+  let load_with = (text : String) => {
+    try @schema.Schema::load_from_text(text, resolver~) catch {
+      _ => None
+    } noraise {
+      schema => Some(schema)
+    }
+  }
+  // a and b import each other.
+  let schema = load_with(
+    "schema_header::{ imports: [{ id: \"a.isl\", type: a, as: top }] } type::{ name: t, type: top }",
+  ).unwrap()
+  assert_true(schema.is_valid("t", @text.read_ion("{ b: { b: null } }")))
+  assert_true(!schema.is_valid("t", @text.read_ion("{ b: 1 }")))
+  assert_true(schema.find("a.isl#a") is Some(_))
+  // Inline imports, and whole-schema imports.
+  assert_true(
+    load_with("type::{ name: t, type: { id: \"c.isl\", type: c } }") is Some(_),
+  )
+  assert_true(
+    load_with(
+      "schema_header::{ imports: [{ id: \"c.isl\" }] } type::{ name: t, type: c }",
+    )
+    is Some(_),
+  )
+  // c is imported by b, not by this schema.
+  assert_true(
+    load_with(
+      "schema_header::{ imports: [{ id: \"b.isl\" }] } type::{ name: t, type: c }",
+    )
+    is None,
+  )
+  for
+    bad in [
+      "schema_header::{ imports: [{ id: \"self.isl\" }] }", "schema_header::{ imports: [{ id: \"none.isl\" }] }",
+      "schema_header::{ imports: [{ id: \"c.isl\", type: d }] }", "schema_header::{ imports: [{ id: \"c.isl\", as: d }] }",
+      "schema_header::{ imports: [{ id: \"c.isl\" }] } type::{ name: c }", "type::{ name: t, type: { id: \"c.isl\", type: c, as: d } }",
+      "type::{ name: t, type: missing }", "type::{ name: t } type::{ name: t }",
+    ] {
+    assert_true(load_with(bad) is None, msg=bad)
+  }
+}
+
+///|
+test "field_names, distinct, closed fields, and annotations" {
+  let schema =
+    #|type::{ name: short_names, field_names: distinct::{ codepoint_length: range::[1, 3] } }
+    #|type::{ name: unique, element: distinct::int }
+    #|type::{ name: point, fields: closed::{ x: int, y: int } }
+    #|type::{ name: tagged, annotations: closed::required::[a, b] }
+    #|type::{ name: one_tag, annotations: { container_length: 1 } }
+  assert_true(accepts(schema, "short_names", "{a: 1, bcd: 2}"))
+  assert_true(!accepts(schema, "short_names", "{a: 1, a: 2}"))
+  assert_true(!accepts(schema, "short_names", "{abcd: 1}"))
+  assert_true(accepts(schema, "unique", "[1, 2, 3]"))
+  assert_true(!accepts(schema, "unique", "[1, 2, 1]"))
+  assert_true(!accepts(schema, "unique", "{a: 1, b: 1}"))
+  assert_true(accepts(schema, "point", "{x: 1}"))
+  assert_true(!accepts(schema, "point", "{x: 1, z: 2}"))
+  assert_true(accepts(schema, "tagged", "b::a::1"))
+  assert_true(!accepts(schema, "tagged", "a::1"))
+  assert_true(!accepts(schema, "tagged", "a::b::c::1"))
+  assert_true(accepts(schema, "one_tag", "x::1"))
+  assert_true(!accepts(schema, "one_tag", "1"))
+  for
+    bad in [
+      "annotations: [a]", "annotations: required::[a::b]", "annotations: open::[a]",
+      "fields: open::{ a: int }", "element: distinct::distinct::int",
+    ] {
+    assert_true(
+      load_error("type::{ name: t, \{bad} }")
+      is Some(@ion.IonError::DataModel(_)),
+      msg=bad,
+    )
+  }
 }
 
 ///|
@@ -190,9 +321,13 @@ test "the top level: version marker, header, types, footer, and open content" {
 }
 
 ///|
-test "unknown type references are reported" {
-  let schema = load("type::{ name: t, type: missing }").unwrap()
-  assert_true(!schema.is_valid("t", @ion.IonValue::int(1)))
+test "a reference to a type that does not exist is an error" {
+  assert_true(
+    load_error("type::{ name: t, type: missing }")
+    is Some(@ion.IonError::DataModel(_)),
+  )
+  let schema = load("type::{ name: t, type: int }").unwrap()
+  assert_true(!schema.is_valid("missing", @ion.IonValue::int(1)))
 }
 
 ///|
@@ -273,4 +408,74 @@ test "valid_values takes ranges of numbers and of timestamps" {
     let error = load_error("type::{ name: t, valid_values: \{bad} }")
     assert_true(error is Some(@ion.IonError::DataModel(_)))
   }
+}
+
+///|
+test "byte, precision, exponent, and timestamp constraints" {
+  let schema =
+    #|type::{ name: blob5, byte_length: 5 }
+    #|type::{ name: utf8, utf8_byte_length: range::[3, exclusive::5] }
+    #|type::{ name: money, precision: range::[1, 5], exponent: -2 }
+    #|type::{ name: coarse, timestamp_precision: range::[min, day] }
+    #|type::{ name: fine, timestamp_precision: range::[exclusive::second, max] }
+    #|type::{ name: local, timestamp_offset: ["+01:00", "-00:00"] }
+  assert_true(accepts(schema, "blob5", "{{\"12345\"}}"))
+  assert_true(!accepts(schema, "blob5", "{{\"1234\"}}"))
+  assert_true(!accepts(schema, "blob5", "\"12345\""))
+  // é is two bytes and 😀 four.
+  assert_true(accepts(schema, "utf8", "\"aé\""))
+  assert_true(accepts(schema, "utf8", "abcd"))
+  assert_true(accepts(schema, "utf8", "\"😀\""))
+  assert_true(!accepts(schema, "utf8", "\"😀a\""))
+  assert_true(accepts(schema, "money", "123.45"))
+  assert_true(!accepts(schema, "money", "1234.56"))
+  assert_true(!accepts(schema, "money", "12.3"))
+  assert_true(!accepts(schema, "money", "12.30e0"))
+  assert_true(accepts(schema, "coarse", "2020-01T"))
+  assert_true(!accepts(schema, "coarse", "2020-01-01T00:00Z"))
+  assert_true(accepts(schema, "fine", "2020-01-01T00:00:00.0Z"))
+  assert_true(!accepts(schema, "fine", "2020-01-01T00:00:00Z"))
+  assert_true(accepts(schema, "local", "2020-01-01T00:00+01:00"))
+  assert_true(accepts(schema, "local", "2020T"))
+  assert_true(!accepts(schema, "local", "2020-01-01T00:00Z"))
+  for
+    bad in [
+      "precision: 0", "exponent: range::[2, 1]", "byte_length: -1", "timestamp_precision: hour",
+      "timestamp_precision: range::[day, month]", "timestamp_offset: []", "timestamp_offset: [\"+24:00\"]",
+      "timestamp_offset: [\"Z\"]",
+    ] {
+    assert_true(
+      load_error("type::{ name: t, \{bad} }")
+      is Some(@ion.IonError::DataModel(_)),
+      msg=bad,
+    )
+  }
+}
+
+///|
+test "ieee754_float accepts the floats a format holds exactly" {
+  let schema =
+    #|type::{ name: half, ieee754_float: binary16 }
+    #|type::{ name: single, ieee754_float: binary32 }
+  for
+    text in [
+      "nan", "+inf", "0e0", "-0e0", "2048e0", "65504e0", "5.960464477539063e-8",
+      "0.5e0",
+    ] {
+    assert_true(accepts(schema, "half", text), msg=text)
+  }
+  for
+    text in [
+      "2049e0", "65520e0", "2.9802322387695312e-8", "0.1e0", "1", "null.float",
+    ] {
+    assert_true(!accepts(schema, "half", text), msg=text)
+  }
+  assert_true(accepts(schema, "single", "16777216e0"))
+  assert_true(!accepts(schema, "single", "16777217e0"))
+  assert_true(accepts(schema, "single", "1.401298464324817e-45"))
+  assert_true(!accepts(schema, "single", "0.1e0"))
+  assert_true(
+    load_error("type::{ name: t, ieee754_float: $null_or::binary16 }")
+    is Some(@ion.IonError::DataModel(_)),
+  )
 }

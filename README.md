@@ -6,8 +6,8 @@ hierarchical data serialization format — and
 [Ion Schema](https://amazon-ion.github.io/ion-schema/).
 
 > **Status:** early. The core data model, the Ion **text** and Ion **binary**
-> encodings, **Ion Hash** (Ion Hash 1.0 over SHA-256), a focused Ion Schema
-> validation subset, and **JSON interoperability** are implemented and tested,
+> encodings, **Ion Hash** (Ion Hash 1.0 over SHA-256), **Ion Schema 2.0**
+> validation, and **JSON interoperability** are implemented and tested,
 > with asynchronous streaming readers and writers for both encodings over
 > `moonbitlang/async`.
 
@@ -273,8 +273,8 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   slot has no text keeps only its ID, and the writers keep that ID by
   reserving it in the symbol table they write.
 - **Unsupported is an error.** The schema loader raises
-  `IonError::Unsupported` for constructs it does not implement, rather than
-  silently ignoring them.
+  `IonError::Unsupported` for what it does not implement (ISL 1.0, and
+  imports when no resolver is given), rather than silently ignoring it.
 
 ## Roadmap
 
@@ -286,15 +286,9 @@ label.
 - Shared symbol tables: a symbol whose text a shared table leaves unknown
   keeps its symbol ID but not its place in that table, so any two such
   symbols compare as equal, as symbols with unknown text do.
-- Ion Schema ([#5](https://github.com/moonrockz/ion/issues/5)):
-  `ordered_elements`, `annotations`, `timestamp_precision`,
-  `closed::` fields, imports, and the decimal
-  `precision`/`exponent` constraints. The
-  [Cookbook](https://amazon-ion.github.io/ion-schema/docs/cookbook/)'s
-  `logical-relationships` page is already covered by
-  `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
-  the constraints above. The loader also accepts some schemas that ISL 2.0
-  does not allow; the ion-schema-tests harness lists them.
+- Ion Schema: the loader accepts some schemas that ISL 2.0 does not allow
+  ([#33](https://github.com/moonrockz/ion/issues/33)); the ion-schema-tests
+  harness lists them. ISL 1.0 is not implemented.
 - Ion 1.1 ([#7](https://github.com/moonrockz/ion/issues/7)): only Ion 1.0 is
   implemented.
 - Ion binary output from the CLI ([#8](https://github.com/moonrockz/ion/issues/8)).
@@ -338,9 +332,11 @@ ion-tests itself.
 The [ion-schema-tests](https://github.com/amazon-ion/ion-schema-tests) suite
 is a second submodule, at `tests/ion-schema-tests`, and `pkgs/conformance`
 runs its ISL 2.0 files: each schema must load, each `$test` value must match
-its type or not, and each invalid schema or type must fail to load. Cases that
-need a construct the schema package does not implement are counted as
-unsupported, and each file with such cases is listed with what it needs.
+its type or not, and each invalid schema or type must fail to load. Imports
+resolve to the suite's files. Every ISL 2.0 file passes, except the three
+that involve ISL 1.0, which is not implemented, and the invalid schemas of
+[#33](https://github.com/moonrockz/ion/issues/33), which are listed as known
+failures.
 
 Besides the example and snapshot tests, several packages carry property tests
 (`property_test.mbt`) using the built-in QuickCheck: text round-trips, decimal

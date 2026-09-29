@@ -283,3 +283,36 @@ async test "Ion text in UTF-16 and UTF-32 reads like UTF-8" {
     validate.stderr.has_prefix("value 1: $.name: expected one of [string]"),
   )
 }
+
+///|
+async test "validate loads the schemas a schema imports" {
+  let good = text("{ lead: { name: \"Ada\" }, members: [{ name: \"Alan\" }] }")
+  let run = ion(
+    ["validate", "tests/fixtures/imports/team.isl", "team"],
+    stdin=good,
+  )
+  assert_eq(run.status, 0)
+  assert_eq(run.stderr, "")
+  let bad = ion(
+    ["validate", "tests/fixtures/imports/team.isl", "team"],
+    stdin=text("{ lead: { name: 1 } }"),
+  )
+  assert_eq(bad.status, 1)
+  assert_eq(
+    bad.stderr,
+    "value 0: $.lead.name: expected one of [string] but found int\n1 of 1 value(s) failed validation\n",
+  )
+  // --schema-root names the directory that import ids are relative to.
+  let wrong_root = ion(
+    [
+      "validate", "--schema-root", "tests/fixtures", "tests/fixtures/imports/team.isl",
+      "team",
+    ],
+    stdin=good,
+  )
+  assert_eq(wrong_root.status, 1)
+  assert_eq(
+    wrong_root.stderr,
+    "tests/fixtures/common/people.isl: no such file or directory\n",
+  )
+}

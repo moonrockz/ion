@@ -205,6 +205,12 @@ fn subcommand(name : String, prefix : String) -> @argparse.Command {
           ),
           input_argument(ion_input),
         ],
+        options=[
+          @argparse.OptionArg(
+            "schema-root",
+            about="The directory that the ids of schema imports are relative to. Default: the schema file's directory.",
+          ),
+        ],
       )
     "version" => @argparse.Command(named, about="Write the version.")
     _ =>
@@ -328,6 +334,10 @@ async fn dispatch(args : Array[String], streams : Streams) -> Int {
         value_of(sub, "schema-file"),
         value_of(sub, "type-name"),
         value_of(sub, "file"),
+        match sub.values.get("schema-root") {
+          Some([root, ..]) => Some(root)
+          _ => None
+        },
       )
     Some(("version", _)) => {
       streams.out.line(version)
@@ -525,6 +535,70 @@ async fn hash(streams : Streams, path : String) -> Int {
 }
 
 ///|
+/// Load a schema file and the schemas it imports, whose ids are paths under
+/// `schema_root`, or else under the schema file's directory.
+///
+/// The schema loader asks for an import while it loads, but a file is read
+/// asynchronously. So the loader runs again after each import it asks for
+/// that is not read yet, until every import is read.
+async fn load_schema(
+  streams : Streams,
+  schema_path : String,
+  schema_root : String?,
+) -> @schema.Schema {
+  let root = match schema_root {
+    Some(root) => root
+    None => directory_of(schema_path)
+  }
+  let text = read_ion_text(streams, schema_path)
+  let read : Map[String, Array[@core.IonValue]] = Map([])
+  while true {
+    let missing : Ref[String?] = { val: None, }
+    let resolver = (id : String) => {
+      match read.get(id) {
+        Some(values) => values
+        None => {
+          missing.val = Some(id)
+          raise @core.IonError::Unsupported(
+            "the import '\{id}' is not read yet",
+          )
+        }
+      }
+    }
+    let schema = @schema.Schema::load_from_text(text, resolver~) catch {
+      error =>
+        match missing.val {
+          Some(id) => {
+            let import_path = "\{root}/\{id}"
+            let values = @text.read_ion_datagram(
+              read_ion_text(streams, import_path),
+            ) catch {
+              @core.IonError::Syntax(message) =>
+                raise CliError("\{import_path}: \{message}")
+              other => raise other
+            }
+            read[id] = values
+            continue
+          }
+          None => raise error
+        }
+    }
+    return schema
+  }
+  panic()
+}
+
+///|
+/// The directory of a file path, or `.` when it has none (or is stdin).
+fn directory_of(path : String) -> String {
+  match path.rev_find("/") {
+    Some(0) => "/"
+    Some(index) => path.view(end_offset=index).to_owned()
+    None => "."
+  }
+}
+
+///|
 /// Check each value of the input against a schema type, reporting each
 /// violation on stderr. Fails when any value has a violation.
 async fn validate(
@@ -532,10 +606,9 @@ async fn validate(
   schema_path : String,
   type_name : String,
   path : String,
+  schema_root : String?,
 ) -> Int {
-  let schema = @schema.Schema::load_from_text(
-    read_ion_text(streams, schema_path),
-  )
+  let schema = load_schema(streams, schema_path, schema_root)
   if schema.find(type_name) is None {
     raise CliError("\{describe_path(schema_path)}: no type named \{type_name}")
   }

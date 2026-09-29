@@ -33,7 +33,21 @@ pub(all) enum Constraint {
   OneOf(Array[Constraint])
   Not(Constraint)
   Nothing
+  IsDocument
   Matches(Regex)
+  ByteLength(Int, Int?)
+  Utf8ByteLength(Int, Int?)
+  Precision(Int, Int?)
+  Exponent(Int, Int?)
+  TimestampPrecision(Int, Int?)
+  TimestampOffsets(Array[@ion.TimestampOffset])
+  Ieee754Float(FloatFormat)
+  FieldNames(Constraint)
+  DistinctFieldNames
+  DistinctElements
+  ClosedFields(Array[String])
+  Annotations(Constraint)
+  OrderedElements(Array[(Constraint, Occurs)])
   Contains(Array[@ion.IonValue])
 } derive(@debug.Debug)
 pub fn Constraint::any() -> Self
@@ -45,6 +59,15 @@ pub struct FieldConstraint {
   occurs : Occurs
 } derive(@debug.Debug)
 pub fn FieldConstraint::to_repr(Self) -> @debug.Repr
+
+pub(all) enum FloatFormat {
+  Binary16
+  Binary32
+  Binary64
+} derive(Eq, @debug.Debug)
+pub fn FloatFormat::equal(Self, Self) -> Bool
+pub fn FloatFormat::not_equal(Self, Self) -> Bool
+pub fn FloatFormat::to_repr(Self) -> @debug.Repr
 
 pub struct Occurs {
   lower : Int
@@ -76,11 +99,13 @@ pub fn Schema::empty() -> Self
 pub fn Schema::find(Self, String) -> TypeDefinition?
 pub fn Schema::from_types(Array[TypeDefinition]) -> Self
 pub fn Schema::is_valid(Self, String, @ion.IonValue) -> Bool
-pub fn Schema::load(Array[@ion.IonValue]) -> Self raise @ion.IonError
-pub fn Schema::load_from_text(StringView) -> Self raise @ion.IonError
+pub fn Schema::is_valid_document(Self, String, Array[@ion.IonValue]) -> Bool
+pub fn Schema::load(Array[@ion.IonValue], resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError) -> Self raise @ion.IonError
+pub fn Schema::load_from_text(StringView, resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError) -> Self raise @ion.IonError
 pub fn Schema::to_repr(Self) -> @debug.Repr
 pub fn Schema::types(Self) -> Array[TypeDefinition]
 pub fn Schema::validate(Self, String, @ion.IonValue) -> Array[Violation]
+pub fn Schema::validate_document(Self, String, Array[@ion.IonValue]) -> Array[Violation]
 
 pub struct TypeDefinition {
   name : String
