@@ -1,72 +1,25 @@
 // Loading Ion Schema documents into the constraint model.
 
 ///|
-/// Load a schema from a parsed schema document: a sequence of
-/// `type::{ ... }` definitions, optionally preceded by an Ion Schema version
-/// marker such as `$ion_schema_2_0`. Any other top-level value is rejected as
-/// unsupported rather than silently ignored.
-pub fn Schema::load(
-  values : Array[@ion.IonValue],
-) -> Schema raise @ion.IonError {
-  let types : Array[TypeDefinition] = []
-  for value in values {
-    if has_annotation(value, "type") {
-      match value.kind() {
-        @ion.IonValueKind::Struct(fields) =>
-          types.push(load_type_definition(fields))
-        _ =>
-          raise @ion.IonError::DataModel(
-            "a 'type' definition must be an Ion struct",
-          )
-      }
-    } else if is_schema_version_marker(value) {
-      // ISL 1.0 gives the same names other meanings, such as nulls in core
-      // types, so it must not load as ISL 2.0.
-      if value.kind() is @ion.IonValueKind::Symbol(token) &&
-        token.text() == Some("$ion_schema_1_0") {
-        raise @ion.IonError::Unsupported("Ion Schema 1.0 is not supported")
-      }
-      continue
-    } else {
-      raise @ion.IonError::Unsupported(
-        "only 'type::' definitions are supported at the top level of a schema",
-      )
-    }
-  }
-  Schema::from_types(types)
-}
-
-///|
-/// Whether a top-level value is an Ion Schema version marker such as
-/// `$ion_schema_2_0`.
-fn is_schema_version_marker(value : @ion.IonValue) -> Bool {
-  match value.kind() {
-    @ion.IonValueKind::Symbol(token) =>
-      match token.text() {
-        Some(text) => text.has_prefix("$ion_schema_")
-        None => false
-      }
-    _ => false
-  }
-}
-
-///|
-/// Reject annotations this implementation does not understand, so an
-/// unimplemented modifier (such as `closed::`) can never silently widen a
-/// schema. `$null_or` is the one handled modifier. `range::` is an error, since
-/// the constraints that take a range do not call this.
+/// Reject the annotations of a constraint or an inline type, other than
+/// `$null_or::`. An ISL modifier that is not implemented yet (`closed::`,
+/// `distinct::`, `required::`) raises `Unsupported`, so it can never silently
+/// widen a schema. Any other annotation, such as `range::` where no range is
+/// taken, is not ISL 2.0 and raises `DataModel`.
 fn reject_unknown_annotations(
   value : @ion.IonValue,
   context : String,
 ) -> Unit raise @ion.IonError {
   for token in value.annotations() {
     let name = token.require_text()
-    if name == "range" {
-      raise @ion.IonError::DataModel("'range' is not allowed on " + context)
-    }
-    if name != "$null_or" {
+    if name == "closed" || name == "distinct" || name == "required" {
       raise @ion.IonError::Unsupported(
         "unsupported annotation on " + context + ": " + name,
+      )
+    }
+    if name != "$null_or" {
+      raise @ion.IonError::DataModel(
+        "the annotation '\{name}' is not allowed on " + context,
       )
     }
   }
@@ -120,9 +73,11 @@ fn int_of(value : @ion.IonValue) -> Int raise @ion.IonError {
 }
 
 ///|
-/// Load a `type::{ ... }` definition.
+/// Load a `type::{ ... }` definition. `user_fields` are the reserved symbols
+/// the schema header declares as user fields of a type.
 fn load_type_definition(
   fields : Array[@ion.Field],
+  user_fields : Array[String],
 ) -> TypeDefinition raise @ion.IonError {
   let name = match field_value(fields, "name") {
     Some(value) => text_of(value)
@@ -131,10 +86,10 @@ fn load_type_definition(
   let constraints : Array[Constraint] = []
   for field in fields {
     let key = field.name().require_text()
-    if key == "name" {
+    if key == "name" || is_user_field(key, user_fields) {
       continue
     }
-    constraints.push(load_constraint(key, field.value()))
+    constraints.push(load_constraint(key, field.value(), user_fields))
   }
   { name, constraints, }
 }
@@ -144,13 +99,18 @@ fn load_type_definition(
 fn load_constraint(
   key : String,
   value : @ion.IonValue,
+  user_fields : Array[String],
 ) -> Constraint raise @ion.IonError {
   if !implemented_constraints.contains(key) {
-    raise @ion.IonError::Unsupported(
-      "unsupported Ion Schema constraint: " + key,
+    if isl_keywords.contains(key) {
+      raise @ion.IonError::Unsupported(
+        "unsupported Ion Schema constraint: " + key,
+      )
+    }
+    raise @ion.IonError::DataModel(
+      "'\{key}' is not an Ion Schema 2.0 keyword; declare it in the header's user_reserved_fields to use it as a user field",
     )
   }
-  // These take a `range::` annotation, which their loaders check.
   // These take annotations of their own, which their loaders check.
   if key != "container_length" &&
     key != "codepoint_length" &&
@@ -159,9 +119,9 @@ fn load_constraint(
     reject_unknown_annotations(value, "constraint '" + key + "'")
   }
   match key {
-    "type" => load_type_constraint(value)
-    "element" => Element(load_inline_type(value), occurs_of(value))
-    "fields" => Fields(load_fields(value))
+    "type" => load_type_constraint(value, user_fields)
+    "element" => Element(load_inline_type(value, user_fields), occurs_of(value))
+    "fields" => Fields(load_fields(value, user_fields))
     "valid_values" => load_valid_values(value)
     "container_length" => {
       let (lower, upper) = load_range(value)
@@ -171,10 +131,10 @@ fn load_constraint(
       let (lower, upper) = load_range(value)
       CodepointLength(lower, upper)
     }
-    "one_of" => OneOf(load_constraint_list(value))
-    "any_of" => AnyOf(load_constraint_list(value))
-    "all_of" => AllOf(load_constraint_list(value))
-    "not" => Not(load_inline_type(value))
+    "one_of" => OneOf(load_constraint_list(value, user_fields))
+    "any_of" => AnyOf(load_constraint_list(value, user_fields))
+    "all_of" => AllOf(load_constraint_list(value, user_fields))
+    "not" => Not(load_inline_type(value, user_fields))
     "contains" => Contains(as_list(value))
     "regex" => Matches(load_regex(value))
     _ => panic()
@@ -192,11 +152,12 @@ let implemented_constraints : Array[String] = [
 /// Load a `type:` constraint, honoring the `$null_or::` annotation.
 fn load_type_constraint(
   value : @ion.IonValue,
+  user_fields : Array[String],
 ) -> Constraint raise @ion.IonError {
   if has_annotation(value, "$null_or") {
-    NullOr(load_type_constraint_bare(value))
+    NullOr(load_type_constraint_bare(value, user_fields))
   } else {
-    load_type_constraint_bare(value)
+    load_type_constraint_bare(value, user_fields)
   }
 }
 
@@ -204,6 +165,7 @@ fn load_type_constraint(
 /// Load a `type:` constraint, ignoring annotations.
 fn load_type_constraint_bare(
   value : @ion.IonValue,
+  user_fields : Array[String],
 ) -> Constraint raise @ion.IonError {
   match value.kind() {
     @ion.IonValueKind::Symbol(token) => {
@@ -233,7 +195,7 @@ fn load_type_constraint_bare(
       }
       IsType(types)
     }
-    @ion.IonValueKind::Struct(_) => load_inline_type(value)
+    @ion.IonValueKind::Struct(_) => load_inline_type(value, user_fields)
     _ =>
       raise @ion.IonError::DataModel(
         "a type constraint must be a symbol, a list of symbols, or an inline type",
@@ -330,17 +292,20 @@ fn load_valid_values(value : @ion.IonValue) -> Constraint raise @ion.IonError {
 
 ///|
 /// Load a nested type, which is either a symbol or an inline `{ ... }` type.
-fn load_inline_type(value : @ion.IonValue) -> Constraint raise @ion.IonError {
+fn load_inline_type(
+  value : @ion.IonValue,
+  user_fields : Array[String],
+) -> Constraint raise @ion.IonError {
   reject_unknown_annotations(value, "inline type")
   match value.kind() {
     @ion.IonValueKind::Struct(fields) => {
       let constraints : Array[Constraint] = []
       for field in fields {
         let key = field.name().require_text()
-        if key == "occurs" || key == "name" {
+        if key == "occurs" || key == "name" || is_user_field(key, user_fields) {
           continue
         }
-        constraints.push(load_constraint(key, field.value()))
+        constraints.push(load_constraint(key, field.value(), user_fields))
       }
       if constraints.length() == 1 {
         constraints[0]
@@ -348,7 +313,7 @@ fn load_inline_type(value : @ion.IonValue) -> Constraint raise @ion.IonError {
         AllOf(constraints)
       }
     }
-    _ => load_type_constraint(value)
+    _ => load_type_constraint(value, user_fields)
   }
 }
 
@@ -450,6 +415,7 @@ fn load_int_bound(
 /// Load a `fields: { ... }` constraint.
 fn load_fields(
   value : @ion.IonValue,
+  user_fields : Array[String],
 ) -> Array[FieldConstraint] raise @ion.IonError {
   match value.kind() {
     @ion.IonValueKind::Struct(fields) => {
@@ -462,7 +428,7 @@ fn load_fields(
           )
         }
         let type_value = field.value()
-        let ty = load_inline_type(type_value)
+        let ty = load_inline_type(type_value, user_fields)
         let occurs = match occurs_of(type_value) {
           Some(occurs) => occurs
           None => Occurs::optional()
@@ -488,11 +454,12 @@ fn as_list(value : @ion.IonValue) -> Array[@ion.IonValue] raise @ion.IonError {
 /// Load a list of nested constraints.
 fn load_constraint_list(
   value : @ion.IonValue,
+  user_fields : Array[String],
 ) -> Array[Constraint] raise @ion.IonError {
   let items = as_list(value)
   let result : Array[Constraint] = []
   for item in items {
-    result.push(load_inline_type(item))
+    result.push(load_inline_type(item, user_fields))
   }
   result
 }

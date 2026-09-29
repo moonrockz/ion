@@ -38,14 +38,12 @@ let schema_skipped : Map[String, String] = Map([
   ("constraints/container_length.isl", "document:: values"),
   ("constraints/contains.isl", "document:: values"),
   (
-    "constraints/element.isl", "distinct:: on element; inline imports; document:: values; annotations on constraints",
+    "constraints/element.isl", "distinct:: on element; inline imports; document:: values",
   ),
   ("constraints/exponent.isl", "exponent"),
-  (
-    "constraints/field_names.isl", "field_names; distinct:: on field_names; annotations on constraints",
-  ),
-  ("constraints/fields.isl", "closed:: on fields; annotations on constraints"),
-  ("constraints/ieee754_float.isl", "ieee754_float; annotations on constraints"),
+  ("constraints/field_names.isl", "field_names"),
+  ("constraints/fields.isl", "closed:: on fields"),
+  ("constraints/ieee754_float.isl", "ieee754_float"),
   ("constraints/not.isl", "inline imports"),
   ("constraints/one_of.isl", "annotations; inline imports"),
   ("constraints/ordered_elements.isl", "ordered_elements"),
@@ -57,73 +55,35 @@ let schema_skipped : Map[String, String] = Map([
   ("constraints/valid_values.isl", "document:: values"),
   ("imports/cross_version/isl_1_0_importing_isl_2_0.isl", "Ion Schema 1.0"),
   ("imports/cross_version/isl_1_0_schema.isl", "Ion Schema 1.0"),
-  (
-    "imports/cross_version/isl_2_0_importing_isl_1_0.isl", "imported types; schema headers and footers",
-  ),
+  ("imports/cross_version/isl_2_0_importing_isl_1_0.isl", "imports"),
   ("imports/cross_version/isl_2_0_schema.isl", "annotations"),
-  (
-    "imports/cycles/header_import_a.isl", "imported types; schema headers and footers",
-  ),
-  (
-    "imports/cycles/header_import_b.isl", "imported types; schema headers and footers",
-  ),
-  (
-    "imports/cycles/header_import_by_type_a.isl", "imported types; schema headers and footers",
-  ),
-  (
-    "imports/cycles/header_import_by_type_b.isl", "imported types; schema headers and footers",
-  ),
-  (
-    "imports/cycles/header_import_by_type_with_alias_a.isl", "imported types; schema headers and footers",
-  ),
-  (
-    "imports/cycles/header_import_by_type_with_alias_b.isl", "imported types; schema headers and footers",
-  ),
+  ("imports/cycles/header_import_a.isl", "imports"),
+  ("imports/cycles/header_import_b.isl", "imports"),
+  ("imports/cycles/header_import_by_type_a.isl", "imports"),
+  ("imports/cycles/header_import_by_type_b.isl", "imports"),
+  ("imports/cycles/header_import_by_type_with_alias_a.isl", "imports"),
+  ("imports/cycles/header_import_by_type_with_alias_b.isl", "imports"),
   ("imports/cycles/inline_import_a.isl", "inline imports"),
   ("imports/cycles/inline_import_b.isl", "inline imports"),
-  (
-    "imports/diamond/header_import_a.isl", "imported types; schema headers and footers",
-  ),
-  ("imports/diamond/header_import_b.isl", "schema headers and footers"),
-  ("imports/diamond/header_import_c.isl", "schema headers and footers"),
+  ("imports/diamond/header_import_a.isl", "imports"),
+  ("imports/diamond/header_import_b.isl", "imports"),
+  ("imports/diamond/header_import_c.isl", "imports"),
   ("imports/diamond/header_import_d.isl", "annotations"),
   (
-    "imports/diamond/inline_import_a.isl", "inline imports; ordered_elements; schema headers and footers",
+    "imports/diamond/inline_import_a.isl", "inline imports; ordered_elements; imports",
   ),
   ("imports/diamond/inline_import_b.isl", "inline imports"),
   ("imports/diamond/inline_import_c.isl", "inline imports"),
   ("imports/diamond/inline_import_d.isl", "annotations"),
-  ("imports/header_imports.isl", "schema headers and footers"),
+  ("imports/header_imports.isl", "imports"),
   ("imports/inline_imports.isl", "inline imports; distinct:: on element"),
-  (
-    "imports/invalid_imports.isl", "schema headers and footers; inline imports; annotations on constraints",
-  ),
-  ("imports/self_import/self_import.isl", "schema headers and footers"),
-  (
-    "imports/tree/header_import_a.isl", "annotations; schema headers and footers",
-  ),
-  ("imports/tree/header_import_c.isl", "schema headers and footers"),
+  ("imports/invalid_imports.isl", "imports; inline imports"),
+  ("imports/self_import/self_import.isl", "imports"),
+  ("imports/tree/header_import_a.isl", "annotations; imports"),
+  ("imports/tree/header_import_c.isl", "imports"),
   ("imports/tree/inline_import_a.isl", "annotations"),
   ("imports/tree/inline_import_c.isl", "annotations"),
-  (
-    "null_or.isl", "imported types; inline imports; schema headers and footers; ordered_elements",
-  ),
-  ("open_content/top_level_user_content.isl", "schema headers and footers"),
-  ("open_content/user_fields_declaration.isl", "schema headers and footers"),
-  (
-    "open_content/user_fields_in_schema_footer.isl", "schema headers and footers",
-  ),
-  (
-    "open_content/user_fields_in_schema_header.isl", "schema headers and footers",
-  ),
-  (
-    "open_content/user_fields_in_type_definition.isl", "open content; schema headers and footers",
-  ),
-  (
-    "schema/ion_schema_version_markers.isl", "schema headers and footers; Ion Schema 1.0",
-  ),
-  ("schema/schema_footer.isl", "schema headers and footers"),
-  ("schema/schema_header.isl", "schema headers and footers"),
+  ("null_or.isl", "imports; inline imports; ordered_elements"),
   ("schema/schema_with_recursive_type.isl", "ordered_elements"),
 ])
 
@@ -210,21 +170,6 @@ let schema_known_failures : Map[String, String] = Map([
     "imports/tree/inline_import_a.isl $test[1]", "the loader does not check that a referenced type exists",
   ),
   ("null_or.isl $test[7]", "the loader ignores 'occurs' outside 'fields'"),
-  (
-    "open_content/top_level_user_content.isl $test[4]", "the loader accepts any symbol that starts with '$ion_schema_' as a version marker",
-  ),
-  (
-    "open_content/top_level_user_content.isl $test[7]", "the loader accepts an annotated version marker",
-  ),
-  (
-    "schema/ion_schema_version_markers.isl $test[0]", "the loader accepts more than one version marker",
-  ),
-  (
-    "schema/ion_schema_version_markers.isl $test[3]", "the loader accepts a version marker after a type",
-  ),
-  (
-    "schema/type.isl $test[0]", "the loader accepts other annotations on a type definition",
-  ),
   (
     "schema/type.isl $test[2]", "the loader accepts a type definition with no name, or with more than one",
   ),
@@ -341,13 +286,23 @@ fn references(constraint : @schema.Constraint, out : Array[String]) -> Unit {
 fn load_types(definitions : Array[@ion.IonValue]) -> LoadedTypes {
   let loaded : Array[@schema.TypeDefinition] = []
   let unusable : Map[String, String] = Map([])
-  // The version markers go with each type, since they decide how it loads.
-  let markers = definitions.filter(value => {
+  // The version markers and the header go with each type, since they decide
+  // how it loads. The header's imports do not: a type that refers to an
+  // imported type is unusable, and the others can load.
+  let prelude : Array[@ion.IonValue] = []
+  for value in definitions {
     match value.kind() {
-      Symbol(token) => token.text().unwrap_or("").has_prefix("$ion_schema_")
-      _ => false
+      Symbol(token) if token.text().unwrap_or("").has_prefix("$ion_schema_") =>
+        prelude.push(value)
+      Struct(fields) if annotated(value, "schema_header") =>
+        prelude.push(
+          @ion.IonValue::from_fields(
+            fields.filter(field => field.name().text() != Some("imports")),
+          ).with_annotations(value.annotations()),
+        )
+      _ => ()
     }
-  })
+  }
   for definition in definitions {
     if !annotated(definition, "type") {
       continue
@@ -356,7 +311,7 @@ fn load_types(definitions : Array[@ion.IonValue]) -> LoadedTypes {
       Some(Symbol(token)) => token.text().unwrap_or("?")
       _ => "?"
     }
-    let types = try @schema.Schema::load(markers + [definition]).types() catch {
+    let types = try @schema.Schema::load(prelude + [definition]).types() catch {
       error => {
         unusable[name] = "type \{name} does not load: \{describe(error)}"
         continue

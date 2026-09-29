@@ -154,11 +154,39 @@ test "unsupported constructs raise Unsupported" {
 }
 
 ///|
-test "version markers are accepted and other top-level values are not" {
-  let schema = load("$ion_schema_2_0 type::{ name: t, type: int }").unwrap()
+test "the top level: version marker, header, types, footer, and open content" {
+  let schema = load(
+    (
+      #|"open content" $ion_schema_2_0
+      #|schema_header::{ user_reserved_fields: { type: [doc] }, Author: "Ada" }
+      #|extra camelCase::{ a: 1 }
+      #|type::{ name: t, type: int, doc: "a user field", Note: 1 }
+      #|schema_footer::{}
+      #|type::{ name: after_the_footer }
+    ),
+  ).unwrap()
   assert_true(schema.find("t") is Some(_))
-  let stray = load_error("type::{ name: t, type: int } extra")
-  assert_true(stray is Some(@ion.IonError::Unsupported(_)))
+  assert_true(schema.find("after_the_footer") is None)
+  // A type without a version marker loads as ISL 2.0.
+  assert_true(load("type::{ name: t, type: int }") is Some(_))
+  for
+    bad in [
+      "$ion_schema_2_0 $ion_schema_2_0", "type::{ name: t } $ion_schema_2_0", "$ion_schema_2_1",
+      "a::$ion_schema_2_0", "$ion_schema_2_0 snake_case::1", "schema_header::{} schema_header::{}",
+      "type::{ name: t } schema_header::{}", "schema_header::type::{}", "schema_header::null.struct",
+      "schema_footer::[]", "type::{ name: t, doc: 1 }", "schema_header::{ reserved_name: 1 }",
+      "schema_header::{ user_reserved_fields: { type: [fields] } }", "schema_header::{ user_reserved_fields: { types: [a] } }",
+      "schema_header::{ imports: [], imports: [] }",
+    ] {
+    assert_true(load_error(bad) is Some(@ion.IonError::DataModel(_)), msg=bad)
+  }
+  assert_true(
+    load_error("$ion_schema_1_0") is Some(@ion.IonError::Unsupported(_)),
+  )
+  assert_true(
+    load_error("schema_header::{ imports: [{ id: \"a.isl\" }] }")
+    is Some(@ion.IonError::Unsupported(_)),
+  )
 }
 
 ///|
