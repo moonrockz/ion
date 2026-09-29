@@ -1,6 +1,8 @@
 // A pull reader over an asynchronous Ion text stream.
 //
-// Octets are decoded as UTF-8 as they arrive, and each top-level value is
+// Octets are decoded as they arrive, in the encoding the first octets show
+// (UTF-8, UTF-16, or UTF-32; see `@text.detect_encoding`), and each top-level
+// value is
 // returned once it is settled (see `@text.read_ion_prefix`), so memory stays
 // proportional to the largest single value rather than to the stream.
 //
@@ -28,8 +30,11 @@ struct TextReader {
   symbols : @ion.SymbolTable
   /// The code units at the end that the framer has not read yet.
   mut unscanned : String
-  /// The octets of a UTF-8 character that a read split in two.
+  /// The octets of a character that a read split, or, before the encoding
+  /// is known, every octet so far.
   mut partial : Bytes
+  /// The encoding of the source, once its first octets have arrived.
+  mut encoding : @text.TextEncoding?
   mut eof : Bool
 }
 
@@ -54,6 +59,7 @@ pub fn TextReader::new(
     unscanned: "",
     // Decoded with the first chunk, as octets a read left over would be.
     partial: prefix,
+    encoding: None,
     eof: false,
   }
 }
@@ -127,47 +133,36 @@ async fn TextReader::fill(self : TextReader) -> Unit {
   let chunk = self.source.read_some(max_len=read_size) catch {
     _ => raise @ion.IonError::Syntax("the Ion text stream could not be read")
   }
-  let octets = match chunk {
+  let mut octets = match chunk {
     Some(bytes) if bytes.length() > 0 => self.partial + bytes
     _ => {
       self.eof = true
-      // What is left must be whole characters.
-      if whole_characters(self.partial) < self.partial.length() {
-        raise @ion.IonError::Syntax(
-          "the Ion text stream ends inside a UTF-8 character",
-        )
-      }
       self.partial
     }
   }
-  let whole = whole_characters(octets)
-  let decoded = @utf8.decode(octets[:whole]) catch {
-    _ => raise @ion.IonError::Syntax("the Ion text stream is not UTF-8")
+  let encoding = match self.encoding {
+    Some(encoding) => encoding
+    None => {
+      // Four octets tell the encodings apart; wait for them unless the
+      // stream ends first.
+      if octets.length() < 4 && !self.eof {
+        self.partial = octets
+        return
+      }
+      let (encoding, mark) = @text.detect_encoding(octets)
+      octets = octets[mark:].to_owned()
+      self.encoding = Some(encoding)
+      encoding
+    }
   }
+  let whole = @text.complete_length(encoding, octets)
+  // At the end of the stream, what is left must be whole characters.
+  if self.eof && whole < octets.length() {
+    raise @ion.IonError::Syntax("the Ion text stream ends inside a character")
+  }
+  let decoded = @text.decode_text(encoding, octets[:whole])
   self.partial = octets[whole:].to_owned()
   self.append(decoded)
-}
-
-///|
-/// The length of the longest prefix of `octets` that does not end inside a
-/// UTF-8 character. Only the last three octets can belong to a character
-/// that is cut short; any other malformation is left for the decoder.
-fn whole_characters(octets : Bytes) -> Int {
-  let n = octets.length()
-  for back in 1..<=3 {
-    if back > n {
-      break
-    }
-    let octet = octets[n - back].to_int()
-    if octet < 0x80 {
-      return n
-    }
-    if octet >= 0xC0 {
-      let width = if octet >= 0xF0 { 4 } else if octet >= 0xE0 { 3 } else { 2 }
-      return if width > back { n - back } else { n }
-    }
-  }
-  n
 }
 
 ///|

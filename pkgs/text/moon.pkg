@@ -6,6 +6,8 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/core/double",
   "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/encoding/utf16",
   "moonbitlang/core/string",
 }
 
@@ -14,4 +16,6 @@ import {
   "moonbitlang/core/quickcheck",
   "moonbitlang/x/fs",
   "moonbitlang/core/cmp",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/encoding/utf16",
 } for "test"

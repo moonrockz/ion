@@ -218,7 +218,7 @@ async test "ion-tests through every reader and writer" {
     if good {
       let values = read_file(path)
       if text {
-        let source = @utf8.decode(bytes)
+        let source = @text.decode_ion_text(bytes)
         results.push(("events", outcome(() => check_events(bytes, values))))
         results.push(("cst", outcome(() => check_cst(source))))
       }
