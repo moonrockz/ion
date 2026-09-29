@@ -286,9 +286,7 @@ label.
 - Shared symbol tables: a symbol whose text a shared table leaves unknown
   keeps its symbol ID but not its place in that table, so any two such
   symbols compare as equal, as symbols with unknown text do.
-- Ion Schema: the loader accepts some schemas that ISL 2.0 does not allow
-  ([#33](https://github.com/moonrockz/ion/issues/33)); the ion-schema-tests
-  harness lists them. ISL 1.0 is not implemented.
+- Ion Schema 1.0: only ISL 2.0 is implemented.
 - Ion 1.1 ([#7](https://github.com/moonrockz/ion/issues/7)): only Ion 1.0 is
   implemented.
 - Ion binary output from the CLI ([#8](https://github.com/moonrockz/ion/issues/8)).
@@ -334,9 +332,7 @@ is a second submodule, at `tests/ion-schema-tests`, and `pkgs/conformance`
 runs its ISL 2.0 files: each schema must load, each `$test` value must match
 its type or not, and each invalid schema or type must fail to load. Imports
 resolve to the suite's files. Every ISL 2.0 file passes, except the three
-that involve ISL 1.0, which is not implemented, and the invalid schemas of
-[#33](https://github.com/moonrockz/ion/issues/33), which are listed as known
-failures.
+that involve ISL 1.0, which is not implemented and is skipped.
 
 Besides the example and snapshot tests, several packages carry property tests
 (`property_test.mbt`) using the built-in QuickCheck: text round-trips, decimal

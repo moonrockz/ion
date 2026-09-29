@@ -76,11 +76,32 @@ test "element constraint applies to every element" {
 }
 
 ///|
-test "element occurrence range counts elements" {
-  let schema = "type::{ name: pair, element: { type: int, occurs: range::[2, max] } }"
-  assert_true(accepts(schema, "pair", "[1, 2]"))
-  assert_true(accepts(schema, "pair", "[1, 2, 3]"))
-  assert_true(!accepts(schema, "pair", "[1]"))
+test "schemas that ISL 2.0 does not allow do not load" {
+  for
+    bad in [
+      // `occurs` belongs only in `fields` and `ordered_elements`.
+      "element: { type: int, occurs: range::[2, max] }", "type: { occurs: optional, type: int }",
+      "not: { occurs: 1, type: int }", "any_of: [{ occurs: 1, type: int }]", "fields: { a: $null_or::{ type: int, occurs: 2 } }",
+      // An inline type has no name.
+       "element: { name: n, type: int }",
+      // A type is one reference, not a list.
+       "type: [int, string]", "fields: { a: [int] }",
+      // `fields` names at least one field, each once, and none 0 times.
+       "fields: {}", "fields: { a: int, a: int }", "fields: { a: { occurs: 0 } }",
+    ] {
+    assert_true(
+      load_error("type::{ name: t, \{bad} }")
+      is Some(@ion.IonError::DataModel(_)),
+      msg=bad,
+    )
+  }
+  // `occurs` in `fields` and `ordered_elements` is fine.
+  assert_true(
+    load(
+      "type::{ name: t, fields: { a: { type: int, occurs: 2 } }, ordered_elements: [{ type: int, occurs: optional }] }",
+    )
+    is Some(_),
+  )
 }
 
 ///|

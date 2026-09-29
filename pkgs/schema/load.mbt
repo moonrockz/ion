@@ -101,7 +101,7 @@ fn load_constraint(
     "type" => load_type_constraint(value, ctx)
     "element" => {
       let (bare, distinct) = take_modifier(value, "distinct")
-      let element = Element(load_inline_type(bare, ctx), occurs_of(bare))
+      let element = Element(load_inline_type(bare, ctx))
       if distinct {
         AllOf([element, DistinctElements])
       } else {
@@ -144,7 +144,7 @@ fn load_constraint(
       for item in items {
         slots.push(
           (
-            load_inline_type(item, ctx),
+            load_inline_type(item, ctx, variably_occurring=true),
             occurs_of(item).unwrap_or(Occurs::required()),
           ),
         )
@@ -266,7 +266,7 @@ fn load_annotations(
     parts.push(Contains(symbols))
   }
   if closed {
-    parts.push(Element(ValidValues(symbols), None))
+    parts.push(Element(ValidValues(symbols)))
   }
   if parts.length() == 1 {
     parts[0]
@@ -365,7 +365,7 @@ fn load_float_format(value : @ion.IonValue) -> FloatFormat raise @ion.IonError {
 }
 
 ///|
-/// Load a `type:` constraint: a type name, a list of core types, or an inline
+/// Load a `type:` constraint: a type name, or an inline
 /// type or import, with `$null_or::` if nullable.
 fn load_type_constraint(
   value : @ion.IonValue,
@@ -388,29 +388,9 @@ fn load_type_constraint_bare(
         None => ctx.resolve(name)
       }
     }
-    @ion.IonValueKind::List(items) => {
-      let types : Array[@ion.IonType] = []
-      for item in items {
-        match item.kind() {
-          @ion.IonValueKind::Symbol(token) => {
-            let name = token.require_text()
-            match @ion.IonType::from_text(name) {
-              Some(t) => types.push(t)
-              None =>
-                raise @ion.IonError::Unsupported(
-                  "unsupported type reference: " + name,
-                )
-            }
-          }
-          _ =>
-            raise @ion.IonError::DataModel("type list entries must be symbols")
-        }
-      }
-      IsType(types)
-    }
     _ =>
       raise @ion.IonError::DataModel(
-        "a type constraint must be a symbol, a list of symbols, or an inline type",
+        "a type must be a type name, an inline type, or an inline import",
       )
   }
 }
@@ -508,8 +488,10 @@ fn load_valid_values(value : @ion.IonValue) -> Constraint raise @ion.IonError {
 fn load_inline_type(
   value : @ion.IonValue,
   ctx : Context,
+  variably_occurring? : Bool = false,
 ) -> Constraint raise @ion.IonError {
   reject_unknown_annotations(value, "inline type")
+  let nullable = has_annotation(value, "$null_or")
   let inner = match value.kind() {
     @ion.IonValueKind::Struct(fields) if field_value(fields, "id") is Some(_) =>
       ctx.inline_import(fields)
@@ -517,9 +499,23 @@ fn load_inline_type(
       let constraints : Array[Constraint] = []
       for field in fields {
         let key = field.name().require_text()
-        if key == "occurs" ||
-          key == "name" ||
-          is_user_field(key, ctx.user_fields) {
+        if key == "name" {
+          raise @ion.IonError::DataModel("an inline type must not have a name")
+        }
+        if key == "occurs" {
+          if !variably_occurring {
+            raise @ion.IonError::DataModel(
+              "'occurs' is allowed only in 'fields' and 'ordered_elements'",
+            )
+          }
+          if nullable {
+            raise @ion.IonError::DataModel(
+              "a type with 'occurs' cannot be '$null_or::'",
+            )
+          }
+          continue
+        }
+        if is_user_field(key, ctx.user_fields) {
           continue
         }
         constraints.push(load_constraint(key, field.value(), ctx))
@@ -532,7 +528,7 @@ fn load_inline_type(
     }
     _ => load_type_constraint_bare(value, ctx)
   }
-  if has_annotation(value, "$null_or") {
+  if nullable {
     NullOr(inner)
   } else {
     inner
@@ -639,19 +635,27 @@ fn load_fields(
 ) -> Array[FieldConstraint] raise @ion.IonError {
   match value.kind() {
     @ion.IonValueKind::Struct(fields) => {
+      if fields.is_empty() {
+        raise @ion.IonError::DataModel("'fields' must name at least one field")
+      }
       let result : Array[FieldConstraint] = []
       for field in fields {
         let name = field.name().require_text()
-        if name == "closed" || name == "content" {
-          raise @ion.IonError::Unsupported(
-            "the 'closed' fields modifier is not supported yet",
+        if result.iter().any(other => other.name == name) {
+          raise @ion.IonError::DataModel(
+            "'fields' names the field '\{name}' twice",
           )
         }
         let type_value = field.value()
-        let ty = load_inline_type(type_value, ctx)
+        let ty = load_inline_type(type_value, ctx, variably_occurring=true)
         let occurs = match occurs_of(type_value) {
           Some(occurs) => occurs
           None => Occurs::optional()
+        }
+        if occurs.upper == Some(0) {
+          raise @ion.IonError::DataModel(
+            "the field '\{name}' cannot occur 0 times",
+          )
         }
         result.push({ name, ty, occurs, })
       }

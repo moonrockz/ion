@@ -39,80 +39,7 @@ let schema_skipped : Map[String, String] = Map([
 /// Cases whose answer is wrong, with the reason. A key is a case ID, or the
 /// ID of a `$test` struct (`<file> $test[<index>]`) for all of its cases.
 /// Most are schemas that ISL 2.0 does not allow but the loader accepts.
-let schema_known_failures : Map[String, String] = Map([
-  (
-    "constraints/field_names.isl $test[4]", "the loader accepts a list of types, an extension to ISL 2.0",
-  ),
-  (
-    "constraints/field_names.isl $test[5]", "the loader ignores 'occurs' outside 'fields'",
-  ),
-  (
-    "constraints/field_names.isl $test[6]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/annotations-standard.isl $test[4]", "the loader ignores 'occurs' outside 'fields'",
-  ),
-  (
-    "constraints/annotations-standard.isl $test[5]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/all_of.isl $test[7]", "the loader ignores 'occurs' outside 'fields'",
-  ),
-  (
-    "constraints/all_of.isl $test[8]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/any_of.isl $test[7]", "the loader ignores 'occurs' outside 'fields'",
-  ),
-  (
-    "constraints/any_of.isl $test[8]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/element.isl $test[6]", "the loader accepts a list of types, an extension to ISL 2.0",
-  ),
-  (
-    "constraints/element.isl $test[7]", "the loader takes 'occurs' in 'element' as an element count, an extension to ISL 2.0",
-  ),
-  (
-    "constraints/element.isl $test[8]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/fields.isl $test[7]", "the loader accepts a list of types, an extension to ISL 2.0",
-  ),
-  (
-    "constraints/fields.isl $test[8]", "the loader accepts an empty 'fields' struct",
-  ),
-  ("constraints/fields.isl $test[9]", "the loader accepts 'occurs: 0'"),
-  ("constraints/fields.isl $test[10]", "the loader accepts a field name twice"),
-  (
-    "constraints/fields.isl $test[12]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/not.isl $test[3]", "the loader accepts a list of types, an extension to ISL 2.0",
-  ),
-  (
-    "constraints/not.isl $test[4]", "the loader ignores 'occurs' outside 'fields'",
-  ),
-  (
-    "constraints/not.isl $test[5]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/one_of.isl $test[7]", "the loader ignores 'occurs' outside 'fields'",
-  ),
-  (
-    "constraints/one_of.isl $test[8]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/type.isl $test[3]", "the loader accepts a list of types, an extension to ISL 2.0",
-  ),
-  (
-    "constraints/type.isl $test[4]", "the loader ignores 'occurs' outside 'fields'",
-  ),
-  (
-    "constraints/type.isl $test[5]", "the loader ignores 'name' in an inline type",
-  ),
-  ("null_or.isl $test[7]", "the loader ignores 'occurs' outside 'fields'"),
-])
+let schema_known_failures : Map[String, String] = Map([])
 
 ///|
 /// The `schema_known_failures` key that covers a case, if any.
@@ -216,7 +143,7 @@ fn references(constraint : @schema.Constraint, out : Array[String]) -> Unit {
     TypeRef(name) => out.push(name)
     NullOr(inner)
     | Not(inner)
-    | Element(inner, _)
+    | Element(inner)
     | FieldNames(inner)
     | Annotations(inner) => references(inner, out)
     AllOf(items) | AnyOf(items) | OneOf(items) =>

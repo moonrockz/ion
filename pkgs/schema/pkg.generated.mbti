@@ -22,7 +22,7 @@ pub(all) enum Constraint {
   IsType(Array[@ion.IonType])
   NullOr(Constraint)
   TypeRef(String)
-  Element(Constraint, Occurs?)
+  Element(Constraint)
   Fields(Array[FieldConstraint])
   ValidValues(Array[@ion.IonValue])
   InRange(ValueRange)

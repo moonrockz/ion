@@ -40,9 +40,10 @@ non-null values of its Ion type, and `$int` or `$struct` also matches its
 typed null. `text`, `lob`, `number`, and `any` cover several Ion types, and
 `$text`, `$lob`, `$number`, and `$any` add their nulls. `$null` matches
 `null.null`, `nothing` matches no value, and `$null_or::T` matches `null.null`
-or a value of `T`. `type` takes a type name or an inline type; a list of core
-types is also accepted, which ISL 2.0 does not allow. `element` constrains the
-elements of a list or S-expression, or the field values of a struct.
+or a value of `T`. `type` takes a type name, an inline type, or an inline
+import. `occurs` is allowed only in `fields` and `ordered_elements`.
+`element` constrains the elements of a list or S-expression, or the field
+values of a struct.
 `valid_values` compares a value without its annotations. `ordered_elements`
 matches the elements in order, each type as many times as its `occurs`
 allows; an ambiguous match is found without backtracking. `annotations`
@@ -53,10 +54,8 @@ A document is a stream of top-level values. `validate_document` and
 `container_length`, and `contains` apply to its values, and the built-in type
 `document` matches it. No other constraint applies to a document.
 
-The loader does not reject every schema that ISL 2.0 does not allow
-([#33](https://github.com/moonrockz/ion/issues/33)): it accepts `occurs`
-outside `fields`, a `name` in an inline type, and an empty `fields` struct, or
-one that names a field twice.
+A schema that ISL 2.0 does not allow raises `IonError::DataModel` when it
+loads, as the ion-schema-tests suite's invalid schemas and types require.
 
 ## Schema documents
 

@@ -53,15 +53,16 @@ pub struct FieldConstraint {
 ///|
 /// A constraint over a value.
 pub(all) enum Constraint {
-  /// `type: int` or `type: [int, string]`.
+  /// A built-in type: a value of one of these Ion types, not null. `int` is
+  /// `IsType([Int])`, and `number` is `IsType([Int, Float, Decimal])`.
   IsType(Array[@ion.IonType])
   /// `$null_or::X`: the value is null, or satisfies `X`.
   NullOr(Constraint)
   /// A reference to a type defined elsewhere in the schema.
   TypeRef(String)
-  /// Every element of a list or S-expression satisfies the constraint; the
-  /// optional occurrence range constrains the element count.
-  Element(Constraint, Occurs?)
+  /// Every element of a list or S-expression, or field value of a struct,
+  /// satisfies the constraint.
+  Element(Constraint)
   /// The struct's fields, by name.
   Fields(Array[FieldConstraint])
   /// `valid_values: [...]`.
