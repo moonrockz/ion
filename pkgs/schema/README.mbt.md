@@ -7,8 +7,8 @@ of the language; a construct it does not implement raises
 
 Supported constraints: `type`, `fields` (with `occurs`, `required`, and
 `optional`), `element`, `valid_values`, `container_length` and
-`codepoint_length`, `contains`, `all_of`, `any_of`, `one_of`, `not`, and
-`$null_or::`. The module README's roadmap lists what is missing.
+`codepoint_length`, `contains`, `regex`, `all_of`, `any_of`, `one_of`, `not`,
+and `$null_or::`. The module README's roadmap lists what is missing.
 
 A length is a non-negative integer or a `range::[lower, upper]` of integers.
 `valid_values` takes a list of values and ranges, or one range. A range there
@@ -16,6 +16,16 @@ is of numbers or of timestamps. Numbers compare by their exact value, whatever
 their Ion type, so `1`, `1.0`, and `1e0` are all in `range::[1, 1]`.
 Timestamps compare by the instant they name. In any range, a bound can be
 `exclusive::`, and `min` or `max` leaves that end open.
+
+`regex` takes the ISL 2.0 subset of ECMA 262 regular expressions, and a
+string or symbol is valid when the expression matches any part of it. `\d`,
+`\s`, and `\w` are the ASCII classes `[0-9]`, `[ \f\n\r\t]`, and
+`[A-Za-z0-9_]`. The flag `i::` ignores case for ASCII letters only, and `m::`
+makes `^` and `$` match at line breaks. A construct outside the subset, such
+as a backreference or a lazy quantifier, is an error. Matching runs a Pike VM,
+which takes time linear in the input, so no expression makes it backtrack
+without end. `Regex` is public, so the same expressions can be used on their
+own.
 
 Types follow ISL 2.0. A core type such as `int` or `struct` matches only the
 non-null values of its Ion type, and `$int` or `$struct` also matches its
@@ -84,13 +94,13 @@ validation never passes because a rule was skipped.
 test "an unsupported constraint is an error" {
   let message = try
     @schema.Schema::load_from_text(
-      "type::{ name: code, type: string, regex: \"^[A-Z]+$\" }",
+      "type::{ name: amount, type: decimal, precision: range::[1, 5] }",
     )
   catch {
     error => error.message()
   } noraise {
     _ => "loaded"
   }
-  inspect(message, content="unsupported Ion Schema constraint: regex")
+  inspect(message, content="unsupported Ion Schema constraint: precision")
 }
 ```
