@@ -159,6 +159,10 @@ fn check_constraint(
         out.push({ path, message: "value is not one of the allowed values", })
       }
     }
+    InRange(range) =>
+      if !range.contains(value) {
+        out.push({ path, message: "value is not in the range", })
+      }
     ContainerLength(lower, upper) =>
       match container_length(value) {
         None =>

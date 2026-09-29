@@ -6,11 +6,16 @@ of the language; a construct it does not implement raises
 `@ion.IonError::Unsupported` when the schema loads, rather than being ignored.
 
 Supported constraints: `type`, `fields` (with `occurs`, `required`, and
-`optional`), `element`, `valid_values` (a list of values), `container_length`
-and `codepoint_length` (an integer or a `range::[min, max]`), `contains`,
-`all_of`, `any_of`, `one_of`, `not`, and `$null_or::`. The module README's
-roadmap lists what is missing, including `valid_values` ranges and
-`exclusive::` range bounds.
+`optional`), `element`, `valid_values`, `container_length` and
+`codepoint_length`, `contains`, `all_of`, `any_of`, `one_of`, `not`, and
+`$null_or::`. The module README's roadmap lists what is missing.
+
+A length is a non-negative integer or a `range::[lower, upper]` of integers.
+`valid_values` takes a list of values and ranges, or one range. A range there
+is of numbers or of timestamps. Numbers compare by their exact value, whatever
+their Ion type, so `1`, `1.0`, and `1e0` are all in `range::[1, 1]`.
+Timestamps compare by the instant they name. In any range, a bound can be
+`exclusive::`, and `min` or `max` leaves that end open.
 
 Types follow ISL 2.0. A core type such as `int` or `struct` matches only the
 non-null values of its Ion type, and `$int` or `$struct` also matches its
@@ -25,8 +30,8 @@ elements of a list or S-expression, or the field values of a struct.
 these names other meanings.
 
 The loader does not reject every schema that ISL 2.0 does not allow: it does
-not check, for example, that a referenced type exists, that type names are
-unique, or that a length range can be satisfied.
+not check, for example, that a referenced type exists or that type names are
+unique.
 
 ## Validating values
 

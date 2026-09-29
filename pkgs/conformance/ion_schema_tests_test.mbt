@@ -30,47 +30,33 @@ let schema_root : String = "tests/ion-schema-tests/ion_schema_2_0"
 /// Files this implementation does not pass yet, by path under `schema_root`,
 /// with what they need that is not supported.
 let schema_skipped : Map[String, String] = Map([
-  ("constraints/all_of.isl", "inline imports; range:: on all_of"),
+  ("constraints/all_of.isl", "inline imports"),
   ("constraints/annotations-simplified.isl", "annotations"),
   ("constraints/annotations-standard.isl", "annotations; regex"),
-  ("constraints/any_of.isl", "inline imports; range:: on any_of"),
-  ("constraints/byte_length.isl", "byte_length; range:: on byte_length"),
-  ("constraints/codepoint_length.isl", "exclusive ranges"),
-  ("constraints/container_length.isl", "document:: values; exclusive ranges"),
-  ("constraints/contains.isl", "document:: values; range:: on contains"),
+  ("constraints/any_of.isl", "inline imports"),
+  ("constraints/byte_length.isl", "byte_length"),
+  ("constraints/container_length.isl", "document:: values"),
+  ("constraints/contains.isl", "document:: values"),
   (
     "constraints/element.isl", "distinct:: on element; inline imports; document:: values; annotations on constraints",
   ),
-  ("constraints/exponent.isl", "exponent; range:: on exponent"),
+  ("constraints/exponent.isl", "exponent"),
   (
     "constraints/field_names.isl", "field_names; distinct:: on field_names; annotations on constraints",
   ),
-  (
-    "constraints/fields.isl", "closed:: on fields; range:: on fields; annotations on constraints",
-  ),
-  (
-    "constraints/ieee754_float.isl", "ieee754_float; annotations on constraints; range:: on ieee754_float",
-  ),
-  ("constraints/not.isl", "inline imports; range:: on not"),
-  ("constraints/one_of.isl", "annotations; inline imports; range:: on one_of"),
-  (
-    "constraints/ordered_elements.isl", "ordered_elements; range:: on ordered_elements",
-  ),
-  ("constraints/precision.isl", "range:: on precision; precision"),
+  ("constraints/fields.isl", "closed:: on fields; annotations on constraints"),
+  ("constraints/ieee754_float.isl", "ieee754_float; annotations on constraints"),
+  ("constraints/not.isl", "inline imports"),
+  ("constraints/one_of.isl", "annotations; inline imports"),
+  ("constraints/ordered_elements.isl", "ordered_elements"),
+  ("constraints/precision.isl", "precision"),
   ("constraints/regex-invalid.isl", "regex"),
   ("constraints/regex.isl", "regex"),
-  (
-    "constraints/timestamp_offset.isl", "timestamp_offset; range:: on timestamp_offset",
-  ),
-  (
-    "constraints/timestamp_precision.isl", "range:: on timestamp_precision; timestamp_precision",
-  ),
-  ("constraints/type.isl", "inline imports; range:: on type"),
-  (
-    "constraints/utf8_byte_length.isl", "utf8_byte_length; range:: on utf8_byte_length",
-  ),
-  ("constraints/valid_values-ranges.isl", "ranges in valid_values"),
-  ("constraints/valid_values.isl", "ranges in valid_values; document:: values"),
+  ("constraints/timestamp_offset.isl", "timestamp_offset"),
+  ("constraints/timestamp_precision.isl", "timestamp_precision"),
+  ("constraints/type.isl", "inline imports"),
+  ("constraints/utf8_byte_length.isl", "utf8_byte_length"),
+  ("constraints/valid_values.isl", "document:: values"),
   ("imports/cross_version/isl_1_0_importing_isl_2_0.isl", "Ion Schema 1.0"),
   ("imports/cross_version/isl_1_0_schema.isl", "Ion Schema 1.0"),
   (
@@ -109,9 +95,7 @@ let schema_skipped : Map[String, String] = Map([
   ("imports/diamond/inline_import_b.isl", "inline imports"),
   ("imports/diamond/inline_import_c.isl", "inline imports"),
   ("imports/diamond/inline_import_d.isl", "annotations"),
-  (
-    "imports/header_imports.isl", "schema headers and footers; ranges in valid_values",
-  ),
+  ("imports/header_imports.isl", "schema headers and footers"),
   ("imports/inline_imports.isl", "inline imports; distinct:: on element"),
   (
     "imports/invalid_imports.isl", "schema headers and footers; inline imports; annotations on constraints",
@@ -143,10 +127,6 @@ let schema_skipped : Map[String, String] = Map([
   ("schema/schema_footer.isl", "schema headers and footers"),
   ("schema/schema_header.isl", "schema headers and footers"),
   ("schema/schema_with_recursive_type.isl", "ordered_elements"),
-  (
-    "schema/schema_with_type_referenced_before_it_is_defined.isl", "imported types; ranges in valid_values",
-  ),
-  ("util.isl", "ranges in valid_values"),
 ])
 
 ///|
@@ -171,24 +151,6 @@ let schema_known_failures : Map[String, String] = Map([
   ),
   (
     "constraints/any_of.isl $test[8]", "the loader ignores 'name' in an inline type",
-  ),
-  (
-    "constraints/codepoint_length.isl $test[3]", "the loader does not check that a length range is non-negative and satisfiable",
-  ),
-  (
-    "constraints/codepoint_length.isl $test[4]", "the loader does not check that a length range is non-negative and satisfiable",
-  ),
-  (
-    "constraints/codepoint_length.isl $test[6]", "the loader does not check that a length range is non-negative and satisfiable",
-  ),
-  (
-    "constraints/container_length.isl $test[3]", "the loader does not check that a length range is non-negative and satisfiable",
-  ),
-  (
-    "constraints/container_length.isl $test[4]", "the loader does not check that a length range is non-negative and satisfiable",
-  ),
-  (
-    "constraints/container_length.isl $test[6]", "the loader does not check that a length range is non-negative and satisfiable",
   ),
   (
     "constraints/element.isl $test[6]", "the loader accepts a list of types, an extension to ISL 2.0",

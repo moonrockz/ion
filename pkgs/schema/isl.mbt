@@ -66,6 +66,8 @@ pub(all) enum Constraint {
   Fields(Array[FieldConstraint])
   /// `valid_values: [...]`.
   ValidValues(Array[@ion.IonValue])
+  /// A `range::[lower, upper]` of numbers or timestamps in `valid_values`.
+  InRange(ValueRange)
   /// `container_length`: the number of elements or fields.
   ContainerLength(Int, Int?)
   /// `codepoint_length`: the number of code points in a string or symbol.

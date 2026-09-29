@@ -288,8 +288,8 @@ label.
   symbols compare as equal, as symbols with unknown text do.
 - Ion Schema ([#5](https://github.com/moonrockz/ion/issues/5)):
   `ordered_elements`, `annotations`, `timestamp_precision`, `regex`,
-  `closed::` fields, imports, open content, the decimal `precision`/`exponent`
-  constraints, `valid_values` ranges, and `exclusive::` range bounds. The
+  `closed::` fields, imports, open content, and the decimal
+  `precision`/`exponent` constraints. The
   [Cookbook](https://amazon-ion.github.io/ion-schema/docs/cookbook/)'s
   `logical-relationships` page is already covered by
   `tests/fixtures/cookbook-logical-relationships.isl`; the other pages need
