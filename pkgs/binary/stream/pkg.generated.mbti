@@ -16,6 +16,10 @@ type BinaryReader
 pub fn BinaryReader::new(&@io.Reader) -> Self
 pub async fn BinaryReader::next(Self) -> @ion.IonValue?
 
+type BinaryWriter
+pub fn BinaryWriter::new(&@io.Writer) -> Self
+pub async fn BinaryWriter::write(Self, @ion.IonValue) -> Unit
+
 // Type aliases
 
 // Traits

@@ -142,3 +142,76 @@ async test "a large value and many small ones arrive in small reads" {
     }
   }
 }
+
+///|
+/// The octets a `BinaryWriter` writes for `values`, one value at a time.
+async fn write_one_at_a_time(values : Array[@ion.IonValue]) -> Bytes {
+  let collector = { bytes: Bytes::new(0), }
+  let writer = @stream.BinaryWriter::new(collector)
+  for value in values {
+    writer.write(value)
+  }
+  collector.bytes
+}
+
+///|
+async test "a binary writer writes one value at a time" {
+  let values = @text.read_ion_datagram(
+    "{name: \"ion\", tags: [a, b]} c::[d, a] 2007-01-01T 1.50 name",
+  )
+  let bytes = write_one_at_a_time(values)
+  assert_true(@binary.has_version_marker(bytes[:], 0))
+  let read_back = @binary.read_binary(bytes)
+  assert_eq(read_back.length(), values.length())
+  for index in 0..<values.length() {
+    assert_true(read_back[index].equals(values[index]))
+  }
+}
+
+///|
+async test "a binary writer declares only the symbols each value adds" {
+  // System symbols need no table: the marker and the symbol `name` (ID 4).
+  let system = write_one_at_a_time([@ion.IonValue::symbol("name")])
+  assert_eq(system, @binary.write_binary([@ion.IonValue::symbol("name")]))
+  // A later value that reuses a symbol adds no table.
+  let first = write_one_at_a_time([@ion.IonValue::symbol("a")])
+  let twice = write_one_at_a_time([
+    @ion.IonValue::symbol("a"),
+    @ion.IonValue::symbol("a"),
+  ])
+  assert_eq(twice.length(), first.length() + 2)
+}
+
+///|
+async test "a binary writer keeps symbols with unknown text" {
+  let unknown = (sid : Int) => {
+    @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(sid))
+  }
+  // The second value needs more reserved IDs than the first.
+  let values = [
+    unknown(12),
+    @ion.IonValue::symbol("a"),
+    unknown(40),
+    @ion.IonValue::symbol("a"),
+  ]
+  let read_back = @binary.read_binary(write_one_at_a_time(values))
+  assert_eq(read_back.length(), 4)
+  for index in 0..<values.length() {
+    assert_true(read_back[index].equals(values[index]))
+  }
+  match read_back[2].kind() {
+    Symbol(token) => assert_eq(token.sid(), Some(40))
+    _ => fail("expected a symbol")
+  }
+}
+
+///|
+async test "a binary writer's output streams through the binary reader" {
+  let values = @text.read_ion_datagram("a b {c: d} [e, a] f::g")
+  let bytes = write_one_at_a_time(values)
+  let read_back = read_all(@stream.BinaryReader::new(reader_of(bytes, chunk=3)))
+  assert_eq(read_back.length(), values.length())
+  for index in 0..<values.length() {
+    assert_true(read_back[index].equals(values[index]))
+  }
+}
