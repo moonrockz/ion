@@ -62,8 +62,7 @@ test "element applies to the field values of a struct" {
 test "valid_values ignores the value's annotations" {
   let schema = "type::{ name: t, valid_values: [true] }"
   assert_true(accepts(schema, "t", "foo::true"))
-  // A range in valid_values is not supported, and annotations are not allowed.
-  assert_true(load("type::{ name: t, valid_values: [range::[1, 2]] }") is None)
+  // Annotations are not allowed in the list.
   assert_true(load("type::{ name: t, valid_values: [a::1] }") is None)
 }
 
@@ -198,9 +197,52 @@ test "length constraints accept a range" {
 }
 
 ///|
-test "an exclusive range bound is unsupported" {
-  let error = load_error(
-    "type::{ name: short, container_length: range::[exclusive::0, 3] }",
-  )
-  assert_true(error is Some(@ion.IonError::Unsupported(_)))
+test "a length range takes exclusive bounds, and must be non-negative and satisfiable" {
+  let schema = "type::{ name: short, container_length: range::[exclusive::0, exclusive::3] }"
+  assert_true(!accepts(schema, "short", "[]"))
+  assert_true(accepts(schema, "short", "[1, 2]"))
+  assert_true(!accepts(schema, "short", "[1, 2, 3]"))
+  for
+    bad in [
+      "range::[-1, 3]", "range::[3, 2]", "range::[exclusive::1, exclusive::2]", "range::[min, max]",
+      "range::[1, 2d0]", "-1", "range::[exclusive::min, 2]",
+    ] {
+    let error = load_error("type::{ name: t, codepoint_length: \{bad} }")
+    assert_true(error is Some(@ion.IonError::DataModel(_)))
+  }
+}
+
+///|
+test "valid_values takes ranges of numbers and of timestamps" {
+  let schema =
+    #|type::{ name: n, valid_values: range::[exclusive::0, 1.5] }
+    #|type::{ name: mixed, valid_values: [a, range::[10, max], range::[min, -10]] }
+    #|type::{ name: t, valid_values: range::[2000T, exclusive::2001-01-01T00:00Z] }
+  // Numbers compare by exact value, whatever their Ion type.
+  assert_true(accepts(schema, "n", "1"))
+  assert_true(accepts(schema, "n", "15e-1"))
+  assert_true(accepts(schema, "n", "x::1.5000"))
+  assert_true(!accepts(schema, "n", "0e0"))
+  assert_true(!accepts(schema, "n", "1.50000000000000000000001"))
+  assert_true(!accepts(schema, "n", "nan"))
+  assert_true(!accepts(schema, "n", "null.int"))
+  assert_true(!accepts(schema, "n", "2000T"))
+  assert_true(accepts(schema, "mixed", "a"))
+  assert_true(accepts(schema, "mixed", "1d1"))
+  assert_true(accepts(schema, "mixed", "-inf"))
+  assert_true(!accepts(schema, "mixed", "0"))
+  // Timestamps compare by instant.
+  assert_true(accepts(schema, "t", "2000-06-01T"))
+  assert_true(!accepts(schema, "t", "2000-12-31T23:59:59.999-01:00"))
+  assert_true(!accepts(schema, "t", "2001T"))
+  assert_true(!accepts(schema, "t", "1999-12-31T23:59Z"))
+  // A range that contains no value, or mixes kinds, does not load.
+  for
+    bad in [
+      "range::[1, 0]", "range::[exclusive::1, exclusive::1]", "range::[2000T, 3000.0]",
+      "range::[min, max]", "range::[1, exclusive::max]", "range::[null.int, 2]",
+    ] {
+    let error = load_error("type::{ name: t, valid_values: \{bad} }")
+    assert_true(error is Some(@ion.IonError::DataModel(_)))
+  }
 }

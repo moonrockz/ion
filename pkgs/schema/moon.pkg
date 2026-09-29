@@ -4,6 +4,7 @@
 import {
   "moonrockz/ion/ion",
   "moonrockz/ion/text",
+  "moonbitlang/core/bigint",
   "moonbitlang/core/debug",
 }
 

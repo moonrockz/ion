@@ -53,13 +53,17 @@ fn is_schema_version_marker(value : @ion.IonValue) -> Bool {
 ///|
 /// Reject annotations this implementation does not understand, so an
 /// unimplemented modifier (such as `closed::`) can never silently widen a
-/// schema. `$null_or` is the one handled modifier.
+/// schema. `$null_or` is the one handled modifier. `range::` is an error, since
+/// the constraints that take a range do not call this.
 fn reject_unknown_annotations(
   value : @ion.IonValue,
   context : String,
 ) -> Unit raise @ion.IonError {
   for token in value.annotations() {
     let name = token.require_text()
+    if name == "range" {
+      raise @ion.IonError::DataModel("'range' is not allowed on " + context)
+    }
     if name != "$null_or" {
       raise @ion.IonError::Unsupported(
         "unsupported annotation on " + context + ": " + name,
@@ -141,15 +145,22 @@ fn load_constraint(
   key : String,
   value : @ion.IonValue,
 ) -> Constraint raise @ion.IonError {
-  // A length takes a `range::` annotation, which `load_range` checks.
-  if key != "container_length" && key != "codepoint_length" {
+  if !implemented_constraints.contains(key) {
+    raise @ion.IonError::Unsupported(
+      "unsupported Ion Schema constraint: " + key,
+    )
+  }
+  // These take a `range::` annotation, which their loaders check.
+  if key != "container_length" &&
+    key != "codepoint_length" &&
+    key != "valid_values" {
     reject_unknown_annotations(value, "constraint '" + key + "'")
   }
   match key {
     "type" => load_type_constraint(value)
     "element" => Element(load_inline_type(value), occurs_of(value))
     "fields" => Fields(load_fields(value))
-    "valid_values" => ValidValues(load_valid_values(value))
+    "valid_values" => load_valid_values(value)
     "container_length" => {
       let (lower, upper) = load_range(value)
       ContainerLength(lower, upper)
@@ -163,12 +174,16 @@ fn load_constraint(
     "all_of" => AllOf(load_constraint_list(value))
     "not" => Not(load_inline_type(value))
     "contains" => Contains(as_list(value))
-    _ =>
-      raise @ion.IonError::Unsupported(
-        "unsupported Ion Schema constraint: " + key,
-      )
+    _ => panic()
   }
 }
+
+///|
+/// The constraints `load_constraint` loads.
+let implemented_constraints : Array[String] = [
+  "type", "element", "fields", "valid_values", "container_length", "codepoint_length",
+  "one_of", "any_of", "all_of", "not", "contains",
+]
 
 ///|
 /// Load a `type:` constraint, honoring the `$null_or::` annotation.
@@ -282,25 +297,32 @@ fn built_in_type(name : String) -> Constraint? {
 }
 
 ///|
-/// Load the list of a `valid_values` constraint. Ranges are not supported yet,
-/// and no other value in the list may have annotations.
-fn load_valid_values(
-  value : @ion.IonValue,
-) -> Array[@ion.IonValue] raise @ion.IonError {
-  let items = as_list(value)
-  for item in items {
+/// Load a `valid_values` constraint: a list of values and ranges, or one
+/// range. No other value in the list may have annotations.
+fn load_valid_values(value : @ion.IonValue) -> Constraint raise @ion.IonError {
+  if value.has_annotations() {
+    return InRange(load_value_range(value))
+  }
+  let values : Array[@ion.IonValue] = []
+  let ranges : Array[Constraint] = []
+  for item in as_list(value) {
     if has_annotation(item, "range") {
-      raise @ion.IonError::Unsupported(
-        "ranges in 'valid_values' are not supported",
-      )
-    }
-    if item.has_annotations() {
+      ranges.push(InRange(load_value_range(item)))
+    } else if item.has_annotations() {
       raise @ion.IonError::DataModel(
         "a value in 'valid_values' must not have annotations",
       )
+    } else {
+      values.push(item)
     }
   }
-  items
+  if ranges.is_empty() {
+    ValidValues(values)
+  } else if values.is_empty() && ranges.length() == 1 {
+    ranges[0]
+  } else {
+    AnyOf([ValidValues(values)] + ranges)
+  }
 }
 
 ///|
@@ -368,47 +390,56 @@ fn load_occurs(value : @ion.IonValue) -> Occurs raise @ion.IonError {
 }
 
 ///|
-/// Load a `range::[lower, upper]`, where `upper` may be `max` for unbounded.
+/// Load a length or count: a non-negative integer, or a `range::[lower,
+/// upper]` of integers, where a bound may be `exclusive::`, `lower` may be
+/// `min`, and `upper` may be `max`. The result is the inclusive range, with
+/// `None` for no upper bound.
 fn load_range(value : @ion.IonValue) -> (Int, Int?) raise @ion.IonError {
-  let annotations = value.annotations().map(token => token.text())
-  match value.kind() {
-    @ion.IonValueKind::List(items) => {
-      if annotations != [Some("range")] {
-        raise @ion.IonError::DataModel("a range must be annotated with 'range'")
-      }
-      if items.iter().any(item => item.has_annotations()) {
-        raise @ion.IonError::Unsupported(
-          "exclusive range bounds are not supported",
-        )
-      }
-      if items.length() != 2 {
-        raise @ion.IonError::DataModel(
-          "a range needs a lower and an upper bound",
-        )
-      }
-      let lower = int_of(items[0])
-      let upper = match items[1].kind() {
-        @ion.IonValueKind::Int(n) => Some(n.to_int())
-        @ion.IonValueKind::Symbol(token) =>
-          if token.text() == Some("max") {
-            None
-          } else {
-            raise @ion.IonError::DataModel("invalid range upper bound")
-          }
-        _ => raise @ion.IonError::DataModel("invalid range upper bound")
-      }
-      (lower, upper)
+  if !value.has_annotations() {
+    let single = int_of(value)
+    if single < 0 {
+      raise @ion.IonError::DataModel("a length or count must not be negative")
     }
-    _ => {
-      if !annotations.is_empty() {
-        raise @ion.IonError::Unsupported(
-          "unsupported annotation on a range: " +
-          value.annotations()[0].text().unwrap_or("?"),
-        )
-      }
-      let single = int_of(value)
-      (single, Some(single))
-    }
+    return (single, Some(single))
+  }
+  let (lower_value, upper_value) = range_bounds(value)
+  let lower = load_int_bound(lower_value, "min")
+  let upper = load_int_bound(upper_value, "max")
+  if lower is None && upper is None {
+    raise @ion.IonError::DataModel("a range needs at least one bound")
+  }
+  let lower = match lower {
+    Some((n, exclusive)) => if exclusive { n + 1 } else { n }
+    None => 0
+  }
+  let upper = upper.map(bound => if bound.1 { bound.0 - 1 } else { bound.0 })
+  if lower < 0 {
+    raise @ion.IonError::DataModel("a length or count must not be negative")
+  }
+  if upper is Some(upper) && upper < lower {
+    raise @ion.IonError::DataModel("the range contains no value")
+  }
+  (lower, upper)
+}
+
+///|
+/// Load one bound of an integer range: the integer and whether it is
+/// exclusive, or `None` for `min` or `max`.
+fn load_int_bound(
+  value : @ion.IonValue,
+  open : String,
+) -> (Int, Bool)? raise @ion.IonError {
+  let (bound, exclusive) = match load_bound(value, open) {
+    Unbounded => return None
+    Inclusive(bound) => (bound, false)
+    Exclusive(bound) => (bound, true)
+  }
+  match bound.kind() {
+    @ion.IonValueKind::Int(n) => Some((n.to_int(), exclusive))
+    _ =>
+      raise @ion.IonError::DataModel(
+        "the bounds of this range must be integers",
+      )
   }
 }
 

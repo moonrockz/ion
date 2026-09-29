@@ -11,6 +11,13 @@ import {
 // Errors
 
 // Types and methods
+pub(all) enum Bound {
+  Unbounded
+  Inclusive(@ion.IonValue)
+  Exclusive(@ion.IonValue)
+} derive(@debug.Debug)
+pub fn Bound::to_repr(Self) -> @debug.Repr
+
 pub(all) enum Constraint {
   IsType(Array[@ion.IonType])
   NullOr(Constraint)
@@ -18,6 +25,7 @@ pub(all) enum Constraint {
   Element(Constraint, Occurs?)
   Fields(Array[FieldConstraint])
   ValidValues(Array[@ion.IonValue])
+  InRange(ValueRange)
   ContainerLength(Int, Int?)
   CodepointLength(Int, Int?)
   AllOf(Array[Constraint])
@@ -67,6 +75,16 @@ pub struct TypeDefinition {
 pub fn TypeDefinition::constraints(Self) -> Array[Constraint]
 pub fn TypeDefinition::name(Self) -> String
 pub fn TypeDefinition::to_repr(Self) -> @debug.Repr
+
+pub struct ValueRange {
+  lower : Bound
+  upper : Bound
+} derive(@debug.Debug)
+pub fn ValueRange::contains(Self, @ion.IonValue) -> Bool
+pub fn ValueRange::lower(Self) -> Bound
+pub fn ValueRange::new(Bound, Bound) -> Self
+pub fn ValueRange::to_repr(Self) -> @debug.Repr
+pub fn ValueRange::upper(Self) -> Bound
 
 pub struct Violation {
   path : String
