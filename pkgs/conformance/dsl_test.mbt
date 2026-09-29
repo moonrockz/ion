@@ -28,7 +28,7 @@ let conformance_root : String = "tests/ion-tests/conformance"
 /// Cases this implementation does not pass yet, by case ID, with the reason.
 let dsl_skipped : Map[String, String] = Map([
   (
-    "data_model/decimal.ion", "the file does not read: its test 'a negative number with low precision and low, positive exponent' leaves a `then` clause unclosed, so the S-expressions never balance (an upstream ion-tests bug)",
+    "data_model/decimal.ion", "the file does not read: its test 'a negative number with low precision and low, positive exponent' leaves a `then` clause unclosed, so the S-expressions never balance (an upstream ion-tests bug, amazon-ion/ion-tests#168)",
   ),
   (
     "system_symbols.ion#0 Ion 1.0 system symbol / then#2 '$ion_1_0'", "expects `$2` at the top level to produce the symbol `$ion_1_0`, but iontestdata/good/equivs/nonIVMNoOps.ion, which this implementation follows, makes it a no-op",
