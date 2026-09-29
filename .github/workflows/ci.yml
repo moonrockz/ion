@@ -103,6 +103,13 @@ jobs:
       - name: Stream Ion from stdin
         run: moon run pkgs -- hash - < tests/fixtures/sample.ion
 
+      - name: Round-trip a fixture through Ion binary
+        run: |
+          moon run pkgs -- print --binary tests/fixtures/sample.ion > sample.10n
+          moon run pkgs -- print sample.10n > from-binary.ion
+          moon run pkgs -- print tests/fixtures/sample.ion > from-text.ion
+          diff from-text.ion from-binary.ion
+
       - name: Convert a JSON fixture to Ion
         run: moon run pkgs -- fromjson tests/fixtures/sample.json
 
