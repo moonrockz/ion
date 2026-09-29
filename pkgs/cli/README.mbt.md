@@ -15,7 +15,10 @@ The module's root package calls it with the process's arguments and standard
 streams. A program can call it with its own, and tests call it with
 in-memory streams. The exit status is 0 on success, 1 when a command fails
 (including a validation failure), and 2 when the arguments do not make a
-command. See the [executable's README](../README.md) for the commands.
+command. `moonbitlang/core/argparse` parses the arguments; since its own help
+and version handling writes to the process's stdout and exits the process,
+the command line declares its own `--help` and `--version` flags and writes
+their text to the streams it was given. See the [executable's README](../README.md) for the commands.
 
 ```mbt check
 ///|

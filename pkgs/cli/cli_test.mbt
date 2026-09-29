@@ -181,17 +181,50 @@ async test "an error stops a command after the values before it" {
 }
 
 ///|
-async test "version, help, and usage errors" {
-  assert_eq(ion(["version"]).out(), "moonrockz/ion 0.1.0\n")
-  let help = ion(["help"])
-  assert_eq(help.status, 0)
-  assert_true(help.out().has_prefix("usage: ion"))
-  for args in [["frobnicate"], ["print", "--bogus"], ["validate", "schema.isl"]] {
+async test "version and help" {
+  for args in [["version"], ["--version"], ["-V"]] {
+    let run = ion(args)
+    assert_eq(run.status, 0)
+    assert_eq(run.out(), "moonrockz/ion 0.1.0\n")
+  }
+  for args in [["help"], ["--help"], ["-h"]] {
+    let run = ion(args)
+    assert_eq(run.status, 0)
+    assert_true(run.out().has_prefix("Usage: ion [options] [command]\n"))
+    assert_true(run.out().contains("  validate  "))
+  }
+  // Help for one command, asked for either way.
+  for args in [["help", "print"], ["print", "--help"]] {
+    let run = ion(args)
+    assert_eq(run.status, 0)
+    assert_true(run.out().has_prefix("Usage: ion print [options] [file]\n"))
+    assert_true(run.out().contains("--binary"))
+  }
+}
+
+///|
+async test "arguments that do not make a command exit with status 2" {
+  for
+    args in [
+      ["frobnicate"],
+      ["print", "--bogus"],
+      ["print", "--binary", "--pretty"],
+      ["print", "a.ion", "b.ion"],
+      ["validate", "schema.isl"],
+      ["help", "nosuch"],
+    ] {
     let run = ion(args)
     assert_eq(run.status, 2)
     assert_eq(run.out(), "")
-    assert_true(run.stderr.has_prefix("usage: ion"))
+    assert_true(run.stderr.has_prefix("error: "))
   }
+  // The error comes with the help of the command it concerns.
+  let run = ion(["validate", "schema.isl"])
+  assert_true(
+    run.stderr.contains(
+      "Usage: ion validate [options] <schema-file> <type-name> [file]",
+    ),
+  )
 }
 
 ///|

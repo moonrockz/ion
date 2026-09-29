@@ -4,32 +4,12 @@
 // each value is read, handled, and dropped in turn, so memory stays
 // proportional to the largest value rather than to the input.
 //
-//   ion print [--binary | --pretty] [file|-]
-//   ion json [file|-]
-//   ion fromjson [file|-]
-//   ion hash [file|-]
-//   ion validate <schema-file> <type-name> [file|-]
-//   ion version
-//   ion help
+// `moonbitlang/core/argparse` parses the arguments; see `command_line` for
+// the commands.
 
 ///|
 /// The version the command line reports.
 let version : String = "moonrockz/ion 0.1.0"
-
-///|
-/// The usage text.
-let usage : String =
-  #|usage: ion <command> [args]
-  #|  ion print [--binary | --pretty] [file|-]
-  #|                          Ion text or binary in; Ion text (or binary) out
-  #|  ion json [file|-]       Ion text or binary in; JSON out
-  #|  ion fromjson [file|-]   JSON in; Ion text out
-  #|  ion hash [file|-]       the Ion Hash (SHA-256) of each value
-  #|  ion validate <schema-file> <type-name> [file|-]
-  #|                          check each value against an Ion Schema type
-  #|  ion version
-  #|  ion help
-  #|A missing file, or `-`, reads stdin.
 
 ///|
 /// An error the command line reports in its own words, such as an input it
@@ -156,42 +136,200 @@ pub async fn run(
 }
 
 ///|
-/// Run the command that `args` names, returning its exit status.
-async fn dispatch(args : Array[String], streams : Streams) -> Int {
-  match args {
-    [] => print(streams, "-", Text)
-    ["print", .. rest] =>
-      match print_arguments(rest) {
-        Some((format, path)) => print(streams, path, format)
-        None => usage_error(streams)
-      }
-    ["json"] => json(streams, "-")
-    ["json", path] => json(streams, path)
-    ["fromjson"] => from_json(streams, "-")
-    ["fromjson", path] => from_json(streams, path)
-    ["hash"] => hash(streams, "-")
-    ["hash", path] => hash(streams, path)
-    ["validate", schema_path, type_name] =>
-      validate(streams, schema_path, type_name, "-")
-    ["validate", schema_path, type_name, path] =>
-      validate(streams, schema_path, type_name, path)
-    ["version"] => {
-      streams.out.line(version)
-      0
-    }
-    ["help"] | ["--help"] | ["-h"] => {
-      streams.out.line(usage)
-      0
-    }
-    _ => usage_error(streams)
+/// The input positional every command takes: a file, or `-` for stdin.
+fn input_argument(about : String) -> @argparse.PositionArg {
+  @argparse.PositionArg("file", about~, default_values=["-"])
+}
+
+///|
+/// The names of the commands, in the order the help lists them.
+let command_names : Array[String] = [
+  "print", "json", "fromjson", "hash", "validate", "version", "help",
+]
+
+///|
+/// The command `name`, called `prefix` plus its name: `ion print` to render
+/// its help alone, or `print` as a subcommand of `ion`.
+fn subcommand(name : String, prefix : String) -> @argparse.Command {
+  let ion_input = "The Ion input, text or binary; `-` reads stdin."
+  let required = @argparse.ValueRange::single()
+  let named = prefix + name
+  match name {
+    "print" =>
+      @argparse.Command(
+        named,
+        about="Write each value as Ion text, one per line (the default command).",
+        flags=[
+          @argparse.FlagArg("binary", about="Write Ion binary instead.", conflicts_with=[
+            "pretty",
+          ]),
+          @argparse.FlagArg("pretty", about="Indent containers."),
+        ],
+        positionals=[input_argument(ion_input)],
+      )
+    "json" =>
+      @argparse.Command(
+        named,
+        about="Write each value as JSON, one per line.",
+        positionals=[input_argument(ion_input)],
+      )
+    "fromjson" =>
+      @argparse.Command(
+        named,
+        about="Read a JSON document and write it as Ion text.",
+        positionals=[input_argument("The JSON input; `-` reads stdin.")],
+      )
+    "hash" =>
+      @argparse.Command(
+        named,
+        about="Write the Ion Hash (SHA-256) of each value, one per line.",
+        positionals=[input_argument(ion_input)],
+      )
+    "validate" =>
+      @argparse.Command(
+        named,
+        about="Check each value against a type of an Ion Schema.",
+        positionals=[
+          @argparse.PositionArg(
+            "schema-file",
+            about="The Ion Schema document.",
+            num_args=required,
+          ),
+          @argparse.PositionArg(
+            "type-name",
+            about="The schema type to check each value against.",
+            num_args=required,
+          ),
+          input_argument(ion_input),
+        ],
+      )
+    "version" => @argparse.Command(named, about="Write the version.")
+    _ =>
+      @argparse.Command(
+        named,
+        about="Write the help of the command line or of one command.",
+        positionals=[
+          @argparse.PositionArg(
+            "command",
+            about="The command to describe.",
+            num_args=@argparse.ValueRange(lower=0, upper=1),
+          ),
+        ],
+      )
   }
 }
 
 ///|
-/// Report arguments that do not make a command.
-fn usage_error(streams : Streams) -> Int {
-  streams.err.line(usage)
-  2
+/// The command line's grammar. argparse's own help and version handling
+/// writes to the process's stdout and exits the process, so the command line
+/// declares its own `--help` and `--version` flags and writes to its streams.
+fn command_line() -> @argparse.Command {
+  @argparse.Command(
+    "ion",
+    about="Read, write, convert, hash, and validate Amazon Ion. Ion input may be text or binary, and is read one value at a time. With no command, `ion` prints stdin.",
+    disable_help_flag=true,
+    disable_help_subcommand=true,
+    disable_version_flag=true,
+    flags=[
+      @argparse.FlagArg(
+        "help",
+        short='h',
+        about="Show help information.",
+        global=true,
+      ),
+      @argparse.FlagArg("version", short='V', about="Show the version."),
+    ],
+    subcommands=command_names.map(name => subcommand(name, "")),
+  )
+}
+
+///|
+/// The help text of the command line, or of the command `name`.
+fn help_text(name : String?) -> String? {
+  match name {
+    None => Some(command_line().render_help())
+    Some(name) if command_names.contains(name) =>
+      Some(subcommand(name, "ion ").render_help())
+    Some(_) => None
+  }
+}
+
+///|
+/// The single value of a positional or option.
+fn value_of(matches : @argparse.Matches, name : String) -> String {
+  match matches.values.get(name) {
+    Some([value, ..]) => value
+    _ => "-"
+  }
+}
+
+///|
+/// Run the command that `args` names, returning its exit status.
+async fn dispatch(args : Array[String], streams : Streams) -> Int {
+  let matches = command_line().parse(argv=args, env=Map([])) catch {
+    error => {
+      streams.err.line(error.to_string().trim_end(chars="\n").to_owned())
+      return 2
+    }
+  }
+  if matches.flags.get("help") == Some(true) {
+    let name = matches.subcommand.map(pair => pair.0)
+    streams.out.line(
+      help_text(name).unwrap_or("").trim_end(chars="\n").to_owned(),
+    )
+    return 0
+  }
+  if matches.flags.get("version") == Some(true) {
+    streams.out.line(version)
+    return 0
+  }
+  match matches.subcommand {
+    None => print(streams, "-", Text)
+    Some(("print", sub)) => {
+      let format = if sub.flags.get("binary") == Some(true) {
+        Binary
+      } else if sub.flags.get("pretty") == Some(true) {
+        Pretty
+      } else {
+        Text
+      }
+      print(streams, value_of(sub, "file"), format)
+    }
+    Some(("json", sub)) => json(streams, value_of(sub, "file"))
+    Some(("fromjson", sub)) => from_json(streams, value_of(sub, "file"))
+    Some(("hash", sub)) => hash(streams, value_of(sub, "file"))
+    Some(("validate", sub)) =>
+      validate(
+        streams,
+        value_of(sub, "schema-file"),
+        value_of(sub, "type-name"),
+        value_of(sub, "file"),
+      )
+    Some(("version", _)) => {
+      streams.out.line(version)
+      0
+    }
+    Some(("help", sub)) => {
+      let name = match sub.values.get("command") {
+        Some([name, ..]) => Some(name)
+        _ => None
+      }
+      match help_text(name) {
+        Some(text) => {
+          streams.out.line(text.trim_end(chars="\n").to_owned())
+          0
+        }
+        None => {
+          streams.err.line("error: no command named '\{name.unwrap_or("")}'")
+          2
+        }
+      }
+    }
+    Some((other, _)) => {
+      streams.err.line("error: no command named '\{other}'")
+      2
+    }
+  }
 }
 
 ///|
@@ -200,24 +338,6 @@ priv enum Format {
   Text
   Pretty
   Binary
-}
-
-///|
-/// The format and input path of `print [--binary | --pretty] [file|-]`, or
-/// `None` when the arguments do not fit that shape.
-fn print_arguments(args : ArrayView[String]) -> (Format, String)? {
-  let mut format = Text
-  let mut path : String? = None
-  for arg in args {
-    match arg {
-      "--binary" if format is Text => format = Binary
-      "--pretty" if format is Text => format = Pretty
-      _ if arg.has_prefix("--") => return None
-      _ if path is None => path = Some(arg)
-      _ => return None
-    }
-  }
-  Some((format, path.unwrap_or("-")))
 }
 
 ///|

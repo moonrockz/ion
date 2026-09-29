@@ -13,8 +13,8 @@ ion json [file|-]                               Ion text or binary in, JSON out
 ion fromjson [file|-]                           JSON in, Ion text out
 ion hash [file|-]                               Ion Hash (SHA-256) of each value
 ion validate <schema-file> <type-name> [file|-] validate each value
-ion version
-ion help
+ion version                                     also `ion --version` or `ion -V`
+ion help [command]                              also `ion --help` or `ion <command> --help`
 ```
 
 A missing file argument, or `-`, reads stdin. Ion input may be text or binary;
@@ -66,8 +66,10 @@ $ echo $?
   text once, in a local symbol table that appends to the ones before.
 - An error stops a command after the values before it are handled, prints a
   message to stderr, and exits with status 1. So does a validation failure.
-  Arguments that do not make a command print the usage to stderr and exit
-  with status 2.
+  Arguments that do not make a command print an error and the help of the
+  command they concern to stderr, and exit with status 2.
+- [`moonbitlang/core/argparse`](https://mooncakes.io/docs/moonbitlang/core/argparse)
+  parses the arguments.
 - `fromjson` reads its whole input, since a JSON document is one value.
 - The tool builds for the `native` and `wasm` targets, which
   `moonbitlang/async` supports for files and stdin.
