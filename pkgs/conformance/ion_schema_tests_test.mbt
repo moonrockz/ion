@@ -49,7 +49,6 @@ let schema_skipped : Map[String, String] = Map([
   ("imports/cross_version/isl_1_0_importing_isl_2_0.isl", "Ion Schema 1.0"),
   ("imports/cross_version/isl_1_0_schema.isl", "Ion Schema 1.0"),
   ("imports/cross_version/isl_2_0_importing_isl_1_0.isl", "imports"),
-  ("imports/cross_version/isl_2_0_schema.isl", "annotations"),
   ("imports/cycles/header_import_a.isl", "imports"),
   ("imports/cycles/header_import_b.isl", "imports"),
   ("imports/cycles/header_import_by_type_a.isl", "imports"),
@@ -61,13 +60,11 @@ let schema_skipped : Map[String, String] = Map([
   ("imports/diamond/header_import_a.isl", "imports"),
   ("imports/diamond/header_import_b.isl", "imports"),
   ("imports/diamond/header_import_c.isl", "imports"),
-  ("imports/diamond/header_import_d.isl", "annotations"),
   (
     "imports/diamond/inline_import_a.isl", "inline imports; ordered_elements; imports",
   ),
   ("imports/diamond/inline_import_b.isl", "inline imports"),
   ("imports/diamond/inline_import_c.isl", "inline imports"),
-  ("imports/diamond/inline_import_d.isl", "annotations"),
   ("imports/header_imports.isl", "imports"),
   ("imports/inline_imports.isl", "inline imports; distinct:: on element"),
   ("imports/invalid_imports.isl", "imports; inline imports"),
@@ -85,6 +82,24 @@ let schema_skipped : Map[String, String] = Map([
 /// ID of a `$test` struct (`<file> $test[<index>]`) for all of its cases.
 /// Most are schemas that ISL 2.0 does not allow but the loader accepts.
 let schema_known_failures : Map[String, String] = Map([
+  (
+    "constraints/field_names.isl $test[4]", "the loader accepts a list of types, an extension to ISL 2.0",
+  ),
+  (
+    "constraints/field_names.isl $test[5]", "the loader ignores 'occurs' outside 'fields'",
+  ),
+  (
+    "constraints/field_names.isl $test[6]", "the loader ignores 'name' in an inline type",
+  ),
+  (
+    "constraints/annotations-standard.isl $test[3]", "the loader does not check that a referenced type exists",
+  ),
+  (
+    "constraints/annotations-standard.isl $test[4]", "the loader ignores 'occurs' outside 'fields'",
+  ),
+  (
+    "constraints/annotations-standard.isl $test[5]", "the loader ignores 'name' in an inline type",
+  ),
   (
     "constraints/all_of.isl $test[6]", "the loader does not check that a referenced type exists",
   ),
@@ -261,7 +276,11 @@ priv struct LoadedTypes {
 fn references(constraint : @schema.Constraint, out : Array[String]) -> Unit {
   match constraint {
     TypeRef(name) => out.push(name)
-    NullOr(inner) | Not(inner) | Element(inner, _) => references(inner, out)
+    NullOr(inner)
+    | Not(inner)
+    | Element(inner, _)
+    | FieldNames(inner)
+    | Annotations(inner) => references(inner, out)
     AllOf(items) | AnyOf(items) | OneOf(items) =>
       for item in items {
         references(item, out)

@@ -265,6 +265,76 @@ fn check_constraint(
             message: "an ieee754_float constraint requires a float",
           })
       }
+    FieldNames(inner) =>
+      match value.kind() {
+        @ion.IonValueKind::Struct(fields) =>
+          for field in fields {
+            check_constraint(
+              schema,
+              inner,
+              @ion.IonValue::symbol_token(field.name()),
+              path + ".(field name)",
+              out,
+            )
+          }
+        _ =>
+          out.push({
+            path,
+            message: "a field_names constraint requires a struct",
+          })
+      }
+    DistinctFieldNames =>
+      match value.kind() {
+        @ion.IonValueKind::Struct(fields) => {
+          let names = fields.map(field => field.name().text())
+          for index, name in names {
+            if names[:index].contains(name) {
+              out.push({ path, message: "a field name repeats", })
+              break
+            }
+          }
+        }
+        _ =>
+          out.push({
+            path,
+            message: "a field_names constraint requires a struct",
+          })
+      }
+    DistinctElements => {
+      let items = match value.kind() {
+        @ion.IonValueKind::List(items) | @ion.IonValueKind::Sexp(items) => items
+        @ion.IonValueKind::Struct(fields) => fields.map(field => field.value())
+        _ => []
+      }
+      for index, item in items {
+        if items[:index].iter().any(other => other.equals(item)) {
+          out.push({ path, message: "an element repeats", })
+          break
+        }
+      }
+    }
+    ClosedFields(names) =>
+      match value.kind() {
+        @ion.IonValueKind::Struct(fields) =>
+          for field in fields {
+            match field.name().text() {
+              Some(name) if names.contains(name) => ()
+              name =>
+                out.push({
+                  path,
+                  message: "the closed struct has the field \{name.unwrap_or("with unknown text")}",
+                })
+            }
+          }
+        _ =>
+          out.push({ path, message: "a fields constraint requires a struct", })
+      }
+    Annotations(inner) => {
+      let symbols = @ion.IonValue::list(
+        value.annotations().map(token => @ion.IonValue::symbol_token(token)),
+      )
+      check_constraint(schema, inner, symbols, path + "::", out)
+    }
     ContainerLength(lower, upper) =>
       match container_length(value) {
         None =>

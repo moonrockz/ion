@@ -145,12 +145,42 @@ fn load_error(text : String) -> @ion.IonError? {
 
 ///|
 test "unsupported constructs raise Unsupported" {
-  let annotations = load_error("type::{ name: t, annotations: [foo] }")
-  assert_true(annotations is Some(@ion.IonError::Unsupported(_)))
   let ordered = load_error("type::{ name: t, ordered_elements: [int] }")
   assert_true(ordered is Some(@ion.IonError::Unsupported(_)))
-  let closed = load_error("type::{ name: t, fields: closed::{ a: int } }")
-  assert_true(closed is Some(@ion.IonError::Unsupported(_)))
+}
+
+///|
+test "field_names, distinct, closed fields, and annotations" {
+  let schema =
+    #|type::{ name: short_names, field_names: distinct::{ codepoint_length: range::[1, 3] } }
+    #|type::{ name: unique, element: distinct::int }
+    #|type::{ name: point, fields: closed::{ x: int, y: int } }
+    #|type::{ name: tagged, annotations: closed::required::[a, b] }
+    #|type::{ name: one_tag, annotations: { container_length: 1 } }
+  assert_true(accepts(schema, "short_names", "{a: 1, bcd: 2}"))
+  assert_true(!accepts(schema, "short_names", "{a: 1, a: 2}"))
+  assert_true(!accepts(schema, "short_names", "{abcd: 1}"))
+  assert_true(accepts(schema, "unique", "[1, 2, 3]"))
+  assert_true(!accepts(schema, "unique", "[1, 2, 1]"))
+  assert_true(!accepts(schema, "unique", "{a: 1, b: 1}"))
+  assert_true(accepts(schema, "point", "{x: 1}"))
+  assert_true(!accepts(schema, "point", "{x: 1, z: 2}"))
+  assert_true(accepts(schema, "tagged", "b::a::1"))
+  assert_true(!accepts(schema, "tagged", "a::1"))
+  assert_true(!accepts(schema, "tagged", "a::b::c::1"))
+  assert_true(accepts(schema, "one_tag", "x::1"))
+  assert_true(!accepts(schema, "one_tag", "1"))
+  for
+    bad in [
+      "annotations: [a]", "annotations: required::[a::b]", "annotations: open::[a]",
+      "fields: open::{ a: int }", "element: distinct::distinct::int",
+    ] {
+    assert_true(
+      load_error("type::{ name: t, \{bad} }")
+      is Some(@ion.IonError::DataModel(_)),
+      msg=bad,
+    )
+  }
 }
 
 ///|

@@ -41,6 +41,11 @@ pub(all) enum Constraint {
   TimestampPrecision(Int, Int?)
   TimestampOffsets(Array[@ion.TimestampOffset])
   Ieee754Float(FloatFormat)
+  FieldNames(Constraint)
+  DistinctFieldNames
+  DistinctElements
+  ClosedFields(Array[String])
+  Annotations(Constraint)
   Contains(Array[@ion.IonValue])
 } derive(@debug.Debug)
 pub fn Constraint::any() -> Self

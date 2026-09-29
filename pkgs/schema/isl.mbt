@@ -102,6 +102,19 @@ pub(all) enum Constraint {
   TimestampOffsets(Array[@ion.TimestampOffset])
   /// `ieee754_float`: a float that the IEEE 754 format holds exactly.
   Ieee754Float(FloatFormat)
+  /// `field_names`: each field name of a struct, as a symbol, satisfies the
+  /// constraint.
+  FieldNames(Constraint)
+  /// `field_names: distinct::...`: no field name repeats.
+  DistinctFieldNames
+  /// `element: distinct::...`: no two elements of a container, or field
+  /// values of a struct, are equivalent.
+  DistinctElements
+  /// `fields: closed::{...}`: the struct has no field but these.
+  ClosedFields(Array[String])
+  /// `annotations`: the value's annotations, as a list of symbols, satisfy
+  /// the constraint.
+  Annotations(Constraint)
   /// `contains: [ ... ]`: the container holds every listed value.
   Contains(Array[@ion.IonValue])
 } derive(Debug)

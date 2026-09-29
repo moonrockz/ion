@@ -117,8 +117,42 @@ fn load_constraint(
   }
   match key {
     "type" => load_type_constraint(value, user_fields)
-    "element" => Element(load_inline_type(value, user_fields), occurs_of(value))
-    "fields" => Fields(load_fields(value, user_fields))
+    "element" => {
+      let (bare, distinct) = take_modifier(value, "distinct")
+      let element = Element(
+        load_inline_type(bare, user_fields),
+        occurs_of(bare),
+      )
+      if distinct {
+        AllOf([element, DistinctElements])
+      } else {
+        element
+      }
+    }
+    "field_names" => {
+      let (bare, distinct) = take_modifier(value, "distinct")
+      let names = FieldNames(load_inline_type(bare, user_fields))
+      if distinct {
+        AllOf([names, DistinctFieldNames])
+      } else {
+        names
+      }
+    }
+    "fields" => {
+      let (bare, closed) = take_modifier(value, "closed")
+      if bare.has_annotations() {
+        raise @ion.IonError::DataModel(
+          "'fields' takes no annotation but closed",
+        )
+      }
+      let fields = load_fields(bare, user_fields)
+      if closed {
+        AllOf([Fields(fields), ClosedFields(fields.map(field => field.name))])
+      } else {
+        Fields(fields)
+      }
+    }
+    "annotations" => Annotations(load_annotations(value, user_fields))
     "valid_values" => load_valid_values(value)
     "container_length" => {
       let (lower, upper) = load_range(value)
@@ -166,6 +200,7 @@ let implemented_constraints : Array[String] = [
   "type", "element", "fields", "valid_values", "container_length", "codepoint_length",
   "one_of", "any_of", "all_of", "not", "contains", "regex", "byte_length", "utf8_byte_length",
   "precision", "exponent", "timestamp_precision", "timestamp_offset", "ieee754_float",
+  "field_names", "annotations",
 ]
 
 ///|
@@ -173,8 +208,74 @@ let implemented_constraints : Array[String] = [
 let checks_own_annotations : Array[String] = [
   "container_length", "codepoint_length", "valid_values", "regex", "byte_length",
   "utf8_byte_length", "precision", "exponent", "timestamp_precision", "timestamp_offset",
-  "ieee754_float",
+  "ieee754_float", "element", "field_names", "fields", "annotations",
 ]
+
+///|
+/// A value without its first annotation, when that is the modifier `name`,
+/// and whether it was there. The value's other annotations stay, for the
+/// loader to check.
+fn take_modifier(
+  value : @ion.IonValue,
+  name : String,
+) -> (@ion.IonValue, Bool) raise @ion.IonError {
+  match value.annotations() {
+    [first, .. rest] if first.text() == Some(name) => {
+      if rest.iter().any(token => token.text() == Some(name)) {
+        raise @ion.IonError::DataModel("'\{name}::' appears twice")
+      }
+      (value.with_annotations(rest.to_owned()), true)
+    }
+    _ => (value, false)
+  }
+}
+
+///|
+/// Load an `annotations` constraint. The standard form is a type, which the
+/// value's annotations, as a list of symbols, must satisfy. The simplified
+/// form is a list of symbols annotated with `required::`, `closed::`, or
+/// both: `required` means each symbol is an annotation of the value, and
+/// `closed` means the value has no other annotation.
+fn load_annotations(
+  value : @ion.IonValue,
+  user_fields : Array[String],
+) -> Constraint raise @ion.IonError {
+  guard value.kind() is @ion.IonValueKind::List(items) else {
+    return load_inline_type(value, user_fields)
+  }
+  let modifiers = value.annotations().map(token => token.text())
+  let required = modifiers.contains(Some("required"))
+  let closed = modifiers.contains(Some("closed"))
+  let expected = (if required { 1 } else { 0 }) + (if closed { 1 } else { 0 })
+  if modifiers.is_empty() || modifiers.length() != expected {
+    raise @ion.IonError::DataModel(
+      "an annotations list must be annotated with required::, closed::, or both",
+    )
+  }
+  let symbols : Array[@ion.IonValue] = []
+  for item in items {
+    match item.kind() {
+      @ion.IonValueKind::Symbol(_) if !item.has_annotations() =>
+        symbols.push(item)
+      _ =>
+        raise @ion.IonError::DataModel(
+          "an annotations list holds symbols without annotations",
+        )
+    }
+  }
+  let parts : Array[Constraint] = []
+  if required {
+    parts.push(Contains(symbols))
+  }
+  if closed {
+    parts.push(Element(ValidValues(symbols), None))
+  }
+  if parts.length() == 1 {
+    parts[0]
+  } else {
+    AllOf(parts)
+  }
+}
 
 ///|
 /// The integer for a named timestamp precision, as `TimestampPrecision`
