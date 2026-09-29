@@ -527,11 +527,13 @@ pub fn accept_value(
 
 ///|
 /// Decode an Ion binary datagram. A leading version marker is optional: a bare
-/// sequence of values is a valid Ion stream.
+/// sequence of values is a valid Ion stream. `catalog` supplies the shared
+/// symbol tables that local symbol tables import.
 pub fn read_binary(
   bytes : BytesView,
+  catalog? : @ion.Catalog = @ion.Catalog::new(),
 ) -> Array[@ion.IonValue] raise @ion.IonError {
-  let table = @ion.SymbolTable::system()
+  let table = @ion.SymbolTable::system(catalog~)
   let values : Array[@ion.IonValue] = []
   let mut offset = 0
   while offset < bytes.length() {
@@ -563,8 +565,9 @@ pub fn read_binary(
 /// Decode exactly one Ion binary value, rejecting anything after it.
 pub fn read_binary_value(
   bytes : BytesView,
+  catalog? : @ion.Catalog = @ion.Catalog::new(),
 ) -> @ion.IonValue raise @ion.IonError {
-  let values = read_binary(bytes)
+  let values = read_binary(bytes, catalog~)
   match values {
     [value] => value
     [] =>

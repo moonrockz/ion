@@ -150,3 +150,42 @@ test "symbols with unknown text round-trip through the writer" {
   }
   assert_true(read_back[1].equals(values[1]))
 }
+
+///|
+/// A catalog with `colors` versions 1 and 2.
+fn colors() -> @ion.Catalog raise {
+  @ion.Catalog::load(
+    @text.read_ion_datagram(
+      "$ion_shared_symbol_table::{name: \"colors\", symbols: [\"red\", \"green\"]} " +
+      "$ion_shared_symbol_table::{name: \"colors\", version: 2, symbols: [\"red\", \"green\", \"blue\"]}",
+    ),
+  )
+}
+
+///|
+test "imports resolve against a catalog" {
+  let text = "$ion_symbol_table::{imports: [{name: \"colors\", version: 2}], symbols: [\"local\"]} $10 $12 $13"
+  let values = @text.read_ion_datagram(text, catalog=colors())
+  assert_eq(@text.write_all(values), "red\nblue\nlocal")
+  // `read_ion` takes the catalog too; version 1 has only red and green.
+  assert_eq(
+    @text.write_ion(
+      @text.read_ion(
+        "$ion_symbol_table::{imports: [{name: \"colors\"}]} $11",
+        catalog=colors(),
+      ),
+    ),
+    "green",
+  )
+  // Without the catalog, the import needs a max_id.
+  let mut failed = false
+  ignore(
+    @text.read_ion_datagram(text) catch {
+      _ => {
+        failed = true
+        []
+      }
+    },
+  )
+  assert_true(failed)
+}

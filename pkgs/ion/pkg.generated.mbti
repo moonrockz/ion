@@ -34,6 +34,14 @@ pub fn IonError::message(Self) -> String
 pub fn IonError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+type Catalog
+pub fn Catalog::add(Self, SharedSymbolTable) -> Unit
+pub fn Catalog::find(Self, String, Int) -> SharedSymbolTable?
+pub fn Catalog::is_empty(Self) -> Bool
+pub fn Catalog::latest(Self, String) -> SharedSymbolTable?
+pub fn Catalog::load(Array[IonValue]) -> Self raise IonError
+pub fn Catalog::new() -> Self
+
 pub struct Decimal {
   coefficient : @bigint.BigInt
   exponent : Int
@@ -165,6 +173,13 @@ pub(all) enum IonValueKind {
 } derive(@debug.Debug)
 pub fn IonValueKind::to_repr(Self) -> @debug.Repr
 
+type SharedSymbolTable
+pub fn SharedSymbolTable::from_value(IonValue) -> Self? raise IonError
+pub fn SharedSymbolTable::name(Self) -> String
+pub fn SharedSymbolTable::new(String, Int, Array[String?]) -> Self
+pub fn SharedSymbolTable::symbols(Self) -> Array[String?]
+pub fn SharedSymbolTable::version(Self) -> Int
+
 type SymbolTable
 pub fn SymbolTable::apply_local_symbol_table(Self, IonValue) -> Bool raise IonError
 pub fn SymbolTable::find(Self, String) -> Int?
@@ -176,7 +191,7 @@ pub fn SymbolTable::max_id(Self) -> Int
 pub fn SymbolTable::reserve(Self, Int) -> Unit
 pub fn SymbolTable::reset(Self) -> Unit
 pub fn SymbolTable::resolve(Self, IonValue) -> IonValue raise IonError
-pub fn SymbolTable::system() -> Self
+pub fn SymbolTable::system(catalog? : Catalog) -> Self
 pub fn SymbolTable::text(Self, Int) -> String?
 pub fn SymbolTable::to_local_symbol_table(Self) -> IonValue?
 pub fn SymbolTable::token(Self, Int) -> SymbolToken

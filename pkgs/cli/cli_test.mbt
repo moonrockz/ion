@@ -235,3 +235,30 @@ async test "validate rejects a type the schema does not define" {
   assert_eq(run.status, 1)
   assert_eq(run.stderr, "tests/fixtures/person.isl: no type named nosuchtype\n")
 }
+
+///|
+async test "--catalog supplies the shared tables that imports name" {
+  let input = text(
+    "$ion_symbol_table::{imports: [{name: \"abcs\", version: 2}]} $10 $11",
+  )
+  let catalog = "tests/ion-tests/catalog/catalog.ion"
+  for args in [["--catalog", catalog, "print"], ["print", "--catalog", catalog]] {
+    let run = ion(args, stdin=input)
+    assert_eq(run.status, 0)
+    assert_eq(run.out(), "a\nb\n")
+  }
+  // Without it, the import has no exact match and no max_id.
+  let missing = ion(["print"], stdin=input)
+  assert_eq(missing.status, 1)
+  assert_true(missing.stderr.contains("abcs"))
+  // A catalog that cannot be read is reported.
+  let unreadable = ion(
+    ["--catalog", "no-such-catalog.ion", "print"],
+    stdin=input,
+  )
+  assert_eq(unreadable.status, 1)
+  assert_eq(
+    unreadable.stderr,
+    "no-such-catalog.ion: no such file or directory\n",
+  )
+}

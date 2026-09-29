@@ -7,16 +7,22 @@
 // text-less); writing assigns an ID to each text a value uses, reusing a
 // system ID when the text matches one.
 //
-// There is no catalog of shared symbol tables, so every import is resolved as
-// a table the catalog does not hold: it reserves `max_id` IDs whose text is
-// unknown. The table records such a gap as a count, since `max_id` can be in
-// the millions.
+// Imports are resolved against a catalog of shared symbol tables, which may
+// be empty. An import the catalog cannot satisfy exactly still reserves its
+// `max_id` IDs, using the latest version the catalog has, if any, for their
+// text. The table keeps each import as a count and the texts it knows, since
+// `max_id` can be in the millions.
 
 ///|
 /// The symbols in effect at a point in an Ion stream: the system symbols, the
-/// IDs that imports reserve, and the local symbols.
+/// symbols of the shared tables the local symbol table imports, and the local
+/// symbols.
 struct SymbolTable {
-  /// The number of IDs from 10 that imports reserve, all with unknown text.
+  /// The shared tables imports resolve against.
+  catalog : Catalog
+  /// The imports, in ID order after the system symbols.
+  mut imports : Array[Import]
+  /// The number of IDs the imports take.
   mut imported : Int
   /// The local symbols in ID order after the imported IDs. `None` is a slot
   /// with unknown text.
@@ -24,14 +30,25 @@ struct SymbolTable {
 }
 
 ///|
-/// A table with only the Ion 1.0 system symbols.
-pub fn SymbolTable::system() -> SymbolTable {
-  { imported: 0, locals: [], }
+/// The IDs one import takes: `count` of them, of which the first `known`
+/// hold the shared table's texts (or gaps), and the rest have unknown text.
+priv struct Import {
+  name : String
+  version : Int
+  count : Int
+  known : Array[String?]
 }
 
 ///|
-/// The local symbols in ID order, after the IDs that imports reserve. `None`
-/// is a slot with unknown text.
+/// A table with only the Ion 1.0 system symbols, resolving imports against
+/// `catalog` (empty by default).
+pub fn SymbolTable::system(catalog? : Catalog = Catalog::new()) -> SymbolTable {
+  { catalog, imports: [], imported: 0, locals: [], }
+}
+
+///|
+/// The local symbols in ID order, after the imported IDs. `None` is a slot
+/// with unknown text.
 pub fn SymbolTable::locals(self : SymbolTable) -> Array[String?] {
   self.locals
 }
@@ -51,24 +68,37 @@ pub fn SymbolTable::max_id(self : SymbolTable) -> Int {
 ///|
 /// Drop the imported and local symbols, as a version marker does.
 pub fn SymbolTable::reset(self : SymbolTable) -> Unit {
+  self.imports = []
   self.imported = 0
   self.locals = []
 }
 
 ///|
-/// The text of a symbol ID: a system symbol, a local symbol, or nothing for an
-/// ID with unknown text or beyond the table.
+/// The text of a symbol ID: a system symbol, an imported or local symbol, or
+/// nothing for an ID with unknown text or beyond the table.
 pub fn SymbolTable::text(self : SymbolTable, sid : Int) -> String? {
   match system_symbol_text(sid) {
-    Some(text) => Some(text)
-    None => {
-      let index = sid - 10 - self.imported
-      if index >= 0 && index < self.locals.length() {
-        self.locals[index]
+    Some(text) => return Some(text)
+    None => ()
+  }
+  let mut index = sid - 10
+  if index < 0 {
+    return None
+  }
+  for import_ in self.imports {
+    if index < import_.count {
+      return if index < import_.known.length() {
+        import_.known[index]
       } else {
         None
       }
     }
+    index -= import_.count
+  }
+  if index < self.locals.length() {
+    self.locals[index]
+  } else {
+    None
   }
 }
 
@@ -104,6 +134,9 @@ pub fn SymbolTable::lookup(
 /// reserves the IDs of symbols whose text it does not know, so the symbols it
 /// declares cannot take those IDs.
 pub fn SymbolTable::reserve(self : SymbolTable, count : Int) -> Unit {
+  self.imports = [
+    { name: unknown_symbols_table, version: 1, count, known: [], },
+  ]
   self.imported = count
 }
 
@@ -115,20 +148,22 @@ let unknown_symbols_table : String = "moonrockz.ion.unknown_symbols"
 
 ///|
 /// The local symbol table that sets up this table in a stream, or `None` when
-/// the system symbols suffice: an import that reserves the IDs with unknown
-/// text, and the local symbols.
+/// the system symbols suffice: its imports, each with the `max_id` it takes,
+/// and the local symbols.
 pub fn SymbolTable::to_local_symbol_table(self : SymbolTable) -> IonValue? {
   if self.is_empty() {
     return None
   }
   let fields : Array[Field] = []
-  if self.imported > 0 {
-    let import_ = IonValue::from_fields([
-      Field::new("name", IonValue::string(unknown_symbols_table)),
-      Field::new("version", IonValue::int(1)),
-      Field::new("max_id", IonValue::int(self.imported)),
-    ])
-    fields.push(Field::new("imports", IonValue::list([import_])))
+  if !self.imports.is_empty() {
+    let imports = self.imports.map(import_ => {
+      IonValue::from_fields([
+        Field::new("name", IonValue::string(import_.name)),
+        Field::new("version", IonValue::int(import_.version)),
+        Field::new("max_id", IonValue::int(import_.count)),
+      ])
+    })
+    fields.push(Field::new("imports", IonValue::list(imports)))
   }
   if !self.locals.is_empty() {
     let symbols = self.locals.map(text => {
@@ -197,6 +232,15 @@ pub fn SymbolTable::find(self : SymbolTable, text : String) -> Int? {
       return Some(sid)
     }
   }
+  let mut first = 10
+  for import_ in self.imports {
+    for index in 0..<import_.known.length() {
+      if import_.known[index] == Some(text) {
+        return Some(first + index)
+      }
+    }
+    first += import_.count
+  }
   for index in 0..<self.locals.length() {
     if self.locals[index] == Some(text) {
       return Some(index + 10 + self.imported)
@@ -227,8 +271,8 @@ pub fn SymbolTable::intern(self : SymbolTable, text : String) -> Int {
 /// string declares a slot with unknown text, and a `symbols` field that is not
 /// a list declares none. `imports: $ion_symbol_table` appends the symbols to
 /// the current ones instead of replacing them. A list of imports names shared
-/// symbol tables; with no catalog to find them in, each reserves `max_id` IDs
-/// with unknown text, and an import without a valid `max_id` is an error.
+/// symbol tables, which resolve against the catalog as `resolve_import`
+/// describes.
 pub fn SymbolTable::apply_local_symbol_table(
   self : SymbolTable,
   value : IonValue,
@@ -278,28 +322,50 @@ pub fn SymbolTable::apply_local_symbol_table(
       return true
     }
     Some(List(items)) => {
-      let mut imported = 0
+      let imports : Array[Import] = []
       for item in items {
-        imported += imported_ids(item)
+        match resolve_import(item, self.catalog) {
+          Some(import_) => imports.push(import_)
+          None => ()
+        }
       }
-      self.imported = imported
+      self.imports = imports
+      self.imported = imports.fold(init=0, (total, import_) => {
+        total + import_.count
+      })
     }
-    _ => self.imported = 0
+    _ => {
+      self.imports = []
+      self.imported = 0
+    }
   }
   self.locals = declared
   true
 }
 
 ///|
-/// The number of IDs an import reserves. An import whose `name` is not a
-/// non-empty string, or is the system table `$ion`, is ignored.
-fn imported_ids(import_ : IonValue) -> Int raise IonError {
+/// Resolve one import against `catalog`:
+///
+/// - an import that is not a struct, or whose `name` is not a non-empty
+///   string or is the system table `$ion`, is ignored;
+/// - a `version` that is not a positive int is 1;
+/// - a table of exactly that name and version supplies the symbols, as many
+///   as a valid `max_id` says (padded with unknown text, or truncated), or all
+///   of them;
+/// - otherwise a valid `max_id` is required: the IDs take the latest version
+///   of the table, when the catalog has one, padded or truncated to `max_id`,
+///   or unknown text when it has none.
+fn resolve_import(
+  import_ : IonValue,
+  catalog : Catalog,
+) -> Import? raise IonError {
   let fields = match import_.kind() {
     Struct(fields) => fields
-    _ => return 0
+    _ => return None
   }
   let mut name : String? = None
-  let mut max_id : IonValue? = None
+  let mut version = 1
+  let mut max_id : Int? = None
   let seen : Array[String] = []
   for field in fields {
     match field.name().text() {
@@ -308,26 +374,39 @@ fn imported_ids(import_ : IonValue) -> Int raise IonError {
           raise DataModel("an import has two \{key} fields")
         }
         seen.push(key)
-        if key == "name" && field.value().kind() is String(text) {
-          name = Some(text)
-        } else if key == "max_id" {
-          max_id = Some(field.value())
+        match (key, field.value().kind()) {
+          ("name", String(text)) => name = Some(text)
+          ("version", Int(n)) if n >= 1N && n <= 0x7FFF_FFFFN =>
+            version = n.to_int()
+          ("max_id", Int(n)) if n >= 0N && n <= 0x7FFF_FFFFN =>
+            max_id = Some(n.to_int())
+          _ => ()
         }
       }
       _ => ()
     }
   }
-  match name {
-    None | Some("") | Some("$ion") => return 0
-    Some(_) => ()
+  let name = match name {
+    None | Some("") | Some("$ion") => return None
+    Some(name) => name
   }
-  match max_id.map(value => value.kind()) {
-    Some(Int(count)) if count >= 0N && count <= 0x7FFF_FFFFN => count.to_int()
-    _ =>
-      raise DataModel(
-        "an imported shared symbol table that is not in the catalog must declare a max_id",
-      )
+  let (symbols, count) = match catalog.find(name, version) {
+    Some(table) => (table.symbols(), max_id.unwrap_or(table.symbols().length()))
+    None =>
+      match max_id {
+        Some(count) =>
+          (
+            catalog.latest(name).map(table => table.symbols()).unwrap_or([]),
+            count,
+          )
+        None =>
+          raise DataModel(
+            "no exact match for the shared symbol table \{name} version \{version}, and the import declares no max_id",
+          )
+      }
   }
+  let known = symbols[:@cmp.minimum(count, symbols.length())].to_owned()
+  Some({ name, version, count, known, })
 }
 
 ///|

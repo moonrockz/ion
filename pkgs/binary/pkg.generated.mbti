@@ -33,9 +33,9 @@ pub let length_null : Int
 
 pub fn local_symbol_table(@ion.SymbolTable) -> Bytes? raise @ion.IonError
 
-pub fn read_binary(BytesView) -> Array[@ion.IonValue] raise @ion.IonError
+pub fn read_binary(BytesView, catalog? : @ion.Catalog) -> Array[@ion.IonValue] raise @ion.IonError
 
-pub fn read_binary_value(BytesView) -> @ion.IonValue raise @ion.IonError
+pub fn read_binary_value(BytesView, catalog? : @ion.Catalog) -> @ion.IonValue raise @ion.IonError
 
 pub fn symbols_for_values(Array[@ion.IonValue]) -> @ion.SymbolTable raise @ion.IonError
 

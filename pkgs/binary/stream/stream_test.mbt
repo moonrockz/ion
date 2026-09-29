@@ -215,3 +215,20 @@ async test "a binary writer's output streams through the binary reader" {
     assert_true(read_back[index].equals(values[index]))
   }
 }
+
+///|
+async test "a binary reader reads the octets it is given before its source" {
+  let values = @text.read_ion_datagram("{a: 1} b [c]")
+  let bytes = @binary.write_binary(values)
+  for split in [0, 2, 4, 9, bytes.length()] {
+    let reader = @stream.BinaryReader::new(
+      reader_of(bytes[split:].to_owned(), chunk=3),
+      prefix=bytes[:split].to_owned(),
+    )
+    let read_back = read_all(reader)
+    assert_eq(read_back.length(), values.length())
+    for index in 0..<values.length() {
+      assert_true(read_back[index].equals(values[index]))
+    }
+  }
+}
