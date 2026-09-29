@@ -10,7 +10,7 @@ depends = ["setup:submodules"]
 run = "moon update"
 
 [tasks."setup:submodules"]
-description = "Fetch the ion-tests conformance data (the tests/ion-tests submodule)"
+description = "Fetch the conformance data (the tests/ion-tests and tests/ion-schema-tests submodules)"
 run = "git submodule update --init --recursive"
 
 [tasks."test:unit"]

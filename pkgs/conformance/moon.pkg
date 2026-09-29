@@ -6,6 +6,7 @@ import {
   "moonrockz/ion/ion",
   "moonrockz/ion/text",
   "moonrockz/ion/binary",
+  "moonrockz/ion/schema",
   "moonrockz/ion/binary/stream" @binary_stream,
   "moonrockz/ion/text/stream" @text_stream,
   "moonbitlang/async",
