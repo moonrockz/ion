@@ -1,6 +1,5 @@
 import copy
 import json
-import os
 import sys
 import tempfile
 import unittest
@@ -87,7 +86,9 @@ class PerformanceTests(unittest.TestCase):
         self.report["comparison"] = unavailable
         self.assertIn("No prior artifact", performance.render(self.report))
 
-    @unittest.skipUnless(hasattr(os, "wait4"), "RSS runner requires POSIX wait4")
+    @unittest.skipUnless(
+        Path("/usr/bin/time").exists(), "RSS runner requires system time"
+    )
     def test_cli_rss_and_execution_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "input"
@@ -102,6 +103,12 @@ class PerformanceTests(unittest.TestCase):
             )
             self.assertGreater(result["peak_rss_bytes"], 0)
             self.assertGreater(result["elapsed_ms"], 0)
+            # Touch enough parent memory to expose Linux fork/exec RSS inheritance.
+            parent_memory = b"x" * (64 * 1024 * 1024)
+            small_child = performance.measure_cli(
+                [sys.executable, "-c", "pass"], source
+            )
+            self.assertLess(small_child["peak_rss_bytes"], len(parent_memory) // 2)
             with self.assertRaisesRegex(RuntimeError, "CLI benchmark failed"):
                 performance.measure_cli(
                     [sys.executable, "-c", "raise RuntimeError('sample failure')"],

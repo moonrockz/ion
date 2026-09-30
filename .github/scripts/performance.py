@@ -5,10 +5,11 @@ import json
 import math
 import os
 import platform
+import re
+import signal
 import statistics
 import subprocess
 import tempfile
-import threading
 import time
 from pathlib import Path
 
@@ -62,27 +63,50 @@ def summarize(samples):
 
 
 def measure_cli(args, source):
-    """wait4 reports this child's peak RSS rather than the parent's historical max."""
-    with open(source, "rb") as input_file, tempfile.TemporaryFile() as errors:
+    """Use a small time process so Linux RSS does not inherit Python's heap."""
+    with (
+        open(source, "rb") as input_file,
+        tempfile.TemporaryFile() as errors,
+        tempfile.TemporaryDirectory() as directory,
+    ):
+        stats = Path(directory) / "rss"
+        darwin = platform.system() == "Darwin"
+        timed = (
+            ["/usr/bin/time", "-l", *args]
+            if darwin
+            else ["/usr/bin/time", "-f", "%M", "-o", str(stats), *args]
+        )
         start = time.perf_counter()
         child = subprocess.Popen(
-            args, stdin=input_file, stdout=subprocess.DEVNULL, stderr=errors, cwd=ROOT
+            timed,
+            stdin=input_file,
+            stdout=subprocess.DEVNULL,
+            stderr=errors,
+            cwd=ROOT,
+            start_new_session=True,
         )
-        # The timer bounds execution without adding another process to the RSS sample.
-        timer = threading.Timer(180, child.kill)
-        timer.start()
         try:
-            _, status, usage = os.wait4(child.pid, 0)
-            child.returncode = os.waitstatus_to_exitcode(status)
-        finally:
-            timer.cancel()
+            child.wait(timeout=180)
+        except subprocess.TimeoutExpired:
+            os.killpg(child.pid, signal.SIGKILL)
+            child.wait()
+            raise
         elapsed = (time.perf_counter() - start) * 1000
+        errors.seek(0)
+        diagnostics = errors.read().decode(errors="replace")
         if child.returncode:
-            errors.seek(0)
-            raise RuntimeError(
-                "CLI benchmark failed: " + errors.read().decode(errors="replace")[:2000]
+            raise RuntimeError("CLI benchmark failed: " + diagnostics[:2000])
+        if darwin:
+            match = re.search(
+                r"^\s*(\d+)\s+maximum resident set size\s*$", diagnostics, re.MULTILINE
             )
-        rss = usage.ru_maxrss * (1 if platform.system() == "Darwin" else 1024)
+            if not match:
+                raise ValueError("system time did not report CLI peak RSS")
+            rss = int(match[1])
+        else:
+            rss = int(stats.read_text().strip()) * 1024
+        if rss <= 0:
+            raise ValueError("system time returned invalid CLI peak RSS")
         return {"elapsed_ms": elapsed, "peak_rss_bytes": rss}
 
 
@@ -240,6 +264,7 @@ def main():
             "samples": args.samples,
             "sample_ms": args.sample_ms,
             "cli_items": args.cli_items,
+            "rss_method": "external-time",
         },
         "metrics": {},
         "errors": [],
