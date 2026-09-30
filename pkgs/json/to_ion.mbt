@@ -109,5 +109,6 @@ fn is_integral_64(value : Double) -> Bool {
   !value.is_nan() &&
   !value.is_inf() &&
   value == value.floor() &&
-  value.abs() < 9.223372036854776e18
+  value >= -9.223372036854776e18 &&
+  value < 9.223372036854776e18
 }

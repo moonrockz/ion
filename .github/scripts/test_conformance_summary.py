@@ -210,40 +210,56 @@ class ConformanceSummaryTests(unittest.TestCase):
             command = textwrap.dedent(
                 block.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
             )
-            for exit_code in (0, 2):
-                with self.subTest(workflow=filename, exit_code=exit_code):
-                    binary = self.root / "bin"
-                    binary.mkdir(exist_ok=True)
-                    executable = binary / ("moon" if filename == "ci.yml" else "mise")
-                    executable.write_text(
-                        "#!/bin/sh\nprintf 'test output\\n'\nexit "
-                        + str(exit_code)
-                        + "\n"
-                    )
-                    executable.chmod(0o755)
-                    output = self.root / "github-output"
-                    output.unlink(missing_ok=True)
-                    process = subprocess.run(
-                        ["bash", "-e", "-o", "pipefail", "-c", command],
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                        env=dict(
-                            os.environ,
-                            PATH=str(binary) + os.pathsep + os.environ["PATH"],
-                            GITHUB_OUTPUT=str(output),
-                            RUNNER_TEMP=str(self.root),
-                            TEST_TARGET="wasm",
-                        ),
-                    )
-                    self.assertEqual(process.returncode, exit_code, process.stderr)
-                    self.assertEqual(
-                        output.read_text(), "exit_code=" + str(exit_code) + "\n"
-                    )
-                    self.assertEqual(
-                        (self.root / "conformance-results/moon-test.log").read_text(),
-                        "test output\n",
-                    )
+            for coverage in ["true", "false"] if filename == "ci.yml" else ["false"]:
+                for exit_code in (0, 2):
+                    with self.subTest(
+                        workflow=filename, exit_code=exit_code, coverage=coverage
+                    ):
+                        binary = self.root / "bin"
+                        binary.mkdir(exist_ok=True)
+                        executable = binary / (
+                            "moon" if filename == "ci.yml" else "mise"
+                        )
+                        executable.write_text(
+                            '#!/bin/sh\nif [ "$1" = coverage ]; then exit 0; fi\nprintf \'%s\\n\' "$@" > "$MOON_TEST_ARGS_FILE"\nprintf \'test output\\n\'\nexit '
+                            + str(exit_code)
+                            + "\n"
+                        )
+                        executable.chmod(0o755)
+                        output = self.root / "github-output"
+                        output.unlink(missing_ok=True)
+                        process = subprocess.run(
+                            ["bash", "-e", "-o", "pipefail", "-c", command],
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                            env=dict(
+                                os.environ,
+                                PATH=str(binary) + os.pathsep + os.environ["PATH"],
+                                GITHUB_OUTPUT=str(output),
+                                RUNNER_TEMP=str(self.root),
+                                TEST_TARGET="wasm",
+                                COVERAGE_ENABLED=coverage,
+                                MOON_TEST_ARGS_FILE=str(self.root / "moon-args"),
+                            ),
+                        )
+                        self.assertEqual(process.returncode, exit_code, process.stderr)
+                        self.assertEqual(
+                            output.read_text(), "exit_code=" + str(exit_code) + "\n"
+                        )
+                        self.assertEqual(
+                            (
+                                self.root / "conformance-results/moon-test.log"
+                            ).read_text(),
+                            "test output\n",
+                        )
+                        if filename == "ci.yml":
+                            arguments = (
+                                (self.root / "moon-args").read_text().splitlines()
+                            )
+                            self.assertEqual(
+                                "--enable-coverage" in arguments, coverage == "true"
+                            )
 
 
 if __name__ == "__main__":

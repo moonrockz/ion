@@ -82,3 +82,16 @@ ls -la "$release"
 [tasks.bench]
 description = "Sample native release benchmarks and CLI peak RSS"
 run = "python3 .github/scripts/performance.py"
+
+[tasks."test:coverage"]
+description = "Run instrumented wasm tests and generate coverage reports"
+depends = ["setup:submodules"]
+run = '''
+moon coverage --target-dir _build/coverage clean
+if moon test --target wasm --enable-coverage --target-dir _build/coverage; then
+  coverage_test_status=0
+else
+  coverage_test_status=$?
+fi
+python3 .github/scripts/coverage_summary.py --exit-code "$coverage_test_status" --target-dir _build/coverage --output-dir _build/coverage-results
+'''
