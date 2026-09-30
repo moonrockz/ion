@@ -96,7 +96,7 @@ fn same_event(a : @text.IonEvent, b : @text.IonEvent) -> Bool {
   match (a, b) {
     (Scalar(x), Scalar(y)) => x.equals(y)
     (Annotation(x), Annotation(y)) | (FieldName(x), FieldName(y)) =>
-      x.text() == y.text() && (x.text() is Some(_) || x.sid() == y.sid())
+      x.equivalent(y)
     _ => a.to_text() == b.to_text() && !(a is Scalar(_) || b is Scalar(_))
   }
 }

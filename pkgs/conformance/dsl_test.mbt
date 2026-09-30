@@ -583,13 +583,26 @@ fn expect(
 
 ///|
 /// A `produces` datum, with `'#$0'` as a symbol with unknown text. A symbol
-/// `'#$name#ddd'` is a symbol with unknown text at a place in a shared table;
-/// the data model does not keep that place, so the check is only that the
-/// text is unknown.
-fn produced_value(value : @ion.IonValue) -> @ion.IonValue {
+/// `'#$name#ddd'` retains its shared-table name and one-based slot.
+fn produced_value(value : @ion.IonValue) -> @ion.IonValue raise {
   map_tokens(value, token => {
     match token.text() {
-      Some(text) if text.has_prefix("#$") => @ion.SymbolToken::from_sid(0)
+      Some("#$0") => @ion.SymbolToken::from_sid(0)
+      Some(text) if text.has_prefix("#$") => {
+        let split = text.rev_find("#").unwrap()
+        if split <= 2 {
+          fail("invalid reserved symbol: \{text}")
+        }
+        let digits = text.view(start_offset=split + 1)
+        if digits.is_empty() || !digits.iter().all(c => c >= '0' && c <= '9') {
+          fail("invalid reserved symbol: \{text}")
+        }
+        let slot = @string.parse_int(digits)
+        if slot < 1 {
+          fail("invalid imported symbol slot: \{text}")
+        }
+        @ion.SymbolToken::from_import(0, text[2:split].to_owned(), 1, slot)
+      }
       _ => token
     }
   })
@@ -603,13 +616,41 @@ fn model_token(value : @ion.IonValue) -> @ion.SymbolToken raise {
     String(text) => @ion.SymbolToken::new(text)
     // A symbol ID: its text when it is a system symbol, unknown otherwise.
     Int(sid) => @ion.SymbolTable::system().token(sid.to_int())
+    Sexp([first, second]) | List([first, second]) if first.kind()
+      is String(name) => {
+      let slot = int_of(second)
+      if name == "" || slot < 1 {
+        fail("invalid imported symbol model: \{show([value])}")
+      }
+      @ion.SymbolToken::from_import(0, name, 1, slot)
+    }
     _ =>
       match keyword(value) {
         Some("text") => @ion.SymbolToken::new(codepoints(arguments(value)))
         // A symbol with unknown text at a place in a shared table, as
-        // `(absent name offset)` or `(name offset)`. The data model does not
-        // keep that place, so the check is only that the text is unknown.
-        Some(_) => @ion.SymbolToken::from_sid(0)
+        // `(absent name offset)` or `(name offset)`.
+        Some(keyword) => {
+          let args = arguments(value)
+          let (name, slot) = if keyword == "absent" {
+            if args.length() != 2 {
+              fail("invalid absent symbol model: \{show([value])}")
+            }
+            let name = match string_of(args[0]) {
+              Some(name) => name
+              None => fail("invalid absent symbol name: \{show([value])}")
+            }
+            (name, int_of(args[1]))
+          } else {
+            if args.length() != 1 {
+              fail("invalid imported symbol model: \{show([value])}")
+            }
+            (keyword, int_of(args[0]))
+          }
+          if name == "" || slot < 1 {
+            fail("invalid imported symbol model: \{show([value])}")
+          }
+          @ion.SymbolToken::from_import(0, name, 1, slot)
+        }
         None => fail("invalid symbol model: \{show([value])}")
       }
   }
@@ -817,4 +858,44 @@ test "the decimal model accepts negative_0 as a symbol or a string" {
       @ion.IonValue::decimal(@ion.Decimal::parse("-1.5")),
     ),
   )
+}
+
+///|
+test "DSL expectations preserve and check imported-symbol locations" {
+  let values = @text.read_ion_datagram(
+    "$ion_symbol_table::{imports:[{name:\"shared\",max_id:2}]} $10 $11 $0",
+  )
+  for
+    clause in [
+      "(denotes (Symbol (absent \"shared\" 1)) (Symbol (\"shared\" 2)) (Symbol 0))",
+      "(produces '#$shared#1' '#$shared#2' '#$0')",
+    ] {
+    assert_true(expect(@text.read_ion(clause), Ok(values)) is Passed)
+  }
+  for
+    clause in [
+      "(denotes (Symbol (\"other\" 1)) (Symbol (\"shared\" 2)) (Symbol 0))", "(produces '#$shared#2' '#$shared#1' '#$0')",
+      "(produces '#$0' '#$0' '#$0')",
+    ] {
+    assert_true(expect(@text.read_ion(clause), Ok(values)) is Failed(_))
+  }
+}
+
+///|
+test "produces rejects malformed reserved unknown-symbol literals" {
+  for
+    literal in [
+      "'#$1'", "'#$#1'", "'#$shared#0'", "'#$shared#x'", "'#$shared#'",
+    ] {
+    let mut rejected = false
+    ignore(
+      produced_value(@text.read_ion(literal)) catch {
+        _ => {
+          rejected = true
+          @ion.IonValue::untyped_null()
+        }
+      },
+    )
+    assert_true(rejected)
+  }
 }

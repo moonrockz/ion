@@ -17,6 +17,8 @@ pub fn write_ion(value : @ion.IonValue) -> String raise @ion.IonError {
 /// A symbol known only by its ID keeps that ID: before the first value that
 /// holds such an ID, a local symbol table reserves the IDs up to it with
 /// unknown text, so the text reads back to the same symbols.
+/// Unknown imported symbols retain their table name, version, and slot; their
+/// local IDs may change. Each such value gets its own local symbol table.
 pub fn write_all(values : Array[@ion.IonValue]) -> String raise @ion.IonError {
   write_values(values, pretty=false)
 }
@@ -65,12 +67,28 @@ fn write_values(
 /// 9 at the start of a stream. Returns the text, which starts with a local
 /// symbol table on its own line when the value holds a symbol known only by an
 /// ID above `reserved`, and the highest reserved ID after it.
+/// Values containing unknown imported symbols get a complete import context
+/// and reset the returned reservation to 9 for later local unknown symbols.
 pub fn write_stream_value(
   value : @ion.IonValue,
   reserved~ : Int,
   pretty? : Bool = false,
 ) -> (String, Int) raise @ion.IonError {
   let buffer = StringBuilder()
+  if value.has_imported_symbols() {
+    let table = @ion.SymbolTable::for_values([value])
+    write_value(
+      buffer,
+      table.to_local_symbol_table().unwrap(),
+      0,
+      pretty,
+      false,
+    )
+    buffer.write_string("\n")
+    write_value(buffer, table.localize_for_text(value), 0, pretty, false)
+    // Any later local unknown IDs need their own context after these imports.
+    return (buffer.to_string(), 9)
+  }
   let highest = @ion.highest_symbol_id([value])
   let reserved = if highest > reserved {
     let table = @ion.SymbolTable::system()

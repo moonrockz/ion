@@ -270,8 +270,10 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   and resolve each symbol ID against it. Imports of shared symbol tables
   resolve against an `@ion.Catalog`, which the readers and the CLI's
   `--catalog` option take. A symbol ID beyond the table is an error; one whose
-  slot has no text keeps only its ID, and the writers keep that ID by
-  reserving it in the symbol table they write.
+  slot has no text retains its shared-table name and slot when imported.
+  Equality uses that location, independently of stream IDs and table versions.
+  Writers preserve shared imports and reserve local unknown IDs as null slots.
+  A shared table's `imports` field is informational metadata and is ignored.
 - **Unsupported is an error.** The schema loader raises
   `IonError::Unsupported` for what it does not implement (imports when no
   resolver is given), rather than silently ignoring it.
@@ -283,11 +285,6 @@ test-suite work carries the
 [`testing`](https://github.com/moonrockz/ion/issues?q=is%3Aissue+label%3Atesting)
 label.
 
-- Unknown imported symbols lose their shared-table name and slot, so distinct
-  imported symbols can compare as equal
-  ([#45](https://github.com/moonrockz/ion/issues/45)). Shared-table definitions
-  with informational `imports` metadata are rejected
-  ([#44](https://github.com/moonrockz/ion/issues/44)).
 - Ion 1.1 ([#7](https://github.com/moonrockz/ion/issues/7)): only Ion 1.0 is
   implemented.
 - An incremental writer that writes containers without building them first

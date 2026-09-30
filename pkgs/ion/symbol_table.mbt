@@ -24,6 +24,8 @@ struct SymbolTable {
   mut imports : Array[Import]
   /// The number of IDs the imports take.
   mut imported : Int
+  /// Local null slots reserved by a writer before its named local symbols.
+  mut reserved : Int
   /// The local symbols in ID order after the imported IDs. `None` is a slot
   /// with unknown text.
   mut locals : Array[String?]
@@ -43,26 +45,30 @@ priv struct Import {
 /// A table with only the Ion 1.0 system symbols, resolving imports against
 /// `catalog` (empty by default).
 pub fn SymbolTable::system(catalog? : Catalog = Catalog::new()) -> SymbolTable {
-  { catalog, imports: [], imported: 0, locals: [], }
+  { catalog, imports: [], imported: 0, reserved: 0, locals: [], }
 }
 
 ///|
 /// The local symbols in ID order, after the imported IDs. `None` is a slot
 /// with unknown text.
 pub fn SymbolTable::locals(self : SymbolTable) -> Array[String?] {
-  self.locals
+  if self.reserved == 0 {
+    self.locals
+  } else {
+    Array::make(self.reserved, None) + self.locals
+  }
 }
 
 ///|
 /// Whether the table defines no symbols beyond the system symbols.
 pub fn SymbolTable::is_empty(self : SymbolTable) -> Bool {
-  self.imported == 0 && self.locals.is_empty()
+  self.imported == 0 && self.reserved == 0 && self.locals.is_empty()
 }
 
 ///|
 /// The highest symbol ID the table defines.
 pub fn SymbolTable::max_id(self : SymbolTable) -> Int {
-  9 + self.imported + self.locals.length()
+  9 + self.imported + self.reserved + self.locals.length()
 }
 
 ///|
@@ -70,6 +76,7 @@ pub fn SymbolTable::max_id(self : SymbolTable) -> Int {
 pub fn SymbolTable::reset(self : SymbolTable) -> Unit {
   self.imports = []
   self.imported = 0
+  self.reserved = 0
   self.locals = []
 }
 
@@ -95,7 +102,8 @@ pub fn SymbolTable::text(self : SymbolTable, sid : Int) -> String? {
     }
     index -= import_.count
   }
-  if index < self.locals.length() {
+  index -= self.reserved
+  if index >= 0 && index < self.locals.length() {
     self.locals[index]
   } else {
     None
@@ -103,12 +111,28 @@ pub fn SymbolTable::text(self : SymbolTable, sid : Int) -> String? {
 }
 
 ///|
-/// The token for a symbol ID: its text when the table defines it, and an
-/// ID-only token otherwise.
+/// The token for a symbol ID: known text, or an unknown symbol retaining its
+/// imported table name and slot when applicable.
 pub fn SymbolTable::token(self : SymbolTable, sid : Int) -> SymbolToken {
   match self.text(sid) {
     Some(text) => SymbolToken::new(text)
-    None => SymbolToken::from_sid(sid)
+    None => {
+      let mut index = sid - 10
+      if index >= 0 {
+        for import_ in self.imports {
+          if index < import_.count {
+            return SymbolToken::from_import(
+              sid,
+              import_.name,
+              import_.version,
+              index + 1,
+            )
+          }
+          index -= import_.count
+        }
+      }
+      SymbolToken::from_sid(sid)
+    }
   }
 }
 
@@ -129,22 +153,15 @@ pub fn SymbolTable::lookup(
 }
 
 ///|
-/// Reserve `count` IDs from 10 with unknown text, ahead of the local symbols,
-/// as an import of a shared table missing from the catalog does. A writer
-/// reserves the IDs of symbols whose text it does not know, so the symbols it
-/// declares cannot take those IDs.
+/// Replace the imports with `count` local null slots from ID 10, ahead of the
+/// existing local symbols. These remain
+/// equivalent to symbol zero; declaring them through a shared import would
+/// give them a different identity. Known texts can be interned after them.
 pub fn SymbolTable::reserve(self : SymbolTable, count : Int) -> Unit {
-  self.imports = [
-    { name: unknown_symbols_table, version: 1, count, known: [], },
-  ]
-  self.imported = count
+  self.imports = []
+  self.imported = 0
+  self.reserved = count
 }
-
-///|
-/// The name of the shared symbol table that `to_local_symbol_table` imports to
-/// reserve IDs with unknown text. No catalog holds it, so a reader reserves the
-/// IDs and leaves their text unknown.
-let unknown_symbols_table : String = "moonrockz.ion.unknown_symbols"
 
 ///|
 /// The local symbol table that sets up this table in a stream, or `None` when
@@ -165,13 +182,15 @@ pub fn SymbolTable::to_local_symbol_table(self : SymbolTable) -> IonValue? {
     })
     fields.push(Field::new("imports", IonValue::list(imports)))
   }
-  if !self.locals.is_empty() {
-    let symbols = self.locals.map(text => {
-      match text {
-        Some(text) => IonValue::string(text)
-        None => IonValue::untyped_null()
-      }
-    })
+  if self.reserved > 0 || !self.locals.is_empty() {
+    let symbols = self
+      .locals()
+      .map(text => {
+        match text {
+          Some(text) => IonValue::string(text)
+          None => IonValue::untyped_null()
+        }
+      })
     fields.push(Field::new("symbols", IonValue::list(symbols)))
   }
   Some(
@@ -243,7 +262,7 @@ pub fn SymbolTable::find(self : SymbolTable, text : String) -> Int? {
   }
   for index in 0..<self.locals.length() {
     if self.locals[index] == Some(text) {
-      return Some(index + 10 + self.imported)
+      return Some(index + 10 + self.imported + self.reserved)
     }
   }
   None
@@ -339,6 +358,7 @@ pub fn SymbolTable::apply_local_symbol_table(
       self.imported = 0
     }
   }
+  self.reserved = 0
   self.locals = declared
   true
 }
@@ -421,8 +441,8 @@ fn is_local_symbol_table_annotation(value : IonValue) -> Bool {
 ///|
 /// `value` with text for every symbol ID the table defines, in its
 /// annotations, field names, and symbol values at any depth. A symbol ID the
-/// table leaves without text keeps only its ID, and an ID beyond the table
-/// raises, as `lookup` does.
+/// table leaves without text retains its import location when applicable,
+/// and an ID beyond the table raises, as `lookup` does.
 pub fn SymbolTable::resolve(
   self : SymbolTable,
   value : IonValue,
@@ -455,6 +475,9 @@ fn SymbolTable::resolve_token(
   self : SymbolTable,
   token : SymbolToken,
 ) -> SymbolToken raise IonError {
+  if token.import_location is Some(_) {
+    return token
+  }
   match (token.text(), token.sid()) {
     (None, Some(sid)) if sid > 0 => self.lookup(sid)
     _ => token

@@ -88,6 +88,7 @@ fn serialize_with(
 fn symbol_text(token : @ion.SymbolToken) -> String? {
   match token.text() {
     Some(text) => Some(text)
+    None if token.import_location is Some(_) => None
     None =>
       match token.sid() {
         Some(sid) => @ion.system_symbol_text(sid)
@@ -110,7 +111,7 @@ fn symbol_body(token : @ion.SymbolToken) -> Array[Byte] raise @ion.IonError {
     }
     None =>
       match token.sid() {
-        Some(0) => out.push(0x71)
+        Some(0) if token.import_location is None => out.push(0x71)
         _ =>
           raise @ion.IonError::DataModel(
             "cannot hash a symbol whose text is unknown",

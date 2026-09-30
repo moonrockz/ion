@@ -47,8 +47,8 @@ pub fn SharedSymbolTable::symbols(self : SharedSymbolTable) -> Array[String?] {
 /// `$ion_shared_symbol_table` with a non-empty string `name`, an optional
 /// positive `version` (1 when missing), and a `symbols` list, where an element
 /// that is not a string is a slot with unknown text. `None` means the value is
-/// not a shared table. A shared table that imports others raises
-/// `IonError::Unsupported`.
+/// not a shared table. The `imports` field is informational metadata and is
+/// ignored; only `symbols` declares slots.
 pub fn SharedSymbolTable::from_value(
   value : IonValue,
 ) -> SharedSymbolTable? raise IonError {
@@ -77,10 +77,6 @@ pub fn SharedSymbolTable::from_value(
             },
           )
         }
-      (Some("imports"), List(items)) if !items.is_empty() =>
-        raise Unsupported(
-          "a shared symbol table that imports other tables is not supported",
-        )
       _ => ()
     }
   }

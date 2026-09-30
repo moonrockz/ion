@@ -221,6 +221,34 @@ test "imports resolve against a catalog" {
 }
 ```
 
+Unknown symbols imported from a shared table retain an `import_location`
+with its name and one-based slot. `SymbolToken::equivalent` and
+`IonValue::equals` use that location, ignoring the stream-local ID and table
+version. Unknown local symbols remain equivalent to `$0`. The token's derived
+`Eq` and `Hash` compare its complete representation, including reader metadata.
+Shared-table `imports` fields are informational metadata; loading a catalog
+does not resolve them or add slots for them.
+
+```mbt check
+///|
+test "unknown imports keep their identity through text" {
+  let symbol = @ion.SymbolToken::from_import(20, "example", 1, 2)
+  let shifted = @ion.SymbolToken::from_import(30, "example", 2, 2)
+  assert_true(symbol.equivalent(shifted))
+  assert_false(symbol.equivalent(@ion.SymbolToken::from_sid(0)))
+  let value = @ion.IonValue::symbol_token(symbol)
+  assert_true(@text.read_ion(@text.write_ion(value)).equals(value))
+}
+```
+
+Text and binary writers preserve the import name, version, and slot while
+assigning output-local IDs. Unknown local IDs are reserved with null slots.
+The incremental writers reset their context when an unknown imported symbol
+needs a different table. A single writer context containing unknown symbols
+from conflicting versions of one shared table raises `IonError::Unsupported`.
+This applies to one text value or one binary datagram; write separate contexts
+with the incremental writer when the versions differ between values.
+
 ## Traversal
 
 `IonValue::accept` walks a value depth-first with an `IonVisitor`, whose

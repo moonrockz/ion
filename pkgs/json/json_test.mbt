@@ -174,3 +174,23 @@ test "read_json and write_json go through JSON text" {
     "{\n  \"a\": 1\n}",
   )
 }
+
+///|
+test "unknown imported symbols cannot borrow system text from a local ID" {
+  for sid in [0, 4, 10] {
+    let value = @core.IonValue::symbol_token(
+      @core.SymbolToken::from_import(sid, "shared", 1, 1),
+    )
+    let mut rejected = false
+    ignore(
+      @json.to_json(value) catch {
+        @core.IonError::Unsupported(_) => {
+          rejected = true
+          Json::null()
+        }
+        error => fail(error.message())
+      },
+    )
+    assert_true(rejected)
+  }
+}

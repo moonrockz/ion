@@ -238,6 +238,27 @@ async test "the async writer round-trips through the async reader" {
 }
 
 ///|
+async test "text streams retain unknown imported identity across contexts" {
+  let input = "$ion_symbol_table::{imports:[{name:\"a\",max_id:2}]} $10::{$11:[$10]} $ion_1_0 $ion_symbol_table::{symbols:[null]} $10 $ion_symbol_table::{imports:[{name:\"b\",max_id:2}]} $10::{$11:$10} $ion_symbol_table::{imports:[{name:\"a\",version:2,max_id:2}]} $10::{$11:$10}"
+  let values = @text.read_ion_datagram(input)
+  for pretty in [false, true] {
+    let collector = { bytes: Bytes::new(0), }
+    @stream.write_all(collector, values, pretty~)
+    for chunk in [1, 4096] {
+      for bytes in [@utf8.encode(input), collector.bytes] {
+        let source = reader_of(bytes, chunk~)
+        defer source.close()
+        let actual = read_all(@stream.TextReader::new(source))
+        assert_eq(actual.length(), values.length())
+        for index in 0..<values.length() {
+          assert_true(values[index].equals(actual[index]))
+        }
+      }
+    }
+  }
+}
+
+///|
 async test "a text reader reads the octets it is given before its source" {
   let bytes = @utf8.encode("{ city: \"Zürich\" } [1, 2] last")
   // Split inside the two octets of `ü`, and inside a value.

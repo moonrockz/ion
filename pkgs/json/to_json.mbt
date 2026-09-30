@@ -82,6 +82,10 @@ fn struct_to_json(fields : Array[@core.Field]) -> Json raise @core.IonError {
 fn symbol_text(token : @core.SymbolToken) -> String raise @core.IonError {
   match token.text() {
     Some(text) => text
+    None if token.import_location is Some(_) =>
+      raise @core.IonError::Unsupported(
+        "an imported symbol with unknown text cannot be converted to JSON",
+      )
     None =>
       match token.sid() {
         Some(sid) =>
