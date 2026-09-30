@@ -1,0 +1,17 @@
+// Native release benchmark driver; the Python runner owns sampling/reporting.
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+  "moonrockz/ion/binary",
+  "moonrockz/ion/text/stream" @text_stream,
+  "moonrockz/ion/binary/stream" @binary_stream,
+  "moonrockz/ion/hash",
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+}
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")

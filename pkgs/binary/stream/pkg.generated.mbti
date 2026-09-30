@@ -25,6 +25,19 @@ type BinaryWriter
 pub fn BinaryWriter::new(&@io.Writer) -> Self
 pub async fn BinaryWriter::write(Self, @ion.IonValue) -> Unit
 
+type IncrementalWriter
+pub async fn IncrementalWriter::finish(Self) -> Unit
+pub fn IncrementalWriter::new(&@io.Writer, symbols? : @ion.SymbolTable) -> Self
+pub fn IncrementalWriter::set_annotations(Self, Array[@ion.SymbolToken]) -> Unit raise @ion.IonError
+pub fn IncrementalWriter::set_field_name(Self, @ion.SymbolToken) -> Unit raise @ion.IonError
+pub fn IncrementalWriter::step_in(Self, @ion.IonType) -> Unit raise @ion.IonError
+pub async fn IncrementalWriter::step_out(Self) -> Unit
+pub async fn IncrementalWriter::write(Self, @ion.IonValue) -> Unit
+pub async fn IncrementalWriter::write_bool(Self, Bool) -> Unit
+pub async fn IncrementalWriter::write_int(Self, Int) -> Unit
+pub async fn IncrementalWriter::write_null(Self, kind? : @ion.IonType) -> Unit
+pub async fn IncrementalWriter::write_string(Self, String) -> Unit
+
 // Type aliases
 
 // Traits

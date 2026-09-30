@@ -287,8 +287,6 @@ label.
 
 - Ion 1.1 ([#7](https://github.com/moonrockz/ion/issues/7)): only Ion 1.0 is
   implemented.
-- An incremental writer that writes containers without building them first
-  ([#9](https://github.com/moonrockz/ion/issues/9)).
 
 ## Building and testing
 
@@ -300,6 +298,7 @@ mise run test:check  # moon check
 mise run test:unit   # moon test (unit, doc, snapshot, conformance, QuickCheck)
 mise run test:all    # check + test
 mise run build:native
+mise run bench       # native release benchmarks and CLI peak RSS
 moon fmt             # format
 moon info            # regenerate package interfaces (*.mbti)
 moon test --update   # refresh the golden fixtures' recorded output
@@ -314,7 +313,9 @@ and survive a round trip through both writers, each `bad` file must fail, and
 the `equivs` and `non-equivs` sequences must compare as their directory says.
 It also runs each file through the stream readers (in one-octet and 4 KiB
 chunks), the streaming event reader, the tokenizer and syntax tree, the pretty
-writer, and the async writers, which must agree with the sync reader. It
+writer, and the async writers, which must agree with the sync reader.
+Incremental writers also rebuild every good value through step-in/out calls,
+checking text equivalence and identical binary bytes. It
 runs both binary event readers against the text/DOM events, including binary
 encodings of every good text file and rejection of every bad binary file. It
 runs the Ion 1.0 cases of ion-tests' `conformance/` directory, written in its
@@ -358,3 +359,36 @@ to a minimal case.
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+
+## Incremental output and CI trends
+
+Both `@text/stream.IncrementalWriter` and `@binary/stream.IncrementalWriter`
+write list, sexp, and struct containers through `step_in` / `step_out` calls.
+Set field names and annotations before values, write scalars as they arrive,
+then call `finish`. Text emits immediately; binary buffers each open
+container's encoded body until its length is known. See the package guides
+for examples and symbol-context requirements.
+
+Conformance summaries compare counts with an earlier successful main CI run
+for the same OS and target. They link that run and commit, show per-suite
+count deltas and missing/excluded suite transitions, and flag changed corpus
+revisions. `conformance.json` stores the comparison. The lookup considers the
+latest 20 successful main runs; missing, expired, incompatible, or inaccessible
+artifacts produce a baseline-unavailable note without changing current results.
+
+The native performance CI job samples sync and async text/binary readers and
+writers, Ion Hash, and incremental list writers. Each runs against many small
+values and one large value, with the incremental writers measured on the
+large list. A separate CLI test records peak process RSS while printing
+300,000 small values, about 13 MiB of input. Builds, fixture setup, and warmup
+are outside the operation samples. Reports contain medians, throughput, and
+raw samples, with timing and memory deltas against a compatible main report.
+Changes are informational; command failures still fail the job. Runner or
+compiler changes can affect measurements, so the report records the OS,
+architecture, toolchain, workload settings, and CPU identifier.
+
+Run `mise run bench` locally. Reports go to `_build/performance/`; in CI they
+appear in the job summary and the `performance-results-ubuntu-latest-native`
+artifact as `performance.md` and `performance.json`. The first run has no
+performance baseline; later runs compare identical workload settings.

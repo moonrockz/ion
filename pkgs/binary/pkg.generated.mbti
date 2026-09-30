@@ -20,6 +20,10 @@ pub fn descriptor_length_nibble(Int) -> Int
 
 pub fn descriptor_type_code(Int) -> IonTypeCode
 
+pub fn encode_container(@ion.IonType, Bytes, Array[@ion.SymbolToken], @ion.SymbolTable) -> Bytes raise @ion.IonError
+
+pub fn encode_field_name(@ion.SymbolToken, @ion.SymbolTable) -> Bytes raise @ion.IonError
+
 pub fn encode_value(@ion.IonValue, @ion.SymbolTable) -> Bytes raise @ion.IonError
 
 pub fn has_binary_version_marker(BytesView) -> Bool

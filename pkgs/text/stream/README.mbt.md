@@ -112,3 +112,48 @@ async test "write values one at a time" {
   )
 }
 ```
+
+## Writing containers incrementally
+
+`IncrementalWriter` writes each scalar and delimiter immediately. You can
+build a large container without retaining its `IonValue` tree. The writer
+keeps the nesting stack, pending metadata, and symbol context; transient
+memory also includes the current scalar. A sink that collects bytes retains
+its own output.
+
+```mbt check
+///|
+async test "write a container without a tree" {
+  let sink : Collected = { written: b"", }
+  let writer = @stream.IncrementalWriter::new(sink)
+  writer.step_in(Struct)
+  writer.set_field_name(@ion.SymbolToken::new("items"))
+  writer.set_annotations([@ion.SymbolToken::new("tag")])
+  writer.step_in(List)
+  for item in 0..<3 {
+    writer.write_int(item)
+  }
+  writer.step_out()
+  writer.step_out()
+  writer.finish()
+  assert_eq(@utf8.decode(sink.written), "{items: tag::[0, 1, 2]}")
+}
+```
+
+`step_in` accepts `List`, `Sexp`, and `Struct`. Set a field name before each
+struct value. Annotations apply to the next scalar or container; `write(value)`
+adds them before that value's existing annotations. `write` accepts any Ion
+scalar, including decimals, timestamps, blobs, and typed nulls, or a finished
+subtree. Convenience methods write integers, strings, booleans, and nulls.
+`pretty=true` produces the batch writer's indentation.
+
+Supply `symbols` before writing unknown local IDs or imports, for example
+`@ion.SymbolTable::for_values([value])`. The writer emits that context before
+its first value. Keep the context exclusive to the writer after construction.
+Context placement can differ from batch output across multiple top-level
+values, while preserving Ion equivalence.
+
+`finish` checks that containers are closed and metadata is consumed. Sequence
+errors before output leave the writer usable after correction. Output failure
+or cancellation makes it unusable because bytes may have reached the sink.
+Calls on the same writer must be sequential. The caller owns sink flushing.
