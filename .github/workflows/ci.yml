@@ -90,6 +90,7 @@ jobs:
 
       - name: Publish conformance summary
         if: always()
+        shell: bash
         env:
           TEST_EXIT_CODE: ${{ steps.tests.outputs.exit_code }}
           TEST_TARGET: ${{ matrix.target }}

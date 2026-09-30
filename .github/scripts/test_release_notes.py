@@ -14,6 +14,18 @@ ROOT = Path(__file__).resolve().parents[2]
 @unittest.skipUnless(shutil.which("git-cliff"), "git-cliff is installed by mise in CI")
 class ReleaseNotesTests(unittest.TestCase):
     def setUp(self):
+        # Resolve mise's project tool before moving into the temporary repository,
+        # where the project configuration is no longer available to its shims.
+        executable = shutil.which("git-cliff")
+        if shutil.which("mise"):
+            executable = subprocess.run(
+                ["mise", "which", "git-cliff"],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        self.tool_path = str(Path(executable).parent)
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
@@ -36,19 +48,21 @@ class ReleaseNotesTests(unittest.TestCase):
 
     def notes(self, tag_exists):
         output = self.root / "github-output"
-        subprocess.run(
+        result = subprocess.run(
             ["bash", "-e", "-o", "pipefail", "-c", self.command],
             cwd=self.root,
-            check=True,
+            check=False,
             capture_output=True,
             text=True,
             env=dict(
                 os.environ,
+                PATH=self.tool_path + os.pathsep + os.environ["PATH"],
                 VERSION="0.2.0",
                 TAG_EXISTS=tag_exists,
                 GITHUB_OUTPUT=str(output),
             ),
         )
+        self.assertEqual(result.returncode, 0, result.stderr)
         return output.read_text()
 
     def test_manual_release_uses_unreleased_commits_under_new_version(self):
