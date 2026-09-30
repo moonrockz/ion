@@ -4,6 +4,7 @@ package "moonrockz/ion/binary/stream"
 import {
   "moonbitlang/async/io",
   "moonrockz/ion/ion",
+  "moonrockz/ion/text",
 }
 
 // Values
@@ -12,6 +13,10 @@ pub async fn write_all(&@io.Writer, Array[@ion.IonValue]) -> Unit
 // Errors
 
 // Types and methods
+type BinaryEventReader
+pub fn BinaryEventReader::new(&@io.Reader, prefix? : Bytes, catalog? : @ion.Catalog) -> Self
+pub async fn BinaryEventReader::next(Self) -> @text.IonEvent?
+
 type BinaryReader
 pub fn BinaryReader::new(&@io.Reader, prefix? : Bytes, catalog? : @ion.Catalog) -> Self
 pub async fn BinaryReader::next(Self) -> @ion.IonValue?

@@ -9,6 +9,7 @@
 import {
   "moonrockz/ion/ion",
   "moonrockz/ion/binary",
+  "moonrockz/ion/text",
   "moonbitlang/async/io",
   "moonbitlang/core/buffer",
 }

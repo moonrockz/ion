@@ -10,10 +10,44 @@ checks it.
 | A whole datagram | `read_binary`, `write_binary` |
 | One value, as its own datagram | `read_binary_value`, `write_binary_value` |
 | One value at a time, for a stream | `decode_value`, `encode_value`, `value_size` |
+| A pull stream of events | `BinaryEventReader::new`, `next`, `remaining` |
 | The symbol table a writer needs | `symbols_for_values`, `local_symbol_table` |
 | Type descriptors | `IonTypeCode`, `type_descriptor`, `descriptor_type_code` |
 
 `moonrockz/ion/binary/stream` runs the same codec over async IO.
+
+## Events
+
+`BinaryEventReader` produces the same `@text.IonEvent` sequence as
+`@text.IonReader`: one document boundary pair, annotations before their
+value, field names before field values, container boundaries, and scalars.
+Typed null containers are scalars. Version markers and local symbol tables
+update symbol resolution without emitting events. Pass `catalog` to resolve
+shared-table imports.
+
+Construction decodes the whole datagram, as the sync text event reader does.
+Use the async `BinaryEventReader` to hold one top-level value at a time.
+
+```mbt check
+///|
+test "read binary events" {
+  let bytes = @binary.write_binary(@text.read_ion_datagram("tag::[1]"))
+  let reader = @binary.BinaryEventReader::new(bytes)
+  debug_inspect(
+    reader.remaining().map(event => event.to_text()),
+    content=(
+      #|[
+      #|  "DocumentStart",
+      #|  "Annotation(tag)",
+      #|  "ListStart",
+      #|  "Scalar(int)",
+      #|  "ListEnd",
+      #|  "DocumentEnd",
+      #|]
+    ),
+  )
+}
+```
 
 ## Reading and writing
 

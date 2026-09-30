@@ -781,6 +781,26 @@ test "ion-tests conformance DSL" {
   for id in stale {
     println("  PASSES BUT SKIPPED " + id)
   }
+  let details = unexpected + stale.map(id => "stale skip: " + id)
+  for id, reason in dsl_skipped {
+    details.push("skip \{id}: \{reason}")
+  }
+  let mut inapplicable = 0
+  for reason, count in not_applicable {
+    inapplicable += count
+    details.push("not applicable (\{count}): \{reason}")
+  }
+  report_conformance(
+    "ion-dsl",
+    report.outcomes.length(),
+    passed,
+    skipped~,
+    not_applicable=inapplicable,
+    unexpected=unexpected.length(),
+    stale=stale.length(),
+    out_of_scope=ion_1_1,
+    details~,
+  )
   assert_true(unexpected.is_empty() && stale.is_empty())
 }
 

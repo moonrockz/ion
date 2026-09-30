@@ -29,14 +29,41 @@ jobs:
       - name: Check code
         run: moon check
 
+      - name: Test CI reporting
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
   unit-tests:
-    runs-on: ubuntu-latest
+    name: Tests (${{ matrix.os }}, ${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: wasm
+          - os: ubuntu-latest
+            target: native
+          - os: ubuntu-latest
+            target: js
+          - os: ubuntu-latest
+            target: wasm-gc
+          - os: windows-latest
+            target: native
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
       - uses: hustcer/setup-moonbit@v1
+
+      - uses: actions/setup-node@v4
+        if: matrix.target == 'js'
+        with:
+          node-version: '24'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - uses: jdx/mise-action@v2
         with:
@@ -47,7 +74,39 @@ jobs:
         run: moon update
 
       - name: Run unit tests
-        run: mise run test:unit
+        id: tests
+        shell: bash
+        env:
+          TEST_TARGET: ${{ matrix.target }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/conformance-results"
+          if moon test --target "$TEST_TARGET" 2>&1 | tee "$RUNNER_TEMP/conformance-results/moon-test.log"; then
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          else
+            status=$?
+            echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+            exit "$status"
+          fi
+
+      - name: Publish conformance summary
+        if: always()
+        shell: bash
+        env:
+          TEST_EXIT_CODE: ${{ steps.tests.outputs.exit_code }}
+          TEST_TARGET: ${{ matrix.target }}
+        run: |
+          python .github/scripts/conformance_summary.py \
+            "$RUNNER_TEMP/conformance-results/moon-test.log" \
+            --exit-code "$TEST_EXIT_CODE" \
+            --target "$TEST_TARGET" \
+            --output-dir "$RUNNER_TEMP/conformance-results"
+
+      - name: Upload conformance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-results-${{ matrix.os }}-${{ matrix.target }}
+          path: ${{ runner.temp }}/conformance-results/
 
   build-native:
     needs: unit-tests

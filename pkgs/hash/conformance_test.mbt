@@ -145,6 +145,30 @@ test "Ion Hash conformance: identity serialization" {
       None => skipped += 1
     }
   }
+  let result = Json::object(
+    Map([
+      ("suite", Json::string("ion-hash")),
+      ("total", Json::number(cases.length().to_double())),
+      ("passed", Json::number((checked - failures.length()).to_double())),
+      ("skipped", Json::number((no_digest + skipped).to_double())),
+      ("known_failures", Json::number(0)),
+      ("not_applicable", Json::number(0)),
+      ("unexpected", Json::number(failures.length().to_double())),
+      ("stale", Json::number(0)),
+      ("files", Json::number(1)),
+      ("out_of_scope", Json::number(0)),
+      (
+        "details",
+        Json::array(
+          (failures +
+          [
+            "cases without an identity digest: \{no_digest}; cases without a source: \{skipped}",
+          ]).map(Json::string),
+        ),
+      ),
+    ]),
+  )
+  println("CONFORMANCE " + result.stringify())
   if !failures.is_empty() {
     let shown = if failures.length() > 10 {
       failures[:10] + ["... \{failures.length() - 10} more"]

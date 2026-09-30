@@ -283,15 +283,15 @@ test-suite work carries the
 [`testing`](https://github.com/moonrockz/ion/issues?q=is%3Aissue+label%3Atesting)
 label.
 
-- Shared symbol tables: a symbol whose text a shared table leaves unknown
-  keeps its symbol ID but not its place in that table, so any two such
-  symbols compare as equal, as symbols with unknown text do.
+- Unknown imported symbols lose their shared-table name and slot, so distinct
+  imported symbols can compare as equal
+  ([#45](https://github.com/moonrockz/ion/issues/45)). Shared-table definitions
+  with informational `imports` metadata are rejected
+  ([#44](https://github.com/moonrockz/ion/issues/44)).
 - Ion 1.1 ([#7](https://github.com/moonrockz/ion/issues/7)): only Ion 1.0 is
   implemented.
-- Ion binary output from the CLI ([#8](https://github.com/moonrockz/ion/issues/8)).
 - An incremental writer that writes containers without building them first
   ([#9](https://github.com/moonrockz/ion/issues/9)).
-- An event reader for Ion binary ([#10](https://github.com/moonrockz/ion/issues/10)).
 
 ## Building and testing
 
@@ -317,7 +317,9 @@ and survive a round trip through both writers, each `bad` file must fail, and
 the `equivs` and `non-equivs` sequences must compare as their directory says.
 It also runs each file through the stream readers (in one-octet and 4 KiB
 chunks), the streaming event reader, the tokenizer and syntax tree, the pretty
-writer, and the async writers, which must agree with the sync reader. And it
+writer, and the async writers, which must agree with the sync reader. It
+runs both binary event readers against the text/DOM events, including binary
+encodings of every good text file and rejection of every bad binary file. It
 runs the Ion 1.0 cases of ion-tests' `conformance/` directory, written in its
 test language, which cover version markers, symbol tables, imports, and the
 data model.
@@ -333,6 +335,22 @@ must match its type or not, and each invalid schema or type must fail to
 load. Imports resolve to the suite's files. Every file passes, except two ISL
 1.0 cases that contradict another file of the suite, which are listed as
 known failures.
+
+Every CI and release-validation run publishes a corpus conformance table in
+the GitHub Actions run summary. It reports files, checks, or cases for each
+suite, with passes, skipped cases, known failures, inapplicable cases, and
+unexpected failures counted separately. Expand a suite's details to see its
+exclusion reasons. The conformance-results artifacts contain the Markdown
+summary, machine-readable `conformance.json`, and the full test log, along
+with the tested commit and corpus revisions. Failed runs publish the report
+too; a suite that never finished is marked **Not reported**.
+
+CI runs the tests on Linux for wasm, native, JavaScript, and wasm-gc, and on
+Windows for native. Each matrix job publishes its own summary and a
+`conformance-results-<os>-<target>` artifact. The wasm-gc report marks the
+conformance package's suites as **Excluded**, with the reason linked to
+[#13](https://github.com/moonrockz/ion/issues/13). Other wasm-gc tests,
+including Ion Hash, still run.
 
 Besides the example and snapshot tests, several packages carry property tests
 (`property_test.mbt`) using the built-in QuickCheck: text round-trips, decimal

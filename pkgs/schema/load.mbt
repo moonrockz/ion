@@ -1,10 +1,9 @@
 // Loading Ion Schema documents into the constraint model.
 
 ///|
-/// Reject the annotations of a constraint or an inline type, other than those
-/// a type reference may have: `$null_or::` in ISL 2.0, and `nullable::` in
-/// ISL 1.0, where an inline type may also be `type::`. The constraints that
-/// take other modifiers, such as `distinct::` or `range::`, check their own.
+/// Reject annotations other than those a type reference may have:
+/// `$null_or::` in ISL 2.0, and `nullable::` in ISL 1.0, where an inline type
+/// may also be `type::`.
 fn reject_unknown_annotations(
   value : @ion.IonValue,
   context : String,
@@ -219,8 +218,8 @@ fn load_constraint(
     )
   }
   // These take annotations of their own, which their loaders check.
-  if !checks_own_annotations.contains(key) {
-    reject_unknown_annotations(value, "constraint '" + key + "'", ctx)
+  if !checks_own_annotations.contains(key) && value.has_annotations() {
+    raise @ion.IonError::DataModel("constraint '\{key}' takes no annotation")
   }
   match key {
     "type" => load_type_constraint(value, ctx)
@@ -349,10 +348,10 @@ let implemented_constraints : Array[String] = [
 ///|
 /// The constraints whose loaders check their own annotations.
 let checks_own_annotations : Array[String] = [
-  "container_length", "codepoint_length", "valid_values", "regex", "byte_length",
-  "utf8_byte_length", "precision", "exponent", "timestamp_precision", "timestamp_offset",
-  "ieee754_float", "element", "field_names", "fields", "annotations", "ordered_elements",
-  "scale",
+  "type", "not", "container_length", "codepoint_length", "valid_values", "regex",
+  "byte_length", "utf8_byte_length", "precision", "exponent", "timestamp_precision",
+  "timestamp_offset", "ieee754_float", "element", "field_names", "fields", "annotations",
+  "ordered_elements", "scale",
 ]
 
 ///|

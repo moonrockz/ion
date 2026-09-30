@@ -7,6 +7,10 @@ Runs the Ion binary codec over `moonbitlang/async` byte sources and sinks.
   fully arrived, so memory stays proportional to the largest value rather
   than to the stream. Version markers and local symbol tables update the
   reader's symbol table and are not returned.
+- `BinaryEventReader` pulls the same `@text.IonEvent`s as the text event
+  readers. It holds one top-level value's events at a time and decodes a
+  container in full before emitting its events. `prefix` and `catalog` work
+  as they do on `BinaryReader`.
 - `write_all` writes a datagram to any `&@io.Writer`: the version marker, a
   local symbol table when one is needed, and then each value in turn. It
   builds the symbol table from all the values first.
@@ -59,6 +63,33 @@ async test "write a datagram and read it back one value at a time" {
 ```
 
 A stream that ends inside a value raises an `@ion.IonError` at its end.
+
+```mbt check
+///|
+async test "read binary events from an async source" {
+  let bytes = @binary.write_binary(@text.read_ion_datagram("tag::[1]"))
+  let source = @io.MemoryReader(async fn(writer) { writer.write(bytes) })
+  defer source.close()
+  let reader = @stream.BinaryEventReader::new(source)
+  let names : Array[String] = []
+  while reader.next() is Some(event) {
+    names.push(event.to_text())
+  }
+  debug_inspect(
+    names,
+    content=(
+      #|[
+      #|  "DocumentStart",
+      #|  "Annotation(tag)",
+      #|  "ListStart",
+      #|  "Scalar(int)",
+      #|  "ListEnd",
+      #|  "DocumentEnd",
+      #|]
+    ),
+  )
+}
+```
 
 `BinaryWriter` suits a stream whose values are not known ahead, such as the
 output of `ion print --binary`:
