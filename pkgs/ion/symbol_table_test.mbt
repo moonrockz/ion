@@ -393,6 +393,25 @@ test "a catalog finds a shared table by name and version" {
 }
 
 ///|
+test "shared table imports are informational metadata" {
+  let catalog = @ion.Catalog::load(
+    @text.read_ion_datagram(
+      "$ion_shared_symbol_table::{name:\"example\",version:1,imports:[{name:\"origin\",version:1}],symbols:[\"first\",\"second\"]}",
+    ),
+  )
+  assert_eq(catalog.find("example", 1).unwrap().symbols(), [
+    Some("first"),
+    Some("second"),
+  ])
+  let values = @text.read_ion_datagram(
+    "$ion_symbol_table::{imports:[{name:\"example\",version:1}]} $10 $11",
+    catalog~,
+  )
+  assert_true(values[0].equals(@ion.IonValue::symbol("first")))
+  assert_true(values[1].equals(@ion.IonValue::symbol("second")))
+}
+
+///|
 test "an exact import gives its symbols their text" {
   let table = importing([import_entry("abcs", version=2)])
   assert_eq(table.text(10), Some("a"))

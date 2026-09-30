@@ -264,6 +264,18 @@ async test "--catalog supplies the shared tables that imports name" {
 }
 
 ///|
+async test "--catalog accepts shared-table informational imports" {
+  let run = ion(
+    ["print", "--catalog", "tests/fixtures/shared-imports-catalog.ion"],
+    stdin=text(
+      "$ion_symbol_table::{imports:[{name:\"example\",version:1}]} $10 $11",
+    ),
+  )
+  assert_eq(run.status, 0)
+  assert_eq(run.out(), "first\nsecond\n")
+}
+
+///|
 async test "Ion text in UTF-16 and UTF-32 reads like UTF-8" {
   for encoding in ["utf16", "utf32"] {
     let run = ion(["print", "tests/ion-tests/iontestdata/good/\{encoding}.ion"])

@@ -1,0 +1,6 @@
+$ion_shared_symbol_table::{
+  name: "example",
+  version: 1,
+  imports: [{name: "origin", version: 1}],
+  symbols: ["first", "second"]
+}
