@@ -32,7 +32,7 @@ test "symbol IDs resolve in annotations, field names, and nested values" {
 test "a symbol ID with unknown text keeps only its ID" {
   assert_eq(
     datagram("$ion_symbol_table::{symbols: [\"a\", null]} $11 $0"),
-    "$ion_symbol_table::{imports: [{name: \"moonrockz.ion.unknown_symbols\", version: 1, max_id: 2}]}\n$11\n$0",
+    "$ion_symbol_table::{symbols: [null, null]}\n$11\n$0",
   )
 }
 

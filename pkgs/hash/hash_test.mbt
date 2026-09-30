@@ -11,6 +11,26 @@ fn hash_of(text : String) -> String raise @ion.IonError {
 }
 
 ///|
+test "unknown imported symbols never hash as local or system symbols" {
+  for sid in [0, 4, 10] {
+    let value = @ion.IonValue::symbol_token(
+      @ion.SymbolToken::from_import(sid, "shared", 1, 1),
+    )
+    let mut rejected = false
+    ignore(
+      @hash.ion_hash_hex(value) catch {
+        @ion.IonError::DataModel(_) => {
+          rejected = true
+          ""
+        }
+        error => fail(error.message())
+      },
+    )
+    assert_true(rejected)
+  }
+}
+
+///|
 test "Ion Hash golden digests" {
   inspect(
     hash_of("null"),

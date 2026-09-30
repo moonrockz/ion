@@ -206,6 +206,35 @@ async test "a binary writer keeps symbols with unknown text" {
 }
 
 ///|
+async test "binary streams retain unknown imports and local gaps across resets" {
+  let values = @text.read_ion_datagram(
+    "$ion_symbol_table::{imports:[{name:\"a\",max_id:2}]} $10::{$11:[$10]} $ion_1_0 $ion_symbol_table::{symbols:[null]} $10 $ion_symbol_table::{imports:[{name:\"b\",max_id:2}]} $10::{$11:$10}",
+  )
+  let collector = { bytes: Bytes::new(0), }
+  @stream.write_all(collector, values)
+  for bytes in [collector.bytes, write_one_at_a_time(values)] {
+    for chunk in [1, 4096] {
+      let source = reader_of(bytes, chunk~)
+      defer source.close()
+      let actual = read_all(@stream.BinaryReader::new(source))
+      assert_eq(actual.length(), values.length())
+      for index in 0..<values.length() {
+        assert_true(actual[index].equals(values[index]))
+      }
+    }
+  }
+  // The incremental writer can switch versions between values safely.
+  let versions = @text.read_ion_datagram(
+    "$ion_symbol_table::{imports:[{name:\"a\",version:1,max_id:2}]} $10 $ion_symbol_table::{imports:[{name:\"a\",version:2,max_id:2}]} $10",
+  )
+  let actual = @binary.read_binary(write_one_at_a_time(versions))
+  assert_eq(actual.length(), 2)
+  for index in 0..<versions.length() {
+    assert_true(actual[index].equals(versions[index]))
+  }
+}
+
+///|
 async test "a binary writer's output streams through the binary reader" {
   let values = @text.read_ion_datagram("a b {c: d} [e, a] f::g")
   let bytes = write_one_at_a_time(values)

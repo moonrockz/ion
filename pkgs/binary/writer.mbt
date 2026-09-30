@@ -41,21 +41,12 @@ fn wrap(type_code : Int, representation : Array[Byte]) -> Array[Byte] {
 }
 
 ///|
-/// The symbol ID for a token: the ID its text is assigned, or the ID it already
-/// carries when it has no text.
+/// The symbol ID assigned by the writer context, including imported symbols.
 fn symbol_id(
   token : @ion.SymbolToken,
   symbols : @ion.SymbolTable,
 ) -> Int raise @ion.IonError {
-  match token.text() {
-    Some(text) => symbols.intern(text)
-    None =>
-      match token.sid() {
-        Some(sid) => sid
-        None =>
-          raise @ion.IonError::DataModel("a symbol has neither text nor an ID")
-      }
-  }
+  symbols.intern_token(token)
 }
 
 ///|
@@ -236,46 +227,12 @@ fn encode(
 }
 
 ///|
-/// Intern every symbol text a value uses, so a local symbol table can declare
-/// them before the values that reference them.
-fn collect_symbols(
-  value : @ion.IonValue,
-  symbols : @ion.SymbolTable,
-) -> Unit raise @ion.IonError {
-  for annotation in value.annotations() {
-    ignore(symbol_id(annotation, symbols))
-  }
-  match value.kind() {
-    @ion.IonValueKind::Symbol(token) => ignore(symbol_id(token, symbols))
-    @ion.IonValueKind::List(items) | @ion.IonValueKind::Sexp(items) =>
-      for item in items {
-        collect_symbols(item, symbols)
-      }
-    @ion.IonValueKind::Struct(fields) =>
-      for field in fields {
-        ignore(symbol_id(field.name(), symbols))
-        collect_symbols(field.value(), symbols)
-      }
-    _ => ()
-  }
-}
-
-///|
-/// The symbol table a datagram's values need: the system symbols plus a local
-/// symbol for every text they use that the system table does not define.
+/// The symbol table a datagram needs, retaining unknown shared imports and
+/// reserving local unknown IDs before interning known text.
 pub fn symbols_for_values(
   values : Array[@ion.IonValue],
 ) -> @ion.SymbolTable raise @ion.IonError {
-  let table = @ion.SymbolTable::system()
-  // Symbols known only by ID keep their IDs, so the texts go after them.
-  let highest = @ion.highest_symbol_id(values)
-  if highest > 9 {
-    table.reserve(highest - 9)
-  }
-  for value in values {
-    collect_symbols(value, table)
-  }
-  table
+  @ion.SymbolTable::for_values(values)
 }
 
 ///|

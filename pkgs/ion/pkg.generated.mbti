@@ -89,6 +89,16 @@ pub fn[A : Eq] FoldAction::not_equal(Self[A], Self[A]) -> Bool
 pub fn[A : @debug.Debug] FoldAction::to_repr(Self[A]) -> @debug.Repr
 pub fn[A] FoldAction::value(Self[A]) -> A
 
+pub struct ImportLocation {
+  name : String
+  sid : Int
+} derive(Eq, Hash, @debug.Debug)
+pub fn ImportLocation::equal(Self, Self) -> Bool
+pub fn ImportLocation::hash(Self) -> Int
+pub fn ImportLocation::hash_combine(Self, Hasher) -> Unit
+pub fn ImportLocation::not_equal(Self, Self) -> Bool
+pub fn ImportLocation::to_repr(Self) -> @debug.Repr
+
 pub(all) struct IonFold[A] {
   visit_value : (A, IonValue) -> FoldAction[A]
   visit_annotation : (A, SymbolToken) -> FoldAction[A]
@@ -138,6 +148,7 @@ pub fn IonValue::float(Double) -> Self
 pub fn[A] IonValue::fold(Self, A, IonFold[A]) -> A
 pub fn IonValue::from_fields(Array[Field]) -> Self
 pub fn IonValue::has_annotations(Self) -> Bool
+pub fn IonValue::has_imported_symbols(Self) -> Bool
 pub fn IonValue::int(Int) -> Self
 pub fn IonValue::ion_type(Self) -> IonType
 pub fn IonValue::is_null(Self) -> Bool
@@ -183,8 +194,11 @@ pub fn SharedSymbolTable::version(Self) -> Int
 type SymbolTable
 pub fn SymbolTable::apply_local_symbol_table(Self, IonValue) -> Bool raise IonError
 pub fn SymbolTable::find(Self, String) -> Int?
+pub fn SymbolTable::for_values(Array[IonValue]) -> Self raise IonError
 pub fn SymbolTable::intern(Self, String) -> Int
+pub fn SymbolTable::intern_token(Self, SymbolToken) -> Int raise IonError
 pub fn SymbolTable::is_empty(Self) -> Bool
+pub fn SymbolTable::localize_for_text(Self, IonValue) -> IonValue raise IonError
 pub fn SymbolTable::locals(Self) -> Array[String?]
 pub fn SymbolTable::lookup(Self, Int) -> SymbolToken raise IonError
 pub fn SymbolTable::max_id(Self) -> Int
@@ -199,8 +213,12 @@ pub fn SymbolTable::token(Self, Int) -> SymbolToken
 pub struct SymbolToken {
   text : String?
   sid : Int?
+  import_location : ImportLocation?
+  import_version : Int?
 } derive(Eq, Hash, @debug.Debug)
 pub fn SymbolToken::equal(Self, Self) -> Bool
+pub fn SymbolToken::equivalent(Self, Self) -> Bool
+pub fn SymbolToken::from_import(Int, String, Int, Int) -> Self
 pub fn SymbolToken::from_sid(Int) -> Self
 pub fn SymbolToken::has_text(Self) -> Bool
 pub fn SymbolToken::hash(Self) -> Int

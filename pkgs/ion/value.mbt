@@ -240,13 +240,6 @@ pub fn Field::value(self : Field) -> IonValue {
 }
 
 ///|
-/// The text of a symbol token used as a name, or `None` when only an ID is
-/// known.
-fn symbol_text(token : SymbolToken) -> String? {
-  token.text()
-}
-
-///|
 /// Structural equality following the Ion data model: annotations must match in
 /// order, all NaNs are equivalent, positive and negative zero are not, list
 /// and sexp elements are compared
@@ -256,8 +249,7 @@ pub fn IonValue::equals(self : IonValue, other : IonValue) -> Bool {
     return false
   }
   for index in 0..<self.annotations.length() {
-    if symbol_text(self.annotations[index]) !=
-      symbol_text(other.annotations[index]) {
+    if !self.annotations[index].equivalent(other.annotations[index]) {
       return false
     }
   }
@@ -275,8 +267,7 @@ pub fn IonValue::equals(self : IonValue, other : IonValue) -> Bool {
       a.is_negative_zero() == b.is_negative_zero()
     (IonValueKind::Timestamp(a), IonValueKind::Timestamp(b)) =>
       a.to_ion_string() == b.to_ion_string()
-    (IonValueKind::Symbol(a), IonValueKind::Symbol(b)) =>
-      symbol_text(a) == symbol_text(b)
+    (IonValueKind::Symbol(a), IonValueKind::Symbol(b)) => a.equivalent(b)
     (IonValueKind::String(a), IonValueKind::String(b)) => a == b
     (IonValueKind::Clob(a), IonValueKind::Clob(b)) => a == b
     (IonValueKind::Blob(a), IonValueKind::Blob(b)) => a == b
@@ -317,7 +308,7 @@ fn fields_equal(a : Array[Field], b : Array[Field]) -> Bool {
     let mut matched = false
     for index in 0..<b.length() {
       if !consumed[index] &&
-        symbol_text(field_a.name()) == symbol_text(b[index].name()) &&
+        field_a.name().equivalent(b[index].name()) &&
         field_a.value().equals(b[index].value()) {
         consumed[index] = true
         matched = true

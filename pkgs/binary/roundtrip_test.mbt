@@ -371,7 +371,7 @@ test "a symbol table slot that is not a string has unknown text" {
   // The writer reserves symbol 10, which has no text, when it writes it back.
   assert_eq(
     read_back_text([table, sid_symbol(10), sid_symbol(11)]),
-    "$ion_symbol_table::{imports: [{name: \"moonrockz.ion.unknown_symbols\", version: 1, max_id: 1}]}\n$10\nb",
+    "$ion_symbol_table::{symbols: [null]}\n$10\nb",
   )
 }
 
@@ -403,7 +403,7 @@ test "a struct is a symbol table only when its first annotation says so" {
   // struct been applied as a table, symbol 10 would read back as `a`.
   assert_eq(
     read_back_text([struct_, sid_symbol(10)]),
-    "x::$ion_symbol_table::{symbols: [\"a\"]}\n$ion_symbol_table::{imports: [{name: \"moonrockz.ion.unknown_symbols\", version: 1, max_id: 1}]}\n$10",
+    "x::$ion_symbol_table::{symbols: [\"a\"]}\n$ion_symbol_table::{symbols: [null]}\n$10",
   )
 }
 

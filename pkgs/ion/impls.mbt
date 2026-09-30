@@ -24,6 +24,15 @@ pub extend SymbolToken with Hash::{hash, hash_combine}
 pub extend SymbolToken with @debug.Debug::{to_repr}
 
 ///|
+pub extend ImportLocation with Eq::{not_equal, equal}
+
+///|
+pub extend ImportLocation with Hash::{hash, hash_combine}
+
+///|
+pub extend ImportLocation with @debug.Debug::{to_repr}
+
+///|
 pub extend TimestampPrecision with Eq::{not_equal, equal}
 
 ///|

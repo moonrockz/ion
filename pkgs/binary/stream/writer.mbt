@@ -31,6 +31,9 @@ pub async fn write_all(
 /// value holding a symbol known only by an ID above the IDs reserved so far
 /// starts a new context: a version marker and a table that reserves the IDs
 /// up to it with unknown text.
+/// Values with unknown imported symbols also start a new context, preserving
+/// their shared-table identity. The next value starts another context so its
+/// local IDs cannot alias those imports.
 struct BinaryWriter {
   sink : &@io.Writer
   mut symbols : @ion.SymbolTable
@@ -52,6 +55,13 @@ pub async fn BinaryWriter::write(
   self : BinaryWriter,
   value : @ion.IonValue,
 ) -> Unit {
+  if value.has_imported_symbols() {
+    // Imports can differ between successive values. Give this value its own
+    // context, then reset before the next value so local IDs cannot alias it.
+    self.sink.write(@binary.write_binary_value(value))
+    self.started = false
+    return
+  }
   let out : Array[Byte] = []
   let highest = @ion.highest_symbol_id([value])
   if !self.started || highest > self.reserved {
