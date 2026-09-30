@@ -22,6 +22,9 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
@@ -118,6 +121,7 @@ jobs:
       - name: Publish conformance summary
         if: always()
         env:
+          GH_TOKEN: ${{ github.token }}
           TEST_EXIT_CODE: ${{ steps.tests.outputs.exit_code }}
         run: |
           python3 .github/scripts/conformance_summary.py \

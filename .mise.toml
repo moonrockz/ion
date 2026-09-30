@@ -78,3 +78,7 @@ cp "$artifacts/ion-windows-amd64.exe/ion.exe" "$release/ion-windows-amd64.exe"
 chmod +x "$release/ion-linux-amd64" "$release/ion-macos-arm64"
 ls -la "$release"
 '''
+
+[tasks.bench]
+description = "Sample native release benchmarks and CLI peak RSS"
+run = "python3 .github/scripts/performance.py"

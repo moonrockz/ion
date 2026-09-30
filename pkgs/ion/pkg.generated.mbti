@@ -10,6 +10,8 @@ import {
 // Values
 pub fn accept_values(Array[IonValue], &IonVisitor) -> Unit
 
+pub fn check_container_kind(IonType) -> Unit raise IonError
+
 pub fn[A, N] continuing((A, N) -> A) -> (A, N) -> FoldAction[A]
 
 pub fn days_in_month(Int, Int) -> Int
@@ -209,6 +211,7 @@ pub fn SymbolTable::system(catalog? : Catalog) -> Self
 pub fn SymbolTable::text(Self, Int) -> String?
 pub fn SymbolTable::to_local_symbol_table(Self) -> IonValue?
 pub fn SymbolTable::token(Self, Int) -> SymbolToken
+pub fn SymbolTable::writer_token_id(Self, SymbolToken) -> Int raise IonError
 
 pub struct SymbolToken {
   text : String?
@@ -282,6 +285,30 @@ pub fn TimestampPrecision::hash(Self) -> Int
 pub fn TimestampPrecision::hash_combine(Self, Hasher) -> Unit
 pub fn TimestampPrecision::not_equal(Self, Self) -> Bool
 pub fn TimestampPrecision::to_repr(Self) -> @debug.Repr
+
+pub struct WritePosition {
+  depth : Int
+  parent : IonType?
+  index : Int
+  field : SymbolToken?
+  annotations : Array[SymbolToken]
+}
+
+type WriterState
+pub fn WriterState::begin_output(Self) -> Unit raise IonError
+pub fn WriterState::check(Self) -> Unit raise IonError
+pub fn WriterState::check_finished(Self) -> Unit raise IonError
+pub fn WriterState::closing(Self) -> (IonType, Int, Int) raise IonError
+pub fn WriterState::commit(Self) -> Unit
+pub fn WriterState::end_output(Self) -> Unit
+pub fn WriterState::enter(Self, IonType) -> Unit
+pub fn WriterState::fail(Self) -> Unit
+pub fn WriterState::finish(Self) -> Unit
+pub fn WriterState::leave(Self) -> Unit
+pub fn WriterState::new() -> Self
+pub fn WriterState::position(Self) -> WritePosition raise IonError
+pub fn WriterState::set_annotations(Self, Array[SymbolToken]) -> Unit raise IonError
+pub fn WriterState::set_field_name(Self, SymbolToken) -> Unit raise IonError
 
 // Type aliases
 

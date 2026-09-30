@@ -291,6 +291,7 @@ async test "ion-tests through every reader and writer" {
       }
       results.push(("pretty", outcome(() => check_pretty(values))))
       results.push(("writers", outcome(() => check_writers(values))))
+      results.push(("incremental", outcome(() => check_incremental(values))))
     } else if !text {
       results.push(
         ("binary-events", outcome(() => check_bad_binary_events(bytes))),

@@ -32,11 +32,15 @@ pub fn read_ion_datagram(StringView, catalog? : @ion.Catalog) -> Array[@ion.IonV
 
 pub fn read_ion_prefix(StringView, symbols~ : @ion.SymbolTable, end_of_input~ : Bool) -> (@ion.IonValue?, Int)? raise @ion.IonError
 
+pub fn symbol_to_text(@ion.SymbolToken, in_sexp? : Bool) -> String raise @ion.IonError
+
 pub fn tokenize(StringView) -> Array[IonToken] raise @ion.IonError
 
 pub fn write_all(Array[@ion.IonValue]) -> String raise @ion.IonError
 
 pub fn write_all_pretty(Array[@ion.IonValue]) -> String raise @ion.IonError
+
+pub fn write_fragment(@ion.IonValue, depth? : Int, pretty? : Bool, in_sexp? : Bool) -> String raise @ion.IonError
 
 pub fn write_ion(@ion.IonValue) -> String raise @ion.IonError
 

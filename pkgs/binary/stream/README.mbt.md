@@ -111,3 +111,45 @@ async test "write values one at a time" {
   )
 }
 ```
+
+## Writing containers incrementally
+
+`IncrementalWriter` accepts `step_in`, `step_out`, scalar writes, field names,
+and annotations without building an `IonValue` container tree. Binary length
+prefixes require buffering encoded bytes for open containers. Memory is
+proportional to the largest open container plus nesting and symbol state;
+completed top-level values go to the sink immediately.
+
+```mbt check
+///|
+async test "write a list without a tree" {
+  let sink : Sink = { written: b"", }
+  let writer = @stream.IncrementalWriter::new(sink)
+  writer.step_in(List)
+  for item in 0..<3 {
+    writer.write_int(item)
+  }
+  writer.step_out()
+  writer.finish()
+  assert_eq(sink.written, @binary.write_binary([@text.read_ion("[0, 1, 2]")]))
+}
+```
+
+`step_in` accepts `List`, `Sexp`, and `Struct` and does not perform IO.
+`step_out`, `write`, and `finish` are asynchronous. Set a field name before
+writing each struct value, and annotations before the value or container they
+annotate. `write(value)` accepts any scalar or a finished subtree. Convenience
+methods write integers, strings, booleans, and typed nulls.
+
+Known symbol text is interned as it arrives. Additional top-level values can
+add append symbol-table declarations, so their datagram bytes may differ from
+a batch encoding while preserving Ion equivalence. Supply the complete
+`symbols=@ion.SymbolTable::for_values(values)` context up front to get the
+batch encoding's bytes across a whole datagram. Unknown local IDs or imported
+symbols always require a matching context supplied before writing. Keep that
+context exclusive to the writer.
+
+`finish` checks balance and pending metadata; an empty datagram gets its
+version marker. Sequence errors before output are recoverable. Output failure
+or cancellation prevents reuse. Calls on the same writer must be sequential,
+and the caller owns sink flushing.

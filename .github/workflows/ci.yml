@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -92,6 +96,7 @@ jobs:
         if: always()
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           TEST_EXIT_CODE: ${{ steps.tests.outputs.exit_code }}
           TEST_TARGET: ${{ matrix.target }}
         run: |
@@ -178,3 +183,25 @@ jobs:
             echo "::error::validation unexpectedly succeeded"
             exit 1
           fi
+
+  performance:
+    name: Native performance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hustcer/setup-moonbit@v1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: moon update
+      - name: Measure and publish performance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/performance.py --output-dir "$RUNNER_TEMP/performance-results"
+      - name: Upload performance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results-ubuntu-latest-native
+          path: ${{ runner.temp }}/performance-results/

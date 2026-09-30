@@ -50,6 +50,41 @@ fn symbol_id(
 }
 
 ///|
+/// Encode a field-name ID in an existing writer context.
+pub fn encode_field_name(
+  token : @ion.SymbolToken,
+  symbols : @ion.SymbolTable,
+) -> Bytes raise @ion.IonError {
+  let out : Array[Byte] = []
+  push_var_uint(out, symbol_id(token, symbols))
+  Bytes::from_array(out)
+}
+
+///|
+/// Encode an already-buffered container body, with its length and annotations.
+pub fn encode_container(
+  kind : @ion.IonType,
+  body : Bytes,
+  annotations : Array[@ion.SymbolToken],
+  symbols : @ion.SymbolTable,
+) -> Bytes raise @ion.IonError {
+  @ion.check_container_kind(kind)
+  let value = wrap(IonTypeCode::from_ion_type(kind).to_int(), body.to_array())
+  if annotations.is_empty() {
+    return Bytes::from_array(value)
+  }
+  let ids : Array[Byte] = []
+  for annotation in annotations {
+    push_var_uint(ids, symbol_id(annotation, symbols))
+  }
+  let inner : Array[Byte] = []
+  push_var_uint(inner, ids.length())
+  inner.append(ids)
+  inner.append(value)
+  Bytes::from_array(wrap(14, inner))
+}
+
+///|
 /// A float's representation: its IEEE-754 binary64 pattern.
 fn encode_float(value : Double) -> Array[Byte] {
   let bits = value.reinterpret_as_uint64()

@@ -33,20 +33,9 @@ pub fn SymbolTable::for_values(
   values : Array[IonValue],
 ) -> SymbolTable raise IonError {
   let tokens : Array[SymbolToken] = []
-  let add = fn(acc : Unit, token : SymbolToken) -> FoldAction[Unit] {
-    tokens.push(token)
-    Continue(acc)
+  for value in values {
+    collect_writer_tokens(value, tokens)
   }
-  fold_values(values, (), {
-    visit_value: fn(acc, value) {
-      if value.kind() is Symbol(token) {
-        tokens.push(token)
-      }
-      Continue(acc)
-    },
-    visit_annotation: add,
-    visit_field_name: add,
-  })
   let table = SymbolTable::system()
   let mut highest_local = 9
   for token in tokens {
@@ -114,6 +103,26 @@ pub fn SymbolTable::for_values(
 }
 
 ///|
+/// Match encoder traversal: annotations, then value; struct names precede
+/// their values. This gives batch and incremental writers the same IDs.
+fn collect_writer_tokens(value : IonValue, tokens : Array[SymbolToken]) -> Unit {
+  tokens.append(value.annotations())
+  match value.kind() {
+    Symbol(token) => tokens.push(token)
+    List(items) | Sexp(items) =>
+      for item in items {
+        collect_writer_tokens(item, tokens)
+      }
+    Struct(fields) =>
+      for field in fields {
+        tokens.push(field.name())
+        collect_writer_tokens(field.value(), tokens)
+      }
+    _ => ()
+  }
+}
+
+///|
 /// The ID a writer context assigns to `token`. Imported unknown symbols are
 /// located by table name and slot; local unknown IDs follow this context's
 /// imported IDs. Known text is interned as usual.
@@ -158,8 +167,25 @@ pub fn SymbolTable::intern_token(
 }
 
 ///|
-/// Replace unknown tokens with this context's IDs for rendering symbol-ID
-/// literals in text. Emit this context's local symbol table before the result.
+/// Assign a writer ID, rejecting unknown tokens that would alias known text
+/// or refer to an undeclared import or local slot.
+pub fn SymbolTable::writer_token_id(
+  self : SymbolTable,
+  token : SymbolToken,
+) -> Int raise IonError {
+  let sid = self.intern_token(token)
+  if token.text is None &&
+    (sid > self.max_id() || !self.token(sid).equivalent(token)) {
+    raise Unsupported(
+      "unknown symbol requires a matching declared writer context",
+    )
+  }
+  sid
+}
+
+///|
+/// Replace unknown tokens with this context's IDs for text rendering. Emit
+/// this context's local symbol table before the result.
 pub fn SymbolTable::localize_for_text(
   self : SymbolTable,
   value : IonValue,
@@ -168,7 +194,7 @@ pub fn SymbolTable::localize_for_text(
     if token.text is Some(_) {
       token
     } else {
-      SymbolToken::from_sid(self.intern_token(token))
+      SymbolToken::from_sid(self.writer_token_id(token))
     }
   }
   let annotations = value.annotations().map(rewrite)

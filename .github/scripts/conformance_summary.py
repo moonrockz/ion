@@ -9,6 +9,8 @@ import platform
 import subprocess
 from pathlib import Path
 
+from ci_baseline import artifact_for, find_baseline
+
 SUITES = {
     "ion-files": ("Ion 1.0 corpus", "files"),
     "ion-readers": ("Ion readers and writers", "checks"),
@@ -132,6 +134,150 @@ def escape(text):
     return html.escape(str(text), quote=False).replace("|", "&#124;").replace("\n", " ")
 
 
+def compare_report(current, baseline):
+    if baseline["status"] != "available":
+        return baseline
+    previous = baseline["report"]
+    comparison = {key: value for key, value in baseline.items() if key != "report"}
+    comparison["current_commit"] = current["commit"]
+    comparison["baseline_corpora"] = previous["corpora"]
+    comparison["current_corpora"] = current["corpora"]
+    comparison["corpus_changes"] = [
+        name
+        for name in current["corpora"]
+        if current["corpora"][name] != previous["corpora"].get(name)
+    ]
+    comparison["suites"] = {}
+    for suite in SUITES:
+        before = previous["suites"].get(suite)
+        after = current["suites"].get(suite)
+        states = []
+        for report in (previous, current):
+            states.append(
+                "reported"
+                if suite in report["suites"]
+                else "excluded"
+                if suite in report["excluded_suites"]
+                else "missing"
+            )
+        comparison["suites"][suite] = {
+            "baseline_state": states[0],
+            "current_state": states[1],
+            "delta": {key: after[key] - before[key] for key in COUNTS}
+            if before and after
+            else None,
+            "exclusion_changed": previous["excluded_suites"].get(suite)
+            != current["excluded_suites"].get(suite),
+        }
+    return comparison
+
+
+def compatible_baseline(current, previous):
+    if (
+        not isinstance(previous, dict)
+        or previous.get("schema_version") != 1
+        or previous.get("status") != "passed"
+        or previous.get("target") != current["target"]
+        or previous.get("runner_os") != current["runner_os"]
+    ):
+        return False
+    if (
+        not isinstance(previous.get("corpora"), dict)
+        or not isinstance(previous.get("excluded_suites"), dict)
+        or not isinstance(previous.get("suites"), dict)
+        or previous.get("errors") != []
+        or previous.get("test_exit_code") != 0
+    ):
+        return False
+    records, errors = parse_results(
+        "\n".join(
+            PREFIX + json.dumps(record) for record in previous["suites"].values()
+        ),
+        previous["excluded_suites"],
+    )
+    return (
+        not errors
+        and records == previous["suites"]
+        and all(
+            not record["unexpected"] and not record["stale"]
+            for record in records.values()
+        )
+    )
+
+
+def render_comparison(comparison):
+    lines = ["", "### Change from successful main baseline", ""]
+    if comparison["status"] != "available":
+        return lines + ["Baseline unavailable: " + escape(comparison["reason"]) + "."]
+    lines += [
+        "Baseline: [run "
+        + str(comparison["run_id"])
+        + "]("
+        + comparison["url"]
+        + "), commit `"
+        + escape(comparison["commit"])
+        + "`.",
+        "",
+    ]
+    if comparison["corpus_changes"]:
+        lines += [
+            "Corpus revisions changed: "
+            + ", ".join(comparison["corpus_changes"])
+            + ". Count changes may include added or removed corpus cases.",
+            "",
+        ]
+        for name in comparison["corpus_changes"]:
+            lines.append(
+                "- "
+                + name
+                + ": `"
+                + escape(comparison["baseline_corpora"].get(name) or "unavailable")
+                + "` → `"
+                + escape(comparison["current_corpora"].get(name) or "unavailable")
+                + "`."
+            )
+        lines.append("")
+    else:
+        lines += ["Corpus revisions unchanged from the baseline.", ""]
+    lines += [
+        "Each delta compares the same OS, target, suite, and unit. Positive counts are increases, not necessarily improvements.",
+        "",
+        "| Corpus | Unit | Δ Total | Δ Passed | Δ Skipped | Δ Known failures | Δ N/A | Δ Unexpected | Δ Stale | Suite state |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    ]
+    for suite, change in comparison["suites"].items():
+        name, unit = SUITES[suite]
+        state = change["baseline_state"] + " → " + change["current_state"]
+        if change["exclusion_changed"]:
+            state += "; exclusion changed"
+        delta = change["delta"]
+        lines.append(
+            "| "
+            + " | ".join(
+                [name, unit]
+                + [
+                    f"{delta[key]:+d}" if delta is not None else "-"
+                    for key in COUNTS[:7]
+                ]
+                + [state]
+            )
+            + " |"
+        )
+    for suite, change in comparison["suites"].items():
+        delta = change["delta"]
+        if delta and (delta["files"] or delta["out_of_scope"]):
+            lines += [
+                "",
+                SUITES[suite][0]
+                + ": Δ corpus files "
+                + f"{delta['files']:+d}"
+                + "; Δ out-of-scope files/forms "
+                + f"{delta['out_of_scope']:+d}"
+                + ".",
+            ]
+    return lines
+
+
 def render_markdown(report):
     lines = [
         "## Corpus conformance",
@@ -208,6 +354,8 @@ def render_markdown(report):
     if report["errors"]:
         lines += ["", "### Reporting errors", ""]
         lines.extend("- " + escape(error) for error in report["errors"])
+    if "comparison" in report:
+        lines += render_comparison(report["comparison"])
     lines += [
         "",
         "The conformance-results artifact contains this summary, JSON counts, and the full test log.",
@@ -236,6 +384,12 @@ def main():
     report = make_report(
         log, int(args.exit_code) if args.exit_code else None, root, args.target
     )
+    baseline = find_baseline(
+        artifact_for(report),
+        "conformance.json",
+        lambda previous: compatible_baseline(report, previous),
+    )
+    report["comparison"] = compare_report(report, baseline)
     markdown = render_markdown(report)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "conformance.json").write_text(

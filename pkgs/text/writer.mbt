@@ -113,6 +113,31 @@ pub fn write_stream_value(
 let indent_unit : String = "  "
 
 ///|
+/// Render a value inside an existing text context, without symbol-table
+/// directives. Incremental writers supply the depth and sexp position.
+pub fn write_fragment(
+  value : @ion.IonValue,
+  depth? : Int = 0,
+  pretty? : Bool = false,
+  in_sexp? : Bool = false,
+) -> String raise @ion.IonError {
+  let buffer = StringBuilder()
+  write_value(buffer, value, depth, pretty, in_sexp)
+  buffer.to_string()
+}
+
+///|
+/// Render a symbol token in an existing text context.
+pub fn symbol_to_text(
+  token : @ion.SymbolToken,
+  in_sexp? : Bool = false,
+) -> String raise @ion.IonError {
+  let buffer = StringBuilder()
+  write_symbol(buffer, token, in_sexp)
+  buffer.to_string()
+}
+
+///|
 /// Append `depth` indent units.
 fn write_indent(buffer : StringBuilder, depth : Int) -> Unit {
   for _ in 0..<depth {
