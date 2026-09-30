@@ -52,6 +52,45 @@ test "$null_or admits null.null but no other null" {
 }
 
 ///|
+test "type-reference annotations are rejected on constraint lists" {
+  for (version, annotation) in [("1_0", "nullable"), ("2_0", "$null_or")] {
+    for constraint in ["contains", "all_of", "any_of", "one_of"] {
+      let item = if constraint == "contains" { "1" } else { "int" }
+      let schema = "$ion_schema_\{version} type::{ name: t, \{constraint}: \{annotation}::[\{item}] }"
+      assert_true(
+        load_error(schema) is Some(@ion.IonError::DataModel(_)),
+        msg=schema,
+      )
+    }
+  }
+}
+
+///|
+test "type-reference annotations still load on references and list items" {
+  for (version, annotation) in [("1_0", "nullable"), ("2_0", "$null_or")] {
+    for
+      constraint in [
+        "type: \{annotation}::int",
+        "element: \{annotation}::int",
+        "not: \{annotation}::int",
+        "fields: { a: \{annotation}::int }",
+        "all_of: [\{annotation}::int]",
+        "any_of: [\{annotation}::int]",
+        "one_of: [\{annotation}::int]",
+        "ordered_elements: [\{annotation}::int]",
+        "type: \{annotation}::{ type: int }",
+      ] {
+      let schema = "$ion_schema_\{version} type::{ name: t, \{constraint} }"
+      assert_true(load(schema) is Some(_), msg=schema)
+    }
+  }
+  assert_true(
+    load("$ion_schema_1_0 type::{ name: t, type: type::{ type: int } }")
+    is Some(_),
+  )
+}
+
+///|
 test "text, lob, number, and any cover several Ion types" {
   let schema = "type::{ name: t, type: text } type::{ name: n, type: number } type::{ name: a, type: any }"
   assert_true(accepts(schema, "t", "sym"))

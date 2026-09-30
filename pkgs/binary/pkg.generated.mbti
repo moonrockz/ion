@@ -4,6 +4,7 @@ package "moonrockz/ion/binary"
 import {
   "moonbitlang/core/debug",
   "moonrockz/ion/ion",
+  "moonrockz/ion/text",
 }
 
 // Values
@@ -50,6 +51,13 @@ pub fn write_binary_value(@ion.IonValue) -> Bytes raise @ion.IonError
 // Errors
 
 // Types and methods
+pub struct BinaryEventReader {
+  events : @text.IonReader
+}
+pub fn BinaryEventReader::new(BytesView, catalog? : @ion.Catalog) -> Self raise @ion.IonError
+pub fn BinaryEventReader::next(Self) -> @text.IonEvent?
+pub fn BinaryEventReader::remaining(Self) -> Array[@text.IonEvent]
+
 pub(all) enum IonTypeCode {
   Null
   Bool

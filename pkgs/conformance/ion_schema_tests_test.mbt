@@ -480,6 +480,9 @@ fn Suite::run(self : Suite) -> Unit raise {
   let used : Set[String] = Set([])
   let mut passed = 0
   let mut total = 0
+  let mut known = 0
+  let mut excluded = 0
+  let details : Array[String] = []
   for file in files {
     let (relative, outcomes) = file
     let mut clean = true
@@ -491,7 +494,11 @@ fn Suite::run(self : Suite) -> Unit raise {
         SchemaFailed(reason) => {
           clean = false
           match self.known_failure(id) {
-            Some(key) => used.add(key)
+            Some(key) => {
+              used.add(key)
+              known += 1
+              details.push("known failure \{id}: \{self.known_failures[key]}")
+            }
             None => unexpected.push("\{id}: \{reason}")
           }
         }
@@ -500,6 +507,9 @@ fn Suite::run(self : Suite) -> Unit raise {
           unsupported[reason] = unsupported.get(reason).unwrap_or(0) + 1
           if !self.skipped.contains(relative) {
             unexpected.push("\{id}: unsupported: \{reason}")
+          } else {
+            excluded += 1
+            details.push("skip \{id}: \{reason}")
           }
         }
       }
@@ -530,6 +540,21 @@ fn Suite::run(self : Suite) -> Unit raise {
   for relative in stale {
     println("  PASSES BUT LISTED " + relative)
   }
+  report_conformance(
+    if self.name == "ISL 1.0" {
+      "isl-1.0"
+    } else {
+      "isl-2.0"
+    },
+    total,
+    passed,
+    skipped=excluded,
+    known_failures=known,
+    unexpected=unexpected.length(),
+    stale=stale.length(),
+    files=files.length(),
+    details=details + unexpected + stale.map(id => "stale exclusion: " + id),
+  )
   assert_true(unexpected.is_empty() && stale.is_empty())
 }
 

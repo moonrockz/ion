@@ -27,6 +27,9 @@ reader and writer, and compares them with the sync reader above:
   octet and of 4 KiB, read the same values from a good file and fail on a bad
   one;
 - `TextEventReader` gives the events of those values;
+- the sync and async `BinaryEventReader`s give the same events for good
+  binary files and binary encodings of every good text file, in chunks of
+  one octet and 4 KiB; bad binary files must fail;
 - `tokenize` covers a good text file exactly, and `parse_cst` parses it;
 - the values survive the pretty writer;
 - the async writers write the same octets as the sync writers.

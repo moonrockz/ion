@@ -86,15 +86,51 @@ jobs:
 
       - name: Generate release notes
         id: notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG_EXISTS: ${{ steps.check_tag.outputs.exists }}
         run: |
-          NOTES=$(git cliff --latest --strip header 2>/dev/null || echo "Release ${{ steps.version.outputs.version }}")
+          if [ "$TAG_EXISTS" = "true" ]; then
+            NOTES=$(git cliff --latest --strip header)
+          else
+            NOTES=$(git cliff --unreleased --tag "v$VERSION" --strip header)
+          fi
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-          echo "notes<<$EOF" >> "$GITHUB_OUTPUT"
-          echo "$NOTES" >> "$GITHUB_OUTPUT"
-          echo "$EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "notes<<$EOF"
+            echo "$NOTES"
+            echo "$EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validate release readiness
-        run: mise run release:pre-check
+        id: tests
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/conformance-results"
+          if mise run release:pre-check 2>&1 | tee "$RUNNER_TEMP/conformance-results/moon-test.log"; then
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          else
+            status=$?
+            echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+            exit "$status"
+          fi
+
+      - name: Publish conformance summary
+        if: always()
+        env:
+          TEST_EXIT_CODE: ${{ steps.tests.outputs.exit_code }}
+        run: |
+          python3 .github/scripts/conformance_summary.py \
+            "$RUNNER_TEMP/conformance-results/moon-test.log" \
+            --exit-code "$TEST_EXIT_CODE" \
+            --output-dir "$RUNNER_TEMP/conformance-results"
+
+      - name: Upload conformance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-results
+          path: ${{ runner.temp }}/conformance-results/
 
   tag:
     needs: validate

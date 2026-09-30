@@ -203,6 +203,8 @@ test "ion-tests" {
   let unexpected : Array[String] = []
   let stale : Array[String] = []
   let mut checked = 0
+  let mut passed = 0
+  let mut excluded = 0
   for path in files_under(root) {
     let relative = path.view(start_offset=root.length() + 1).to_owned()
     if relative.has_suffix(".md") {
@@ -216,8 +218,12 @@ test "ion-tests" {
     }
     match (failure, skipped.get(relative)) {
       (Some(reason), None) => unexpected.push("\{relative}: \{reason}")
-      (None, Some(_)) => stale.push(relative)
-      _ => ()
+      (None, Some(_)) => {
+        passed += 1
+        stale.push(relative)
+      }
+      (Some(_), Some(_)) => excluded += 1
+      (None, None) => passed += 1
     }
   }
   println(
@@ -229,5 +235,18 @@ test "ion-tests" {
   for relative in stale {
     println("  PASSES BUT SKIPPED " + relative)
   }
+  let details = unexpected + stale.map(id => "stale skip: " + id)
+  for id, reason in skipped {
+    details.push("skip \{id}: \{reason}")
+  }
+  report_conformance(
+    "ion-files",
+    checked,
+    passed,
+    skipped=excluded,
+    unexpected=unexpected.length(),
+    stale=stale.length(),
+    details~,
+  )
   assert_true(unexpected.is_empty() && stale.is_empty())
 }
