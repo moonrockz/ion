@@ -1,0 +1,14 @@
+// Unknown variant.
+{kind: triangle, width: 3.0, height: 4.0}
+// Missing payload.
+{kind: circle, center: {x: 0.0, y: 0.0}}
+// Payload from another variant.
+{kind: circle, center: {x: 0.0, y: 0.0}, radius: 2.5, width: 3.0}
+// A string is not a symbol tag.
+{kind: "circle", center: {x: 0.0, y: 0.0}, radius: 2.5}
+// Integers are not decimals.
+{kind: rectangle, width: 3, height: 4.0}
+// Dimensions must be positive.
+{kind: rectangle, width: 0.0, height: 4.0}
+// Duplicate tag.
+{kind: rectangle, kind: rectangle, width: 3.0, height: 4.0}

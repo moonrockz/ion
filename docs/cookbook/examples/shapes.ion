@@ -1,0 +1,2 @@
+{kind: circle, center: {x: 0.0, y: 0.0}, radius: 2.5}
+{kind: rectangle, width: 3.0, height: 4.0}
