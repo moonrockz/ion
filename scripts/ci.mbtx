@@ -2791,6 +2791,18 @@ let cli_line : String = "{name: \"ion\", values: [1, 2, 3], tag: sample}\n"
 let bench_timeout_ms : Int = 180000
 
 ///|
+/// A time limit in words: whole seconds, or milliseconds.
+fn duration_text(ms : Int) -> String {
+  if ms == 1000 {
+    "1 second"
+  } else if ms % 1000 == 0 {
+    "\{ms / 1000} seconds"
+  } else {
+    "\{ms} ms"
+  }
+}
+
+///|
 let invalid_measurements : String = "benchmark returned invalid measurements"
 
 ///|
@@ -3531,6 +3543,20 @@ async fn bench_command(
 }
 
 ///|
+/// Stop a timed-out `time` process together with the command that it runs.
+/// The default handler signals only `time`, and its child then keeps
+/// running. Kill the children first: after `time` exits, they belong to
+/// init and `pkill -P` no longer finds them.
+fn stop_with_children() -> @process.CancellationHandler {
+  pid => {
+    let _ = @process.run("pkill", ["-KILL", "-P", pid.to_string()]) catch {
+      _ => 1
+    }
+    (@process.hard_cancel().0)(pid)
+  }
+}
+
+///|
 /// Run the CLI once under the system `time`, with the input file as stdin
 /// and stdout discarded. Elapsed time has millisecond resolution.
 async fn measure_cli(cli : Command, source : String) -> CliSample {
@@ -3544,25 +3570,27 @@ async fn measure_cli_in(
   dir : String,
   cli : Command,
   source : String,
+  timeout_ms? : Int = bench_timeout_ms,
 ) -> CliSample {
   let stats = dir + "/rss"
   let errors = dir + "/stderr"
   let darwin = platform_system() == "Darwin"
   let timed = timed_command(darwin, cli, stats)
   let start = @async.now()
-  let code = @async.with_timeout_opt(bench_timeout_ms, async fn() {
+  let code = @async.with_timeout_opt(timeout_ms, async fn() {
     @process.run(
       timed.program,
       timed.args,
       stdin=@process.redirect_from_file(source),
       stdout=@process.redirect_to_file("/dev/null"),
       stderr=@process.redirect_to_file(errors),
+      cancel_handler=stop_with_children(),
     )
   })
   let elapsed_ms = (@async.now() - start).to_double()
   guard code is Some(code) else {
     raise BenchFailure(
-      "Command '\{timed.to_string()}' timed out after 180 seconds",
+      "Command '\{timed.to_string()}' timed out after \{duration_text(timeout_ms)}",
     )
   }
   let diagnostics = @utf8.decode_lossy(@fs.read_file(errors).binary())
@@ -4184,6 +4212,46 @@ async test "measure_cli gives the peak RSS of the command alone and reports its 
   @fs.rmdir(dir, recursive=true)
   @expect.expect(failure.has_prefix("CLI benchmark failed: ")).to_be_true()
   @expect.expect(failure.contains("sample failure")).to_be_true()
+}
+
+///|
+/// True when the process `pid` is still running after about two seconds.
+async fn process_left(pid : String) -> Bool {
+  for _ in 0..<20 {
+    let (code, _, _) = @process.collect_output("ps", ["-p", pid])
+    if code != 0 {
+      return false
+    }
+    @async.sleep(100)
+  }
+  true
+}
+
+///|
+async test "measure_cli stops the command as well as time when it times out" {
+  if !@fs.exists("/usr/bin/time") {
+    return
+  }
+  let dir = @fs.tmpdir(prefix="ci-measure-cli-timeout-")
+  let source = dir + "/input"
+  let pid_file = dir + "/pid"
+  @fs.write_file(source, "")
+  // The command records its PID, then becomes a long sleep.
+  let command : Command = {
+    program: "/bin/sh",
+    args: ["-c", "echo $$ > '\{pid_file}'; exec sleep 30"],
+  }
+  let failure = try
+    measure_cli_in(dir, command, source, timeout_ms=1000)
+  catch {
+    error => failure_message(error)
+  } noraise {
+    sample => fail("expected a timeout, got \{Repr(sample)}")
+  }
+  let pid = @fs.read_file(pid_file).text().trim().to_string()
+  @fs.rmdir(dir, recursive=true)
+  @expect.expect(failure.contains("timed out after 1 second")).to_be_true()
+  @expect.expect(process_left(pid)).to_equal(false)
 }
 
 ///|
