@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Install the project git hooks (lefthook.yml) with lefthook"
+set -euo pipefail
+
+exec lefthook install -f

@@ -3,6 +3,7 @@
 
 [tools]
 "cargo:git-cliff" = "2.7.0"
+lefthook = "2.1.1"
 
 [tasks.setup]
 description = "Initialize the repository: fetch the submodules and the MoonBit dependencies"

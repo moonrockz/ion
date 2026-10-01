@@ -3,5 +3,8 @@
 # `pkgs/conformance` holds only a test over `tests/ion-tests`.
 tests/
 .github/
-.githooks/
+.beads/
+.dev/
+lefthook.yml
+mise-tasks/
 pkgs/conformance/
