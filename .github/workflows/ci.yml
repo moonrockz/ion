@@ -82,9 +82,15 @@ jobs:
         shell: bash
         env:
           TEST_TARGET: ${{ matrix.target }}
+          COVERAGE_ENABLED: ${{ matrix.target == 'wasm' }}
         run: |
           mkdir -p "$RUNNER_TEMP/conformance-results"
-          if moon test --target "$TEST_TARGET" 2>&1 | tee "$RUNNER_TEMP/conformance-results/moon-test.log"; then
+          coverage_flags=()
+          if [ "$COVERAGE_ENABLED" = "true" ]; then
+            moon coverage clean
+            coverage_flags+=(--enable-coverage)
+          fi
+          if moon test --target "$TEST_TARGET" "${coverage_flags[@]}" 2>&1 | tee "$RUNNER_TEMP/conformance-results/moon-test.log"; then
             echo "exit_code=0" >> "$GITHUB_OUTPUT"
           else
             status=$?
@@ -112,6 +118,24 @@ jobs:
         with:
           name: conformance-results-${{ matrix.os }}-${{ matrix.target }}
           path: ${{ runner.temp }}/conformance-results/
+
+      - name: Publish coverage
+        if: always() && matrix.target == 'wasm'
+        shell: bash
+        env:
+          TEST_EXIT_CODE: ${{ steps.tests.outputs.exit_code }}
+        run: |
+          python .github/scripts/coverage_summary.py \
+            --exit-code "$TEST_EXIT_CODE" \
+            --target wasm \
+            --output-dir "$RUNNER_TEMP/coverage-results"
+
+      - name: Upload coverage results
+        if: always() && matrix.target == 'wasm'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-results-ubuntu-latest-wasm
+          path: ${{ runner.temp }}/coverage-results/
 
   build-native:
     needs: unit-tests

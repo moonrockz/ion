@@ -297,6 +297,7 @@ mise run setup       # fetch the test-data submodules and install dependencies
 mise run test:check  # moon check
 mise run test:unit   # moon test (unit, doc, snapshot, conformance, QuickCheck)
 mise run test:all    # check + test
+mise run test:coverage # instrumented wasm tests, HTML and machine-readable coverage
 mise run build:native
 mise run bench       # native release benchmarks and CLI peak RSS
 moon fmt             # format
@@ -392,3 +393,19 @@ Run `mise run bench` locally. Reports go to `_build/performance/`; in CI they
 appear in the job summary and the `performance-results-ubuntu-latest-native`
 artifact as `performance.md` and `performance.json`. The first run has no
 performance baseline; later runs compare identical workload settings.
+
+
+The wasm CI job instruments its existing test run for coverage and adds a
+package and focused-file table to the run summary. The
+`coverage-results-ubuntu-latest-wasm` artifact includes `coverage.json` with
+per-file counts and uncovered line numbers, the original Coveralls JSON,
+Cobertura XML, and `html/index.html` with annotated source views. Download and
+extract the artifact to browse the HTML locally. Reports distinguish executable
+line coverage from Moon's execution-point totals, since several points can
+share a line. Coverage percentages are informational; failed tests or missing
+reports are shown as partial or unavailable and fail the reporting step.
+
+Run `mise run test:coverage` locally to generate the same reports in
+`_build/coverage-results/`. The task clears old traces before testing, so source
+changes cannot mix incompatible instrumentation. Coverage is for packages
+compiled on wasm; the native-only benchmark driver is not included.
