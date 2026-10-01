@@ -2,35 +2,4 @@
 #MISE description="Decide the version of a Release workflow run (writes version, prerelease and tag_exists to GITHUB_OUTPUT)"
 set -euo pipefail
 
-if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] && [ "${GITHUB_REF_NAME:-}" != "main" ]; then
-  echo "Error: releases run only from main (current: ${GITHUB_REF_NAME:-})" >&2
-  exit 1
-fi
-
-if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
-  version="${GITHUB_REF_NAME#v}"
-else
-  version=$(mise run release:version 2>/dev/null | tail -1)
-fi
-
-module_version=$(sed -n 's/^version = "\(.*\)"/\1/p' moon.mod)
-if [ "$module_version" != "$version" ]; then
-  echo "Error: moon.mod has version $module_version, but the release is $version" >&2
-  exit 1
-fi
-
-prerelease=false
-if [[ "$version" == *-* ]]; then
-  prerelease=true
-fi
-
-tag_exists=false
-if git tag -l "v$version" | grep -q .; then
-  tag_exists=true
-fi
-
-{
-  echo "version=$version"
-  echo "prerelease=$prerelease"
-  echo "tag_exists=$tag_exists"
-} >> "${GITHUB_OUTPUT:-/dev/stdout}"
+exec moon run -q --target wasm scripts/release.mbtx -- plan

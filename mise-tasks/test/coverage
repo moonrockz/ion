@@ -3,10 +3,4 @@
 #MISE depends=["setup:submodules"]
 set -euo pipefail
 
-moon coverage --target-dir _build/coverage clean
-if moon test --target wasm --enable-coverage --target-dir _build/coverage; then
-  coverage_test_status=0
-else
-  coverage_test_status=$?
-fi
-exec python3 .github/scripts/coverage_summary.py --exit-code "$coverage_test_status" --target-dir _build/coverage --output-dir _build/coverage-results
+exec moon run -q --target wasm scripts/coverage.mbtx -- run

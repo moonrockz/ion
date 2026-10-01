@@ -1,0 +1,1391 @@
+///|
+import {
+  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.4/process",
+  "moonbitlang/async@0.22.4/fs",
+  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/core/bigint",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "moonrockz/moonspec@0.10.0",
+  "moonrockz/expect@0.6.0",
+}
+
+///|
+/// Coverage reports for CI.
+///
+/// Usage:
+/// - `coverage.mbtx run`: runs the instrumented wasm tests, then `summary`.
+/// - `coverage.mbtx summary --exit-code <code|""> --output-dir <dir>
+///   [--target <target>] [--target-dir <dir>]`: exports Moon's coverage
+///   reports and publishes `coverage.json` and `coverage.md`.
+
+///|
+/// The files whose line coverage the summary always shows.
+let focus : Array[String] = [
+  "pkgs/text/handler.mbt", "pkgs/ion/fold.mbt", "pkgs/ion/visitor.mbt", "pkgs/json/to_ion.mbt",
+  "pkgs/schema/load.mbt", "pkgs/schema/validate.mbt",
+]
+
+///|
+enum Status {
+  Passed
+  Partial
+  Unavailable
+} derive(Debug, Eq)
+
+///|
+struct Counts {
+  covered : Int
+  total : Int
+} derive(Debug, Eq)
+
+///|
+struct FileCoverage {
+  lines : Counts
+  uncovered_lines : Array[Int]
+  source_digest : Json?
+} derive(Debug, Eq)
+
+///|
+/// Where the report was made: the runner OS and the commit, if any.
+struct Environment {
+  runner_os : String
+  commit : String?
+} derive(Debug, Eq)
+
+///|
+struct Report {
+  status : Status
+  target : String
+  runner_os : String
+  commit : String?
+  test_exit_code : Int?
+  files : Map[String, FileCoverage]
+  packages : Map[String, Counts]
+  lines : Counts?
+  points : Counts?
+  errors : Array[String]
+} derive(Debug, Eq)
+
+///|
+/// The outcome of each Moon export: its text, or the failure detail.
+struct Exports {
+  point_summary : Result[String, String]
+  coveralls : Result[String, String]
+  cobertura : Result[Unit, String]
+  html : Result[Unit, String]
+} derive(Debug, Eq)
+
+///|
+struct Summary {
+  report : Report
+  json : String
+  markdown : String
+} derive(Debug, Eq)
+
+///|
+/// A coverage export that failed validation; the text is the report error.
+suberror CoverageError {
+  Invalid(String)
+} derive(Debug)
+
+///|
+/// The line hits of one source line in the Coveralls export.
+enum LineHit {
+  NotExecutable
+  Missed
+  Covered
+} derive(Debug, Eq)
+
+///|
+/// One of Moon's coverage report formats.
+enum ReportFormat {
+  PointSummary
+  Coveralls
+  Cobertura
+  Html
+} derive(Debug, Eq)
+
+///|
+enum Command {
+  Summarize(SummaryOptions)
+  RunTests
+} derive(Debug, Eq)
+
+///|
+struct SummaryOptions {
+  test_exit_code : Int?
+  target : String
+  target_dir : String
+  output_dir : String
+} derive(Debug, Eq)
+
+///|
+let usage : String =
+  #|Usage: coverage.mbtx run
+  #|       coverage.mbtx summary --exit-code <code|""> --output-dir <dir> [--target <target>] [--target-dir <dir>]
+
+///|
+let partial_tests_error : String = "Instrumented tests failed or did not report an exit code; coverage is partial"
+
+///|
+let no_sources_error : String = "no instrumented source files reported"
+
+///|
+let invalid_points_error : String = "Moon did not report valid instrumentation-point totals"
+
+///|
+let export_timeout_ms : Int = 60_000
+
+///|
+let failure_detail_limit : Int = 2000
+
+///|
+let run_target_dir : String = "_build/coverage"
+
+///|
+let run_output_dir : String = "_build/coverage-results"
+
+///|
+/// Parse `--exit-code`: an empty argument means the tests reported no code.
+fn parse_exit_code(text : String) -> Result[Int?, String] {
+  if text.is_empty() {
+    return Ok(None)
+  }
+  Ok(Some(@string.parse_int(text))) catch {
+    _ => Err("--exit-code must be an integer or empty, got \{text}")
+  }
+}
+
+///|
+fn parse_command(args : ArrayView[String]) -> Result[Command, String] {
+  match args {
+    ["run"] => Ok(RunTests)
+    ["summary", .. options] =>
+      parse_summary_options(options).map(options => Summarize(options))
+    _ => Err(usage)
+  }
+}
+
+///|
+/// Parse `--flag value` pairs. The last value of a repeated flag wins.
+fn parse_summary_options(
+  args : ArrayView[String],
+) -> Result[SummaryOptions, String] {
+  let values : Map[String, String] = Map([])
+  for rest = args {
+    match rest {
+      [] => break
+      [flag, value, .. rest] if [
+          "--exit-code", "--output-dir", "--target", "--target-dir",
+        ].contains(flag) => {
+        values[flag] = value
+        continue rest
+      }
+      _ => return Err(usage)
+    }
+  }
+  guard values.get("--exit-code") is Some(exit_code) &&
+    values.get("--output-dir") is Some(output_dir) else {
+    return Err(usage)
+  }
+  parse_exit_code(exit_code).map(test_exit_code => {
+    test_exit_code,
+    target: values.get("--target").unwrap_or("wasm"),
+    target_dir: values.get("--target-dir").unwrap_or("_build"),
+    output_dir,
+  })
+}
+
+///|
+fn Status::name(self : Status) -> String {
+  match self {
+    Passed => "passed"
+    Partial => "partial"
+    Unavailable => "unavailable"
+  }
+}
+
+///|
+/// A report with errors is partial when it still measured some files.
+fn status_for(
+  errors : Array[String],
+  files : Map[String, FileCoverage],
+) -> Status {
+  match (errors.is_empty(), files.is_empty()) {
+    (true, _) => Passed
+    (false, false) => Partial
+    (false, true) => Unavailable
+  }
+}
+
+///|
+fn Counts::percent(self : Counts) -> Double? {
+  if self.total == 0 {
+    None
+  } else {
+    Some(self.covered.to_double() * 100.0 / self.total.to_double())
+  }
+}
+
+///|
+fn Counts::add(self : Counts, other : Counts) -> Counts {
+  { covered: self.covered + other.covered, total: self.total + other.total, }
+}
+
+///|
+/// The source list of a Coveralls export; it must not be empty.
+fn source_files(coveralls : Json?) -> Array[Json] raise CoverageError {
+  guard coveralls is Some(Object(raw)) &&
+    raw.get("source_files") is Some(Array(sources)) &&
+    !sources.is_empty() else {
+    raise Invalid(no_sources_error)
+  }
+  sources
+}
+
+///|
+/// The string names of the Coveralls sources, to look up on disk.
+fn source_names(coveralls : Json?) -> Array[String] {
+  let sources = source_files(coveralls) catch { Invalid(_) => [] }
+  sources.filter_map(source => {
+    guard source is Object(fields) && fields.get("name") is Some(String(name)) else {
+      None
+    }
+    Some(name)
+  })
+}
+
+///|
+/// A project source: a relative path under `pkgs/` with no `..` segment,
+/// naming a file that exists.
+fn is_project_file(name : String, file_exists : (String) -> Bool) -> Bool {
+  !name.has_prefix("/") &&
+  !name.split("/").any(segment => segment == "..") &&
+  name.has_prefix("pkgs/") &&
+  file_exists(name)
+}
+
+///|
+fn line_hit(value : Json) -> LineHit? {
+  match value {
+    Null => Some(NotExecutable)
+    Number(n, ..) if n >= 0.0 && !n.is_inf() && n.floor() == n =>
+      Some(if n == 0.0 { Missed } else { Covered })
+    _ => None
+  }
+}
+
+///|
+fn file_coverage(
+  name : String,
+  fields : Map[String, Json],
+) -> FileCoverage raise CoverageError {
+  guard fields.get("coverage") is Some(Array(values)) else {
+    raise Invalid("invalid line hits for \{name}")
+  }
+  let hits = []
+  for value in values {
+    guard line_hit(value) is Some(hit) else {
+      raise Invalid("invalid line hits for \{name}")
+    }
+    hits.push(hit)
+  }
+  let uncovered_lines = []
+  for index, hit in hits {
+    if hit == Missed {
+      uncovered_lines.push(index + 1)
+    }
+  }
+  {
+    lines: {
+      covered: hits.filter(hit => hit == Covered).length(),
+      total: hits.filter(hit => hit != NotExecutable).length(),
+    },
+    uncovered_lines,
+    source_digest: fields.get("source_digest"),
+  }
+}
+
+///|
+/// The parent directory of a source path, like Python's `Path.parent`.
+fn parent_directory(name : String) -> String {
+  let segments = name
+    .split("/")
+    .filter(segment => segment != "" && segment != ".")
+    .map(segment => segment.to_owned())
+    .collect()
+  match segments {
+    [] | [_] => "."
+    [.. parents, _] => parents.join("/")
+  }
+}
+
+///|
+/// Parse a `Total: <covered>/<total>` line; trailing whitespace is allowed.
+fn point_total_line(line : StringView) -> Counts? {
+  let line = line.trim_end(chars=" \t\n\r\u{0b}\u{0c}")
+  guard line is [.. "Total: ", .. rest] else { return None }
+  let is_number = (text : StringView) => {
+    !text.is_empty() && text.iter().all(c => c >= '0' && c <= '9')
+  }
+  guard rest.split("/").collect() is [covered, total] &&
+    is_number(covered) &&
+    is_number(total) else {
+    return None
+  }
+  Some({ covered: @string.parse_int(covered), total: @string.parse_int(total), }) catch {
+    _ => None
+  }
+}
+
+///|
+/// The point totals from Moon's summary: the first `Total:` line, which
+/// must have a non-zero total no smaller than the covered count.
+fn point_counts(summary : String?) -> Counts raise CoverageError {
+  guard summary is Some(text) else { raise Invalid(invalid_points_error) }
+  let found = text
+    .split("\n")
+    .find_first(line => point_total_line(line) is Some(_))
+  guard found.bind(point_total_line) is Some(points) &&
+    points.covered <= points.total &&
+    points.total > 0 else {
+    raise Invalid(invalid_points_error)
+  }
+  points
+}
+
+///|
+/// The measures a report gathers. A validation error stops the gathering
+/// and keeps what was measured before it.
+struct Measures {
+  files : Map[String, FileCoverage]
+  packages : Map[String, Counts]
+  mut lines : Counts?
+  mut points : Counts?
+}
+
+///|
+fn Measures::gather(
+  self : Measures,
+  coveralls : Json?,
+  point_summary : String?,
+  file_exists : (String) -> Bool,
+) -> Unit raise CoverageError {
+  for source in source_files(coveralls) {
+    guard source is Object(fields) else {
+      raise Invalid("coverage source is not an object")
+    }
+    let name = match fields.get("name") {
+      Some(String(name)) if is_project_file(name, file_exists) => name
+      Some(name) =>
+        raise Invalid(
+          "coverage source is not a project file: \{project_name_text(name)}",
+        )
+      None => raise Invalid("coverage source has no name")
+    }
+    if self.files.contains(name) {
+      raise Invalid("duplicate coverage source: \{name}")
+    }
+    self.files[name] = file_coverage(name, fields)
+  }
+  let lines = self.files
+    .values()
+    .fold(init={ covered: 0, total: 0, }, (sum, file) => sum.add(file.lines))
+  self.lines = Some(lines)
+  if lines.total == 0 {
+    raise Invalid("no executable source lines reported")
+  }
+  for name, file in self.files {
+    let directory = parent_directory(name)
+    self.packages[directory] = self.packages
+      .get(directory)
+      .unwrap_or({ covered: 0, total: 0, })
+      .add(file.lines)
+  }
+  self.points = Some(point_counts(point_summary))
+  for name in focus {
+    if !self.files.contains(name) {
+      raise Invalid("focused source was not instrumented: \{name}")
+    }
+  }
+}
+
+///|
+/// A source name as the report error shows it: strings without quotes.
+fn project_name_text(name : Json) -> String {
+  match name {
+    String(text) => text
+    other => other.stringify()
+  }
+}
+
+///|
+fn make_report(
+  coveralls : Json?,
+  point_summary : String?,
+  test_exit_code : Int?,
+  target : String,
+  env : Environment,
+  file_exists : (String) -> Bool,
+) -> Report {
+  let errors = []
+  if test_exit_code != Some(0) {
+    errors.push(partial_tests_error)
+  }
+  let measures : Measures = {
+    files: {},
+    packages: {},
+    lines: None,
+    points: None,
+  }
+  measures.gather(coveralls, point_summary, file_exists) catch {
+    Invalid(message) => errors.push(message)
+  }
+  {
+    status: status_for(errors, measures.files),
+    target,
+    runner_os: env.runner_os,
+    commit: env.commit,
+    test_exit_code,
+    files: measures.files,
+    packages: measures.packages,
+    lines: measures.lines,
+    points: measures.points,
+    errors,
+  }
+}
+
+///|
+/// Add export failures to a report and update its status.
+fn Report::with_failures(self : Report, failures : Array[String]) -> Report {
+  if failures.is_empty() {
+    return self
+  }
+  let errors = self.errors + failures
+  { ..self, errors, status: status_for(errors, self.files), }
+}
+
+///|
+fn Report::exit_status(self : Report) -> Int {
+  match self.status {
+    Passed => 0
+    Partial | Unavailable => 1
+  }
+}
+
+///|
+/// Escape text like Python's `html.escape`.
+fn html_escape(text : String) -> String {
+  let buffer = StringBuilder()
+  for c in text {
+    match c {
+      '&' => buffer.write_string("&amp;")
+      '<' => buffer.write_string("&lt;")
+      '>' => buffer.write_string("&gt;")
+      '"' => buffer.write_string("&quot;")
+      '\'' => buffer.write_string("&#x27;")
+      c => buffer.write_char(c)
+    }
+  }
+  buffer.to_string()
+}
+
+///|
+/// Format a number with exactly 2 decimals, like Python's `%.2f`: round the
+/// exact binary value half to even.
+fn format_fixed2(value : Double) -> String {
+  if value.is_nan() {
+    return "nan"
+  }
+  if value.is_inf() {
+    return if value > 0.0 { "inf" } else { "-inf" }
+  }
+  let bits = value.reinterpret_as_uint64()
+  let sign = if bits >> 63 == 1UL { "-" } else { "" }
+  let exponent = ((bits >> 52) & 0x7FFUL).to_int()
+  let fraction = bits & ((1UL << 52) - 1UL)
+  // value = mantissa * 2^shift
+  let (mantissa, shift) = if exponent == 0 {
+    (fraction, -1074)
+  } else {
+    (fraction | (1UL << 52), exponent - 1075)
+  }
+  let scaled = @bigint.BigInt::from_uint64(mantissa) * 100N
+  let hundredths = if shift >= 0 {
+    scaled << shift
+  } else {
+    let quotient = scaled >> -shift
+    let remainder = scaled - (quotient << -shift)
+    let half = 1N << (-shift - 1)
+    if remainder > half || (remainder == half && quotient % 2N == 1N) {
+      quotient + 1N
+    } else {
+      quotient
+    }
+  }
+  let digits = hundredths.to_string().pad_start(3, '0')
+  let point = digits.length() - 2
+  "\{sign}\{digits.view(end_offset=point)}.\{digits.view(start_offset=point)}"
+}
+
+///|
+/// A float as Python's `json.dumps` writes it: whole numbers keep `.0`.
+fn python_float_text(value : Double) -> String {
+  let text = value.to_string()
+  if text.iter().all(c => c == '-' || (c >= '0' && c <= '9')) {
+    text + ".0"
+  } else {
+    text
+  }
+}
+
+///|
+/// Compare strings by code point, like Python's `sorted`.
+fn compare_code_points(a : String, b : String) -> Int {
+  let xs = a.to_array()
+  let ys = b.to_array()
+  for
+    i in 0..<(if xs.length() < ys.length() { xs.length() } else { ys.length() }) {
+    let order = xs[i].compare(ys[i])
+    if order != 0 {
+      return order
+    }
+  }
+  xs.length().compare(ys.length())
+}
+
+///|
+fn row(name : String, counts : Counts) -> String {
+  let percent = match counts.percent() {
+    None => "n/a"
+    Some(percent) => "\{format_fixed2(percent)}%"
+  }
+  let name = html_escape(name).replace_all(old="|", new="&#124;")
+  "| \{name} | \{counts.covered} / \{counts.total} | \{percent} |"
+}
+
+///|
+/// The Markdown summary for the job summary and `coverage.md`.
+fn render(report : Report) -> String {
+  let lines = [
+    "## Code coverage",
+    "",
+    "Status: **\{report.status.name()}**. Target: `\{report.target}`. OS: \{report.runner_os}.",
+    "",
+    "Commit: `\{report.commit.filter(commit => !commit.is_empty()).unwrap_or("local working tree")}`.",
+    "",
+    "Line coverage comes from Moon's Coveralls output; comments and uninstrumented lines are excluded. Moon's summary counts execution points, which can include several points on one line. These percentages are separate measures.",
+    "",
+  ]
+  if report.lines is Some(line_counts) {
+    lines.append([
+      "| Measure | Covered / total | Coverage |",
+      "| --- | ---: | ---: |",
+      row("Executable lines", line_counts),
+    ])
+    if report.points is Some(points) {
+      lines.push(row("Moon instrumentation points", points))
+    }
+  }
+  lines.append([
+    "", "### Package line coverage", "", "| Package | Covered / total | Coverage |",
+    "| --- | ---: | ---: |",
+  ])
+  let packages = report.packages.to_array()
+  packages.sort_by((a, b) => compare_code_points(a.0, b.0))
+  for entry in packages {
+    lines.push(row(entry.0, entry.1))
+  }
+  lines.append([
+    "", "### Focused files", "", "| File | Covered / total | Line coverage |", "| --- | ---: | ---: |",
+  ])
+  for name in focus {
+    if report.files.get(name) is Some(file) {
+      lines.push(row(name, file.lines))
+    }
+  }
+  if !report.errors.is_empty() {
+    lines.append(["", "Reporting errors:", ""])
+    for error in report.errors {
+      lines.push("- \{html_escape(error)}")
+    }
+  }
+  lines.append([
+    "", "Coverage percentages are informational. The coverage-results artifact includes HTML source views, Coveralls JSON, Cobertura XML, raw point totals, and per-file line counts with uncovered line numbers.",
+    "",
+  ])
+  lines.join("\n")
+}
+
+///|
+fn counts_json(counts : Counts) -> Map[String, Json] {
+  {
+    "covered": counts.covered.to_json(),
+    "total": counts.total.to_json(),
+    "percent": match counts.percent() {
+      None => Json::null()
+      Some(percent) => Json::number(percent, repr=python_float_text(percent))
+    },
+  }
+}
+
+///|
+fn optional_json(value : Json?) -> Json {
+  value.unwrap_or(Json::null())
+}
+
+///|
+/// The report as `coverage.json`: the field names and order of the
+/// published schema, indented by 2 with a trailing newline.
+fn report_json(report : Report) -> String {
+  let files : Map[String, Json] = Map([])
+  for name, file in report.files {
+    let fields = counts_json(file.lines)
+    fields["uncovered_lines"] = file.uncovered_lines.to_json()
+    fields["source_digest"] = optional_json(file.source_digest)
+    files[name] = Json::object(fields)
+  }
+  let packages : Map[String, Json] = Map([])
+  for name, counts in report.packages {
+    packages[name] = Json::object(counts_json(counts))
+  }
+  let fields : Map[String, Json] = {
+    "schema_version": 1,
+    "status": report.status.name().to_json(),
+    "target": report.target.to_json(),
+    "runner_os": report.runner_os.to_json(),
+    "commit": optional_json(report.commit.map(commit => commit.to_json())),
+    "test_exit_code": optional_json(
+      report.test_exit_code.map(code => code.to_json()),
+    ),
+    "files": Json::object(files),
+    "packages": Json::object(packages),
+    "errors": report.errors.to_json(),
+  }
+  if report.lines is Some(lines) {
+    fields["lines"] = Json::object(counts_json(lines))
+  }
+  if report.points is Some(points) {
+    fields["points"] = Json::object(counts_json(points))
+  }
+  Json::object(fields).stringify(indent=2) + "\n"
+}
+
+///|
+fn ReportFormat::name(self : ReportFormat) -> String {
+  match self {
+    PointSummary => "summary"
+    Coveralls => "coveralls"
+    Cobertura => "cobertura"
+    Html => "html"
+  }
+}
+
+///|
+/// The output path of a format, under the output directory.
+fn ReportFormat::output(self : ReportFormat, output_dir : String) -> String {
+  let file = match self {
+    PointSummary => "moon-summary.txt"
+    Coveralls => "coverage.coveralls.json"
+    Cobertura => "coverage.cobertura.xml"
+    Html => "html"
+  }
+  "\{output_dir}/\{file}"
+}
+
+///|
+/// The `moon` arguments that export one format. The point summary goes to
+/// standard output; the other formats write their output path.
+fn export_args(
+  format : ReportFormat,
+  target_dir : String,
+  output_dir : String,
+) -> Array[String] {
+  let args = [
+    "coverage",
+    "--target-dir",
+    target_dir,
+    "report",
+    "-f",
+    format.name(),
+  ]
+  match format {
+    PointSummary => args
+    Coveralls | Cobertura | Html => args + ["-o", format.output(output_dir)]
+  }
+}
+
+///|
+/// A failed export as a report error; long details are cut.
+fn export_failure(format : ReportFormat, detail : String) -> String {
+  let detail = if detail.char_length_ge(failure_detail_limit + 1) {
+    String::from_iter(detail.iter().take(failure_detail_limit))
+  } else {
+    detail
+  }
+  "\{format.name()} report failed: \{detail}"
+}
+
+///|
+/// Build the report and its outputs from the outcome of each export.
+fn summarize(
+  exports : Exports,
+  test_exit_code : Int?,
+  target : String,
+  env : Environment,
+  file_exists : (String) -> Bool,
+) -> Summary {
+  let failures = []
+  let point_summary = match exports.point_summary {
+    Ok(text) => Some(text)
+    Err(detail) => {
+      failures.push(export_failure(PointSummary, detail))
+      None
+    }
+  }
+  let coveralls = match exports.coveralls {
+    Ok(text) =>
+      Some(@json.parse(text)) catch {
+        error => {
+          failures.push(export_failure(Coveralls, "\{error}"))
+          None
+        }
+      }
+    Err(detail) => {
+      failures.push(export_failure(Coveralls, detail))
+      None
+    }
+  }
+  if exports.cobertura is Err(detail) {
+    failures.push(export_failure(Cobertura, detail))
+  }
+  if exports.html is Err(detail) {
+    failures.push(export_failure(Html, detail))
+  }
+  let report = make_report(
+    coveralls, point_summary, test_exit_code, target, env, file_exists,
+  ).with_failures(failures)
+  { report, json: report_json(report), markdown: render(report), }
+}
+
+///|
+fn platform_name() -> String {
+  match @async.platform {
+    Linux => "Linux"
+    MacOS => "Darwin"
+    Windows => "Windows"
+  }
+}
+
+///|
+fn environment() -> Environment {
+  {
+    runner_os: @env.get_env_var("RUNNER_OS").unwrap_or(platform_name()),
+    commit: @env.get_env_var("GITHUB_SHA").filter(sha => !sha.is_empty()),
+  }
+}
+
+///|
+async fn is_file(path : String) -> Bool {
+  (@fs.kind(path, follow_symlink=true) catch { _ => Unknown }) == Regular
+}
+
+///|
+/// Run one `moon` export with a timeout. Returns standard output, or the
+/// failure detail: standard error when `moon` fails.
+async fn moon_export(
+  format : ReportFormat,
+  options : SummaryOptions,
+) -> Result[String, String] {
+  let args = export_args(format, options.target_dir, options.output_dir)
+  @async.with_timeout(export_timeout_ms, () => {
+    let (code, stdout, stderr) = @process.collect_output("moon", args)
+    if code == 0 {
+      Ok(stdout.text())
+    } else {
+      Err(stderr.text())
+    }
+  }) catch {
+    @async.TimeoutError =>
+      Err(
+        "moon \{args.join(" ")} timed out after \{export_timeout_ms / 1000} seconds",
+      )
+    error => Err("\{error}")
+  }
+}
+
+///|
+/// Run the exports in order and check the files each one must write.
+async fn run_exports(options : SummaryOptions) -> Exports {
+  let point_summary = match moon_export(PointSummary, options) {
+    Ok(text) =>
+      try {
+        @fs.write_file(
+          PointSummary.output(options.output_dir),
+          text,
+          create_mode=CreateOrTruncate,
+        )
+        Ok(text)
+      } catch {
+        error => Err("\{error}")
+      }
+    Err(detail) => Err(detail)
+  }
+  let coveralls = match moon_export(Coveralls, options) {
+    Ok(_) =>
+      Ok(@fs.read_file(Coveralls.output(options.output_dir)).text()) catch {
+        error => Err("\{error}")
+      }
+    Err(detail) => Err(detail)
+  }
+  let cobertura = match moon_export(Cobertura, options) {
+    Ok(_) if is_file(Cobertura.output(options.output_dir)) => Ok(())
+    Ok(_) => Err("Cobertura XML was not generated")
+    Err(detail) => Err(detail)
+  }
+  let html = match moon_export(Html, options) {
+    Ok(_) if is_file(Html.output(options.output_dir) + "/index.html") => Ok(())
+    Ok(_) => Err("HTML source index was not generated")
+    Err(detail) => Err(detail)
+  }
+  { point_summary, coveralls, cobertura, html, }
+}
+
+///|
+/// Export the reports, write `coverage.json` and `coverage.md`, and publish
+/// the summary. Returns the exit status: 0 only for a passed report.
+async fn run_summary(options : SummaryOptions, env : Environment) -> Int {
+  @fs.mkdir(options.output_dir, recursive=true, allow_exist=true)
+  let exports = run_exports(options)
+  let coveralls = match exports.coveralls {
+    Ok(text) => Some(@json.parse(text)) catch { _ => None }
+    Err(_) => None
+  }
+  let existing = []
+  for name in source_names(coveralls) {
+    if is_file(name) {
+      existing.push(name)
+    }
+  }
+  let summary = summarize(
+    exports,
+    options.test_exit_code,
+    options.target,
+    env,
+    name => existing.contains(name),
+  )
+  let output = (file : String) => "\{options.output_dir}/\{file}"
+  @fs.write_file(
+    output("coverage.json"),
+    summary.json,
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    output("coverage.md"),
+    summary.markdown,
+    create_mode=CreateOrTruncate,
+  )
+  match
+    @env.get_env_var("GITHUB_STEP_SUMMARY").filter(path => !path.is_empty()) {
+    Some(path) =>
+      @fs.write_file(
+        path,
+        summary.markdown,
+        create_mode=OpenOrCreate,
+        append=true,
+      )
+    None => println(summary.markdown)
+  }
+  summary.report.exit_status()
+}
+
+///|
+/// Run the instrumented wasm tests, then publish their coverage.
+async fn run_tests(env : Environment) -> Int {
+  let clean = @process.run("moon", [
+    "coverage", "--target-dir", run_target_dir, "clean",
+  ])
+  if clean != 0 {
+    return clean
+  }
+  let tests = @process.run("moon", [
+    "test", "--target", "wasm", "--enable-coverage", "--target-dir", run_target_dir,
+  ])
+  run_summary(
+    {
+      test_exit_code: Some(tests),
+      target: "wasm",
+      target_dir: run_target_dir,
+      output_dir: run_output_dir,
+    },
+    env,
+  )
+}
+
+///|
+async fn main {
+  let status = match parse_command(@env.args()[1:]) {
+    Ok(Summarize(options)) => run_summary(options, environment())
+    Ok(RunTests) => run_tests(environment())
+    Err(message) => {
+      eprintln(message)
+      2
+    }
+  }
+  @sys.exit(status)
+}
+
+///|
+/// Scenario state for `features/coverage.feature`.
+struct CoverageWorld {
+  files : Array[String]
+  mut env : Environment
+  mut coveralls : Json?
+  mut point_summary : String?
+  mut test_exit_code : Int?
+  mut exports : Exports
+  mut report : Report?
+  mut summary : Summary?
+}
+
+///|
+fn CoverageWorld::new() -> CoverageWorld {
+  {
+    files: [],
+    env: { runner_os: "Linux", commit: None, },
+    coveralls: None,
+    point_summary: None,
+    test_exit_code: None,
+    exports: {
+      point_summary: Err("not exported"),
+      coveralls: Err("not exported"),
+      cobertura: Err("not exported"),
+      html: Err("not exported"),
+    },
+    report: None,
+    summary: None,
+  }
+}
+
+///|
+/// One Coveralls source entry.
+fn coveralls_source(name : String, hits : Json) -> Json {
+  { "name": name.to_json(), "coverage": hits, "source_digest": "digest" }
+}
+
+///|
+/// A Coveralls report that lists `names`, each with the same line hits.
+fn coveralls_for(names : Array[String], hits : Json) -> Json {
+  { "source_files": names.map(name => coveralls_source(name, hits)).to_json() }
+}
+
+///|
+fn CoverageWorld::sources(self : CoverageWorld) -> Array[Json] raise {
+  guard self.coveralls is Some(Object(raw)) &&
+    raw.get("source_files") is Some(Array(sources)) else {
+    fail("the scenario has no Coveralls source list")
+  }
+  sources
+}
+
+///|
+fn CoverageWorld::source(
+  self : CoverageWorld,
+  name : String,
+) -> Map[String, Json] raise {
+  for source in self.sources() {
+    if source is Object(fields) &&
+      fields.get("name") is Some(String(n)) &&
+      n == name {
+      return fields
+    }
+  }
+  fail("the Coveralls report does not list \{name}")
+}
+
+///|
+fn CoverageWorld::file_exists(self : CoverageWorld) -> (String) -> Bool {
+  name => self.files.contains(name)
+}
+
+///|
+fn CoverageWorld::current_report(self : CoverageWorld) -> Report raise {
+  guard self.report is Some(report) else { fail("no report was built") }
+  report
+}
+
+///|
+impl @moonspec.World for CoverageWorld with fn configure(self, setup) {
+  setup.given0("the project has the focused source files", () => {
+    self.files.append(focus)
+  })
+  setup.given1("the project also has the file {string}", (name : String) => {
+    self.files.push(name)
+  })
+  setup.given1("the runner OS is {string}", (os : String) => {
+    self.env = { ..self.env, runner_os: os, }
+  })
+  setup.given1("the commit is {string}", (commit : String) => {
+    self.env = { ..self.env, commit: Some(commit), }
+  })
+  setup.given0("there is no commit", () => {
+    self.env = { ..self.env, commit: None, }
+  })
+  setup.given1(
+    "the Coveralls report lists every focused file with the line hits {string}",
+    (hits : String) => {
+      self.coveralls = Some(coveralls_for(focus, @json.parse(hits)))
+    },
+  )
+  setup.given1("the Coveralls report is {string}", (report : String) => {
+    self.coveralls = Some(@json.parse(report))
+  })
+  setup.given0("there is no Coveralls report", () => self.coveralls = None)
+  setup.given3("line {int} of {string} reports the hit count {string}", (
+    line : Int,
+    name : String,
+    hits : String,
+  ) => {
+    guard self.source(name).get("coverage") is Some(Array(coverage)) else {
+      fail("\{name} has no line hits")
+    }
+    coverage[line - 1] = @json.parse(hits)
+  })
+  setup.given1("the Coveralls report leaves out {string}", (name : String) => {
+    let sources = self.sources()
+    let kept = sources.filter(source => {
+      !(source is Object(fields) &&
+      fields.get("name") is Some(String(n)) &&
+      n == name)
+    })
+    sources.clear()
+    sources.append(kept)
+  })
+  setup.given1("the first Coveralls source is named {string}", (name : String) => {
+    guard self.sources() is [Object(first), ..] else {
+      fail("the Coveralls report lists no sources")
+    }
+    first["name"] = @json.parse(name)
+  })
+  setup.given1("the Coveralls report lists {string} again", (name : String) => {
+    let copy = Json::object(Map::from_iter(self.source(name).iter()))
+    self.sources().push(copy)
+  })
+  setup.given2(
+    "the Coveralls report also lists {string} with the line hits {string}",
+    (name : String, hits : String) => {
+      self.sources().push(coveralls_source(name, @json.parse(hits)))
+    },
+  )
+  setup.given1("Moon reports the point summary {string}", (summary : String) => {
+    self.point_summary = Some(summary)
+  })
+  setup.given1("Moon reports the point summary:", (doc : @moonspec.DocString) => {
+    self.point_summary = Some(doc.content)
+  })
+  setup.given1("the test exit code argument is {string}", (argument : String) => {
+    match parse_exit_code(argument) {
+      Ok(code) => self.test_exit_code = code
+      Err(message) => fail(message)
+    }
+  })
+  setup.given0("the Moon exports succeed", () => {
+    let coveralls = coveralls_for(focus, [Json::null(), 0, 1, 2])
+    self.exports = {
+      point_summary: Ok("Total: 12/24\n"),
+      coveralls: Ok(coveralls.stringify()),
+      cobertura: Ok(()),
+      html: Ok(()),
+    }
+  })
+  setup.given2("the {word} export fails with {string}", (
+    format : String,
+    detail : String,
+  ) => {
+    self.exports = match format {
+      "summary" => { ..self.exports, point_summary: Err(detail), }
+      "coveralls" => { ..self.exports, coveralls: Err(detail), }
+      "cobertura" => { ..self.exports, cobertura: Err(detail), }
+      "html" => { ..self.exports, html: Err(detail), }
+      other => fail("unknown export \{other}")
+    }
+  })
+  setup.given1("the coveralls export writes {string}", (text : String) => {
+    self.exports = { ..self.exports, coveralls: Ok(text), }
+  })
+  setup.when0("I build the coverage report", () => {
+    self.report = Some(
+      make_report(
+        self.coveralls,
+        self.point_summary,
+        self.test_exit_code,
+        "wasm",
+        self.env,
+        self.file_exists(),
+      ),
+    )
+  })
+  setup.when1(
+    "I summarize the exports with the test exit code argument {string}",
+    (argument : String) => {
+      let test_exit_code = match parse_exit_code(argument) {
+        Ok(code) => code
+        Err(message) => fail(message)
+      }
+      let summary = summarize(
+        self.exports,
+        test_exit_code,
+        "wasm",
+        self.env,
+        self.file_exists(),
+      )
+      self.summary = Some(summary)
+      self.report = Some(summary.report)
+    },
+  )
+  setup.then1("the status is {string}", (status : String) => {
+    @expect.expect(self.current_report().status.name()).to_equal(status)
+  })
+  setup.then2("the line coverage is {int} of {int}", (
+    covered : Int,
+    total : Int,
+  ) => {
+    @expect.expect(self.current_report().lines).to_equal(
+      Some({ covered, total, }),
+    )
+  })
+  setup.then2("the point coverage is {int} of {int}", (
+    covered : Int,
+    total : Int,
+  ) => {
+    @expect.expect(self.current_report().points).to_equal(
+      Some({ covered, total, }),
+    )
+  })
+  setup.then2("file {string} has the uncovered lines {string}", (
+    name : String,
+    lines : String,
+  ) => {
+    guard self.current_report().files.get(name) is Some(file) else {
+      fail("the report has no file \{name}")
+    }
+    @expect.expect(file.uncovered_lines.to_json()).to_equal(@json.parse(lines))
+  })
+  setup.then3("package {string} has the line coverage {int} of {int}", (
+    name : String,
+    covered : Int,
+    total : Int,
+  ) => {
+    @expect.expect(self.current_report().packages.get(name)).to_equal(
+      Some({ covered, total, }),
+    )
+  })
+  setup.then1("the summary is:", (doc : @moonspec.DocString) => {
+    @expect.expect(render(self.current_report())).to_equal(doc.content + "\n")
+  })
+  setup.then1("the summary contains {string}", (text : String) => {
+    let markdown = render(self.current_report())
+    if !markdown.contains(text) {
+      fail("the summary does not contain \{text}:\n\{markdown}")
+    }
+  })
+  setup.then1("the JSON report is:", (doc : @moonspec.DocString) => {
+    @expect.expect(report_json(self.current_report())).to_equal(
+      doc.content + "\n",
+    )
+  })
+  setup.then1("the first error is {string}", (error : String) => {
+    @expect.expect(self.current_report().errors.get(0)).to_equal(Some(error))
+  })
+  setup.then1("the exit status is {int}", (status : Int) => {
+    @expect.expect(self.current_report().exit_status()).to_equal(status)
+  })
+  setup.then1("the JSON report commit is {string}", (commit : String) => {
+    guard self.summary is Some(summary) else { fail("nothing was summarized") }
+    guard @json.parse(summary.json) is Object(fields) else {
+      fail("the JSON report is not an object")
+    }
+    @expect.expect(fields.get("commit")).to_equal(Some(commit.to_json()))
+  })
+  setup.then0("the JSON report commit is null", () => {
+    guard self.summary is Some(summary) else { fail("nothing was summarized") }
+    guard @json.parse(summary.json) is Object(fields) else {
+      fail("the JSON report is not an object")
+    }
+    @expect.expect(fields.get("commit")).to_equal(Some(Json::null()))
+  })
+}
+
+///|
+async test "coverage feature" {
+  @moonspec.run_or_fail(
+    CoverageWorld::new,
+    @moonspec.RunOptions::new([
+      @moonspec.FeatureSource::File("features/coverage.feature"),
+    ]),
+  )
+}
+
+///|
+test "format_fixed2 rounds the exact binary value like printf" {
+  @expect.expect_all(s => {
+    s.expect(format_fixed2(200.0 / 3.0)).to_equal("66.67")
+    s.expect(format_fixed2(100.0)).to_equal("100.00")
+    s.expect(format_fixed2(0.0)).to_equal("0.00")
+    s.expect(format_fixed2(0.125)).to_equal("0.12")
+    s.expect(format_fixed2(0.375)).to_equal("0.38")
+    s.expect(format_fixed2(12.125)).to_equal("12.12")
+    s.expect(format_fixed2(0.005)).to_equal("0.01")
+    s.expect(format_fixed2(2.675)).to_equal("2.67")
+    s.expect(format_fixed2(99.995)).to_equal("100.00")
+  })
+}
+
+///|
+test "python_float_text keeps the fraction of whole numbers" {
+  @expect.expect_all(s => {
+    s.expect(python_float_text(50.0)).to_equal("50.0")
+    s.expect(python_float_text(0.0)).to_equal("0.0")
+    s.expect(python_float_text(200.0 / 3.0)).to_equal("66.66666666666667")
+    s.expect(python_float_text(0.0001)).to_equal("0.0001")
+  })
+}
+
+///|
+test "compare_code_points sorts like Python, not by length first" {
+  let names = ["pkgs/text", "pkgs/schema", "pkgs/ion", "pkgs/json", "pkgs"]
+  names.sort_by(compare_code_points)
+  @expect.expect(names).to_equal([
+    "pkgs", "pkgs/ion", "pkgs/json", "pkgs/schema", "pkgs/text",
+  ])
+}
+
+///|
+test "html_escape escapes like Python html.escape" {
+  @expect.expect(html_escape("a&b<c>\"d'e")).to_equal(
+    "a&amp;b&lt;c&gt;&quot;d&#x27;e",
+  )
+}
+
+///|
+test "parent_directory follows Path.parent" {
+  @expect.expect_all(s => {
+    s.expect(parent_directory("pkgs/ion/fold.mbt")).to_equal("pkgs/ion")
+    s.expect(parent_directory("pkgs//ion/./fold.mbt")).to_equal("pkgs/ion")
+    s.expect(parent_directory("pkgs/x.mbt")).to_equal("pkgs")
+    s.expect(parent_directory("x.mbt")).to_equal(".")
+  })
+}
+
+///|
+test "point_counts reads the first Total line" {
+  let points = (summary : String?) => {
+    Some(point_counts(summary)) catch {
+      Invalid(_) => None
+    }
+  }
+  @expect.expect_all(s => {
+    s
+    .expect(points(Some("a: 1/2\nTotal: 3/4 \t\r\nTotal: 5/6\n")))
+    .to_equal(Some({ covered: 3, total: 4, }))
+    s
+    .expect(points(Some("Total: x/4\nTotal: 1/4")))
+    .to_equal(Some({ covered: 1, total: 4, }))
+    s.expect(points(Some(" Total: 1/4"))).to_equal(None)
+    s.expect(points(Some("Total: 1/4 extra"))).to_equal(None)
+    s.expect(points(None)).to_equal(None)
+  })
+}
+
+///|
+test "export_failure cuts the detail to 2000 characters" {
+  let failure = export_failure(Html, String::make(2500, 'x'))
+  @expect.expect(failure).to_equal(
+    "html report failed: " + String::make(2000, 'x'),
+  )
+}
+
+///|
+test "export_args write every format but the summary to its output path" {
+  @expect.expect_all(s => {
+    s
+    .expect(export_args(PointSummary, "_build", "out"))
+    .to_equal(["coverage", "--target-dir", "_build", "report", "-f", "summary"])
+    s
+    .expect(export_args(Coveralls, "_build", "out"))
+    .to_equal([
+      "coverage", "--target-dir", "_build", "report", "-f", "coveralls", "-o", "out/coverage.coveralls.json",
+    ])
+    s
+    .expect(export_args(Cobertura, "_build", "out"))
+    .to_equal([
+      "coverage", "--target-dir", "_build", "report", "-f", "cobertura", "-o", "out/coverage.cobertura.xml",
+    ])
+    s
+    .expect(export_args(Html, "_build", "out"))
+    .to_equal([
+      "coverage", "--target-dir", "_build", "report", "-f", "html", "-o", "out/html",
+    ])
+  })
+}
+
+///|
+test "parse_command reads the summary options" {
+  @expect.expect_all(s => {
+    s
+    .expect(
+      parse_command(["summary", "--exit-code", "", "--output-dir", "out"]),
+    )
+    .to_equal(
+      Ok(
+        Summarize({
+          test_exit_code: None,
+          target: "wasm",
+          target_dir: "_build",
+          output_dir: "out",
+        }),
+      ),
+    )
+    s
+    .expect(
+      parse_command([
+        "summary", "--target-dir", "_build/coverage", "--exit-code", "2", "--target",
+        "js", "--output-dir", "out",
+      ]),
+    )
+    .to_equal(
+      Ok(
+        Summarize({
+          test_exit_code: Some(2),
+          target: "js",
+          target_dir: "_build/coverage",
+          output_dir: "out",
+        }),
+      ),
+    )
+    s.expect(parse_command(["run"])).to_equal(Ok(RunTests))
+  })
+}
+
+///|
+test "parse_command rejects bad input" {
+  @expect.expect_all(s => {
+    s.expect(parse_command([])).to_equal(Err(usage))
+    s.expect(parse_command(["run", "extra"])).to_equal(Err(usage))
+    s
+    .expect(parse_command(["summary", "--output-dir", "out"]))
+    .to_equal(Err(usage))
+    s
+    .expect(parse_command(["summary", "--exit-code", "0"]))
+    .to_equal(Err(usage))
+    s
+    .expect(parse_command(["summary", "--exit-code", "0", "--output-dir"]))
+    .to_equal(Err(usage))
+    s
+    .expect(parse_command(["summary", "--exit-code", "x", "--output-dir", "o"]))
+    .to_equal(Err("--exit-code must be an integer or empty, got x"))
+  })
+}

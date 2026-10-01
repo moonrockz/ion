@@ -2,5 +2,4 @@
 #MISE description="Determine the next release version from conventional commits"
 set -euo pipefail
 
-version=$(git cliff --bumped-version 2>/dev/null || echo "0.1.0")
-echo "${version#v}"
+exec moon run -q --target wasm scripts/release.mbtx -- version
