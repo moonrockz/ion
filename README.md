@@ -297,6 +297,7 @@ Tooling is configured with [mise](https://mise.jdx.dev):
 
 ```bash
 mise run setup       # fetch the test-data submodules and install dependencies
+mise run hooks:install # install the git hooks (lefthook)
 mise run test:check  # moon check
 mise run test:unit   # moon test (unit, doc, snapshot, conformance, QuickCheck)
 mise run test:all    # check + test

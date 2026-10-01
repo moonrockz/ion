@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "ion",
+  "project_id": "99208e80-98d0-45fc-9a95-580094e1dfeb"
+}

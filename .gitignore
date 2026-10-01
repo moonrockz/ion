@@ -13,3 +13,13 @@ __pycache__/
 
 # Test output
 pretty.output
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
+
+# AI-assisted working area (specs, plans, scratch scripts and outputs)
+.dev/
