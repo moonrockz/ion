@@ -17,21 +17,29 @@ hierarchical data serialization format — and
 moon add moonrockz/ion
 ```
 
+## User documentation
+
+Read [Ion and the repository](docs/ion-and-the-repository.md) for the data
+model, package map, and setup. The [cookbook](docs/cookbook/README.md) covers
+text and binary conversion, JSON interoperability, schema validation, and
+[modeling algebraic data types with Ion Schema](docs/cookbook/algebraic-data-types.md).
+See the [documentation index](docs/README.md) for all guides.
+
 ## Packages
 
 Each package has a README with checked examples, linked below.
 
 | Package       | Source        | Import path            | Purpose |
 | ------------- | ------------- | ---------------------- | ------- |
-| `@ion` (core) | [`pkgs/ion`](pkgs/ion/README.md)    | `moonrockz/ion/ion`    | Core data model: Ion types, values, annotations, decimals, timestamps, symbol tokens |
-| `@text`       | [`pkgs/text`](pkgs/text/README.md)   | `moonrockz/ion/text`   | Ion text reader and writer                              |
-| `@text/stream` | [`pkgs/text/stream`](pkgs/text/stream/README.md) | `moonrockz/ion/text/stream` | Ion text readers and writers over asynchronous IO (`moonbitlang/async`) |
-| `@hash`       | [`pkgs/hash`](pkgs/hash/README.md)   | `moonrockz/ion/hash`   | Ion Hash 1.0: an encoding-independent hash of an Ion value |
-| `@binary`     | [`pkgs/binary`](pkgs/binary/README.md) | `moonrockz/ion/binary` | Ion binary codec: values, containers, annotations, and local symbol tables |
-| `@binary/stream` | [`pkgs/binary/stream`](pkgs/binary/stream/README.md) | `moonrockz/ion/binary/stream` | The Ion binary codec over asynchronous IO (`moonbitlang/async`) |
-| `@schema`     | [`pkgs/schema`](pkgs/schema/README.md) | `moonrockz/ion/schema` | Ion Schema model, loader, and validator                 |
-| `@json`       | [`pkgs/json`](pkgs/json/README.md)   | `moonrockz/ion/json`   | JSON interoperability: `IonValue` ⇄ core `Json`          |
-| `@cli`        | [`pkgs/cli`](pkgs/cli/README.md) | `moonrockz/ion/cli` | The command line's commands, runnable with any streams |
+| `@ion` (core) | [`pkgs/ion`](pkgs/ion/README.mbt.md)    | `moonrockz/ion/ion`    | Core data model: Ion types, values, annotations, decimals, timestamps, symbol tokens |
+| `@text`       | [`pkgs/text`](pkgs/text/README.mbt.md)   | `moonrockz/ion/text`   | Ion text reader and writer                              |
+| `@text/stream` | [`pkgs/text/stream`](pkgs/text/stream/README.mbt.md) | `moonrockz/ion/text/stream` | Ion text readers and writers over asynchronous IO (`moonbitlang/async`) |
+| `@hash`       | [`pkgs/hash`](pkgs/hash/README.mbt.md)   | `moonrockz/ion/hash`   | Ion Hash 1.0: an encoding-independent hash of an Ion value |
+| `@binary`     | [`pkgs/binary`](pkgs/binary/README.mbt.md) | `moonrockz/ion/binary` | Ion binary codec: values, containers, annotations, and local symbol tables |
+| `@binary/stream` | [`pkgs/binary/stream`](pkgs/binary/stream/README.mbt.md) | `moonrockz/ion/binary/stream` | The Ion binary codec over asynchronous IO (`moonbitlang/async`) |
+| `@schema`     | [`pkgs/schema`](pkgs/schema/README.mbt.md) | `moonrockz/ion/schema` | Ion Schema model, loader, and validator                 |
+| `@json`       | [`pkgs/json`](pkgs/json/README.mbt.md)   | `moonrockz/ion/json`   | JSON interoperability: `IonValue` ⇄ core `Json`          |
+| `@cli`        | [`pkgs/cli`](pkgs/cli/README.mbt.md) | `moonrockz/ion/cli` | The command line's commands, runnable with any streams |
 | `ion` CLI     | [`pkgs`](pkgs/README.md) | `moonrockz/ion`        | `ion print`, `ion json`, `ion fromjson`, `ion hash`, `ion validate` — the module root package is the executable |
 
 ## Repository layout

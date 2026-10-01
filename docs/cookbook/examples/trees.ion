@@ -1,0 +1,6 @@
+{kind: leaf, value: 1}
+{kind: branch, children: []}
+{kind: branch, children: [
+  {kind: leaf, value: 1},
+  {kind: branch, children: [{kind: leaf, value: 2}]},
+]}
