@@ -334,7 +334,25 @@ public intake for reports from outside contributors.
 - A pull request that resolves a GitHub issue says `Closes #<number>` in its
   body. Name the bd issue in the body too.
 - Work lands on `main` through pull requests (squash merge). Branch first;
-  do not push to `main`.
+  do not push to `main` unless the user says so for that change.
+- bd runs with `agent.profile: team-maintainer` (`.beads/config.yaml`):
+  commit, `bd sync` and push are routine parts of the work. An explicit
+  "do not commit" or "do not push" from the user still wins, and pushes go to
+  your branch, not to `main`.
+
+## Persistent Memory
+
+Store knowledge that must outlive the session with `bd remember`. Do not use
+`MEMORY.md` files or any agent's own memory store for this project; bd
+memories sync through `refs/dolt/data`, so every machine and agent sees them.
+
+```bash
+bd remember "insight" --key <slug>   # store, or update the memory with that key
+bd memories <keyword>                # search
+bd recall <key>                      # read one
+```
+
+`bd prime` (the SessionStart hook) injects the memories into each session.
 
 <!-- BEGIN BEADS INTEGRATION -->
 ## Issue Tracking with bd (beads)
