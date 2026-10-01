@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Run MoonBit unit tests"
+#MISE depends=["setup:submodules"]
+set -euo pipefail
+
+exec moon test

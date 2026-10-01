@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Create the annotated release tag and push it to origin"
+#USAGE arg "<version>" help="Release version, for example 0.4.0"
+set -euo pipefail
+
+tag="v${1#v}"
+git tag -a "$tag" -m "Release $tag"
+exec git push origin "$tag"

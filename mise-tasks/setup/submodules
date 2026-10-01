@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Fetch the conformance data (the tests/ion-tests and tests/ion-schema-tests submodules)"
+set -euo pipefail
+
+exec git submodule update --init --recursive

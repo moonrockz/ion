@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Print the release notes: the latest tag's, or the unreleased commits under a new version"
+#USAGE arg "[version]" help="Release version, for example 0.4.0 (default: the latest tag)"
+set -euo pipefail
+
+if [ $# -eq 0 ]; then
+  exec git cliff --latest --strip header
+fi
+version="${1#v}"
+if git tag -l "v$version" | grep -q .; then
+  exec git cliff --latest --strip header
+fi
+exec git cliff --unreleased --tag "v$version" --strip header

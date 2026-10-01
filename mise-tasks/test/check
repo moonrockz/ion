@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Type-check every package"
+set -euo pipefail
+
+exec moon check

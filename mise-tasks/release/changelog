@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Regenerate CHANGELOG.md with git-cliff"
+set -euo pipefail
+
+exec git-cliff -o CHANGELOG.md

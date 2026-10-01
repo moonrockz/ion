@@ -232,16 +232,20 @@ Run all build, test and release operations with `mise run <task>`. Run
 
 | Task | Purpose |
 |------|---------|
-| `setup` | Fetch the submodules and the MoonBit dependencies |
+| `setup` | Fetch the submodules and the MoonBit dependencies (`setup:submodules`, `setup:deps`) |
 | `hooks:install` | Install the git hooks (lefthook) |
+| `format:check` | `moon fmt --check` |
 | `test:check` | `moon check` |
 | `test:unit` | `moon test` (unit, doc, snapshot, property, conformance) |
 | `test:all` | Check and test |
+| `test:cli` | Smoke-test the `ion` CLI on the fixtures |
 | `test:coverage` | Instrumented wasm tests and coverage reports |
+| `test:scripts` | Test the CI tooling scripts |
 | `build:native` | Native CLI binary |
 | `build:wasm` | wasm release build |
 | `bench` | Native release benchmarks and CLI peak RSS |
-| `release:*` | Version, changelog, notes, credentials, assets |
+| `ci:*` | CI steps: test with a kept log, conformance and coverage summaries |
+| `release:*` | Plan, version, changelog, notes, tag, credentials, publish, assets |
 
 Org rules:
 
@@ -251,9 +255,6 @@ Org rules:
 - `.mise.toml` holds only `[tools]`. Do not add inline `[tasks]`.
 - GitHub workflows call `mise run <task>`, not inline shell scripts. If a
   workflow needs a new operation, create a task for it first.
-
-ion still defines most tasks inline in `.mise.toml`; moving them is tracked in
-bd. Put every new task in `mise-tasks/`.
 
 ## Scripts
 

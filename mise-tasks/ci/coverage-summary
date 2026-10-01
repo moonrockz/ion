@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Publish the code coverage summary and reports"
+set -euo pipefail
+
+python=$(command -v python3 || command -v python)
+exec "$python" .github/scripts/coverage_summary.py "$@"

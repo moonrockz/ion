@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Initialize the repository: fetch the submodules and the MoonBit dependencies"
+#MISE depends=["setup:submodules", "setup:deps"]
+set -euo pipefail

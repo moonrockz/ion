@@ -108,7 +108,7 @@ The module sets `source = "pkgs"` in [moon.mod](../moon.mod).
 | `tests/ion-schema-tests/` | Upstream schema corpus as a Git submodule |
 | `tests/fixtures/` | Golden files and existing examples |
 | `docs/cookbook/` | Task guides and their runnable example files |
-| `mise-tasks/`, `.mise.toml` | Build, test, and release tasks |
+| `mise-tasks/` | Build, test, and release tasks (`.mise.toml` pins the tools) |
 
 Each package's `pkg.generated.mbti` lists its public signatures. Its
 `README.mbt.md` contains examples run by `moon test`. Blackbox tests in

@@ -23,18 +23,16 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: moon update
+        run: mise run setup:deps
 
       - name: Check formatting
-        run: |
-          moon fmt
-          git diff --exit-code || (echo "::error::moon fmt produced changes — run 'moon fmt' locally and commit" && exit 1)
+        run: mise run format:check
 
       - name: Check code
-        run: moon check
+        run: mise run test:check
 
-      - name: Test CI reporting
-        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - name: Test CI tooling
+        run: mise run test:scripts
 
   unit-tests:
     name: Tests (${{ matrix.os }}, ${{ matrix.target }})
@@ -75,28 +73,15 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: moon update
+        run: mise run setup:deps
 
       - name: Run unit tests
         id: tests
         shell: bash
-        env:
-          TEST_TARGET: ${{ matrix.target }}
-          COVERAGE_ENABLED: ${{ matrix.target == 'wasm' }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/conformance-results"
-          coverage_flags=()
-          if [ "$COVERAGE_ENABLED" = "true" ]; then
-            moon coverage clean
-            coverage_flags+=(--enable-coverage)
-          fi
-          if moon test --target "$TEST_TARGET" "${coverage_flags[@]}" 2>&1 | tee "$RUNNER_TEMP/conformance-results/moon-test.log"; then
-            echo "exit_code=0" >> "$GITHUB_OUTPUT"
-          else
-            status=$?
-            echo "exit_code=$status" >> "$GITHUB_OUTPUT"
-            exit "$status"
-          fi
+        run: >-
+          mise run ci:test --target ${{ matrix.target }}
+          ${{ matrix.target == 'wasm' && '--coverage' || '' }}
+          --log "$RUNNER_TEMP/conformance-results/moon-test.log"
 
       - name: Publish conformance summary
         if: always()
@@ -105,12 +90,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TEST_EXIT_CODE: ${{ steps.tests.outputs.exit_code }}
           TEST_TARGET: ${{ matrix.target }}
-        run: |
-          python .github/scripts/conformance_summary.py \
-            "$RUNNER_TEMP/conformance-results/moon-test.log" \
-            --exit-code "$TEST_EXIT_CODE" \
-            --target "$TEST_TARGET" \
-            --output-dir "$RUNNER_TEMP/conformance-results"
+        run: >-
+          mise run ci:conformance-summary
+          "$RUNNER_TEMP/conformance-results/moon-test.log"
+          --exit-code "$TEST_EXIT_CODE"
+          --target "$TEST_TARGET"
+          --output-dir "$RUNNER_TEMP/conformance-results"
 
       - name: Upload conformance results
         if: always()
@@ -124,11 +109,11 @@ jobs:
         shell: bash
         env:
           TEST_EXIT_CODE: ${{ steps.tests.outputs.exit_code }}
-        run: |
-          python .github/scripts/coverage_summary.py \
-            --exit-code "$TEST_EXIT_CODE" \
-            --target wasm \
-            --output-dir "$RUNNER_TEMP/coverage-results"
+        run: >-
+          mise run ci:coverage-summary
+          --exit-code "$TEST_EXIT_CODE"
+          --target wasm
+          --output-dir "$RUNNER_TEMP/coverage-results"
 
       - name: Upload coverage results
         if: always() && matrix.target == 'wasm'
@@ -161,7 +146,7 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: moon update
+        run: mise run setup:deps
 
       - name: Build native binary
         run: mise run build:native
@@ -180,33 +165,10 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: moon update
+        run: mise run setup:deps
 
-      - name: Print an Ion fixture
-        run: moon run pkgs -- print tests/fixtures/sample.ion
-
-      - name: Convert an Ion fixture to JSON
-        run: moon run pkgs -- json tests/fixtures/sample.ion
-
-      - name: Stream Ion from stdin
-        run: moon run pkgs -- hash - < tests/fixtures/sample.ion
-
-      - name: Round-trip a fixture through Ion binary
-        run: |
-          moon run pkgs -- print --binary tests/fixtures/sample.ion > sample.10n
-          moon run pkgs -- print sample.10n > from-binary.ion
-          moon run pkgs -- print tests/fixtures/sample.ion > from-text.ion
-          diff from-text.ion from-binary.ion
-
-      - name: Convert a JSON fixture to Ion
-        run: moon run pkgs -- fromjson tests/fixtures/sample.json
-
-      - name: Validate fixtures (a violation must exit non-zero)
-        run: |
-          if moon run pkgs -- validate tests/fixtures/person.isl person tests/fixtures/person.ion; then
-            echo "::error::validation unexpectedly succeeded"
-            exit 1
-          fi
+      - name: Smoke-test the CLI
+        run: mise run test:cli
 
   performance:
     name: Native performance
@@ -217,12 +179,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
       - name: Install dependencies
-        run: moon update
+        run: mise run setup:deps
       - name: Measure and publish performance
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python .github/scripts/performance.py --output-dir "$RUNNER_TEMP/performance-results"
+        run: mise run bench --output-dir "$RUNNER_TEMP/performance-results"
       - name: Upload performance results
         if: always()
         uses: actions/upload-artifact@v4
