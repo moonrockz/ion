@@ -269,9 +269,17 @@ Project tooling logic is written in MoonBit, not bash, Python, `jq` or `awk`.
 - Pin module imports in each script to the versions the module uses.
 - A task that calls one command can stay bash.
 
-ion's CI tooling is still Python in `.github/scripts/`; porting it is tracked
-in bd. Do not add new Python or bash tooling logic. See `moonrockz/krueger`
-`scripts/` for the pattern.
+ion's scripts:
+
+| Script | Subcommands | Tasks |
+|--------|-------------|-------|
+| `scripts/ci.mbtx` | `test`, `conformance`, `bench` | `ci:test`, `ci:conformance-summary`, `bench` |
+| `scripts/coverage.mbtx` | `run`, `summary` | `test:coverage`, `ci:coverage-summary` |
+| `scripts/release.mbtx` | `version`, `plan`, `notes`, `tag`, `credentials`, `assets` | `release:*` |
+
+`ci.mbtx` holds both reports that compare against the latest successful main
+run (conformance and bench), because a script cannot import another script.
+Run `mise run test:scripts` to test them.
 
 ## Tooling
 

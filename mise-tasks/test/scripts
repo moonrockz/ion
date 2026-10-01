@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-#MISE description="Test the CI tooling scripts"
+#MISE description="Run the tests of the MoonBit tooling scripts (scripts/*.mbtx)"
 set -euo pipefail
 
-exec python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+# moon test accepts exactly one .mbtx path per call.
+for script in scripts/*.mbtx; do
+  moon test --target wasm "$script"
+done

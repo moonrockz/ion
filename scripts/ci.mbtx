@@ -1,0 +1,4210 @@
+///|
+import {
+  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.4/process",
+  "moonbitlang/async@0.22.4/fs",
+  "moonbitlang/async@0.22.4/stdio",
+  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/x@0.5.5/crypto",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/bigint",
+  "moonrockz/moonspec@0.10.0",
+  "moonrockz/expect@0.6.0",
+}
+
+///|
+/// CI tooling for the test jobs.
+///
+/// Usage:
+///
+/// - `ci.mbtx test [--target <target>] [--coverage] --log <file>` runs
+///   `moon test`, copies its output to the console and to the log file,
+///   writes `exit_code=<n>` to GITHUB_OUTPUT and exits with the exit code of
+///   moon.
+/// - `ci.mbtx conformance <log> --exit-code <n or ""> [--target <target>]
+///   --output-dir <dir>` reads the CONFORMANCE records in the log, compares
+///   them with the newest earlier successful main run, and writes
+///   `conformance.json` and `conformance.md`.
+
+///|
+let usage : String =
+  #|Usage:
+  #|  ci.mbtx test [--target <target>] [--coverage] --log <file>
+  #|  ci.mbtx conformance <log> --exit-code <code> [--target <target>] --output-dir <dir>
+  #|  ci.mbtx bench [--output-dir <dir>] [--items <n>] [--samples <n>] [--sample-ms <n>] [--cli-items <n>]
+
+///|
+/// A MoonBit build target.
+enum Target {
+  Wasm
+  WasmGc
+  Js
+  Native
+  Llvm
+} derive(Debug, Eq)
+
+///|
+/// The options of `ci.mbtx test`.
+struct TestOptions {
+  target : Target
+  coverage : Bool
+  log : String
+} derive(Debug, Eq)
+
+///|
+/// A program and its arguments.
+struct Command {
+  program : String
+  args : Array[String]
+} derive(Debug, Eq)
+
+///|
+/// The commands of `ci.mbtx test`: preparation commands that write to the
+/// console, then the test command whose output goes to the log too.
+struct TestPlan {
+  prepare : Array[Command]
+  run : Command
+} derive(Debug, Eq)
+
+///|
+/// The options of `ci.mbtx conformance`.
+struct ConformanceOptions {
+  log : String
+  exit_code : Int?
+  target : Target
+  output_dir : String
+} derive(Debug, Eq)
+
+///|
+/// A conformance suite that the tests report on.
+enum Suite {
+  IonFiles
+  IonReaders
+  IonDsl
+  Isl10
+  Isl20
+  IonHash
+} derive(Debug, Eq, Hash)
+
+///|
+let suites : Array[Suite] = [
+  IonFiles,
+  IonReaders,
+  IonDsl,
+  Isl10,
+  Isl20,
+  IonHash,
+]
+
+///|
+/// One of the counts in a CONFORMANCE record.
+enum Count {
+  Total
+  Passed
+  Skipped
+  KnownFailures
+  NotApplicable
+  Unexpected
+  Stale
+  Files
+  OutOfScope
+} derive(Debug, Eq)
+
+///|
+let counts : Array[Count] = [
+  Total,
+  Passed,
+  Skipped,
+  KnownFailures,
+  NotApplicable,
+  Unexpected,
+  Stale,
+  Files,
+  OutOfScope,
+]
+
+///|
+/// The counts of one suite. The first seven are shown in the summary table.
+struct Counts {
+  total : Int
+  passed : Int
+  skipped : Int
+  known_failures : Int
+  not_applicable : Int
+  unexpected : Int
+  stale : Int
+  files : Int
+  out_of_scope : Int
+} derive(Debug, Eq)
+
+///|
+/// One valid CONFORMANCE record.
+struct SuiteResult {
+  suite : Suite
+  counts : Counts
+  details : Array[String]
+} derive(Debug, Eq)
+
+///|
+enum Status {
+  Passed
+  Failed
+  Incomplete
+} derive(Debug, Eq)
+
+///|
+/// Revisions of the conformance data.
+struct Corpora {
+  ion_tests : String?
+  ion_schema_tests : String?
+  ion_hash_fixture_sha256 : String?
+} derive(Debug, Eq)
+
+///|
+/// Facts about the checkout and the runner that go into a report.
+struct Environment {
+  runner_os : String
+  commit : String?
+  corpora : Corpora
+} derive(Debug, Eq)
+
+///|
+/// The conformance report. Its JSON form keeps the field names of the
+/// Python report (schema version 1), because reports of earlier runs are
+/// baselines.
+struct Report {
+  status : Status
+  test_exit_code : Int?
+  target : Target
+  runner_os : String
+  excluded_suites : Map[Suite, String]
+  commit : String?
+  corpora : Corpora
+  suites : Map[Suite, SuiteResult]
+  errors : Array[String]
+  comparison : Comparison?
+} derive(Debug, Eq)
+
+///|
+/// The run that a baseline comes from.
+struct BaselineRun {
+  run_id : Int64
+  url : String
+  commit : String
+} derive(Debug, Eq)
+
+///|
+/// The report of an earlier successful main run, or why there is none.
+enum Baseline[T] {
+  Available(BaselineRun, T)
+  Unavailable(String)
+} derive(Debug, Eq)
+
+///|
+enum SuiteState {
+  Reported
+  Excluded
+  Missing
+} derive(Debug, Eq)
+
+///|
+struct SuiteChange {
+  baseline_state : SuiteState
+  current_state : SuiteState
+  delta : Counts?
+  exclusion_changed : Bool
+} derive(Debug, Eq)
+
+///|
+struct Changes {
+  current_commit : String?
+  baseline_corpora : Corpora
+  current_corpora : Corpora
+  corpus_changes : Array[String]
+  suites : Map[Suite, SuiteChange]
+} derive(Debug, Eq)
+
+///|
+/// The change from the baseline, or why there is no baseline.
+enum Comparison {
+  NoBaseline(String)
+  Compared(BaselineRun, Changes)
+} derive(Debug, Eq)
+
+///|
+/// A workflow run from the GitHub run listing.
+struct WorkflowRun {
+  id : Int64
+  head_branch : String?
+  conclusion : String?
+  event : String?
+  html_url : String
+  head_sha : String
+} derive(Debug, Eq)
+
+///|
+/// An artifact from the GitHub artifact listing.
+struct Artifact {
+  id : Int64
+  name : String
+  expired : Bool
+  size_in_bytes : Int?
+} derive(Debug, Eq)
+
+///|
+/// The report file of a downloaded artifact.
+enum ReportFile {
+  Contents(Bytes)
+  Missing
+  TooLarge
+} derive(Debug, Eq)
+
+///|
+/// One step of the baseline search. The search is pure: each request step
+/// holds the continuation that takes the response, so a driver does the
+/// I/O (`find_baseline`) or fakes it (the feature tests). An `Err` response
+/// is a failed request.
+enum BaselineStep[T] {
+  ListRuns(String, (Result[Json, String]) -> BaselineStep[T])
+  ListArtifacts(String, WorkflowRun, (Result[Json, String]) -> BaselineStep[T])
+  DownloadReport(
+    String,
+    WorkflowRun,
+    Artifact,
+    (Result[ReportFile, String]) -> BaselineStep[T]
+  )
+  Done(Baseline[T])
+}
+
+///|
+let github_api_unavailable : String = "GitHub API unavailable: permissions, rate limit, or connectivity"
+
+///|
+let not_in_github_actions : String = "Not running in GitHub Actions"
+
+///|
+let no_compatible_artifact : String = "No earlier successful main run has a compatible, unexpired artifact"
+
+///|
+let invalid_reports : String = "Earlier artifacts contain invalid or incompatible reports"
+
+///|
+let wasm_gc_exclusion : String = "The conformance package is disabled on wasm-gc because of the upstream BigInt conversion bug: https://github.com/moonrockz/ion/issues/13"
+
+///|
+let record_prefix : String = "CONFORMANCE "
+
+///|
+/// The largest artifact that the baseline search downloads.
+let max_artifact_bytes : Int = 16 * 1024 * 1024
+
+///|
+/// The largest report file that the baseline search reads.
+let max_report_bytes : Int64 = 1024L * 1024L
+
+///|
+/// The time limit of each `gh` call.
+let request_timeout_ms : Int = 30000
+
+// ------------------------------------------------------------ arguments
+
+///|
+fn Target::parse(text : String) -> Target? {
+  match text {
+    "wasm" => Some(Wasm)
+    "wasm-gc" => Some(WasmGc)
+    "js" => Some(Js)
+    "native" => Some(Native)
+    "llvm" => Some(Llvm)
+    _ => None
+  }
+}
+
+///|
+fn Target::name(self : Target) -> String {
+  match self {
+    Wasm => "wasm"
+    WasmGc => "wasm-gc"
+    Js => "js"
+    Native => "native"
+    Llvm => "llvm"
+  }
+}
+
+///|
+fn parse_test_args(args : ArrayView[String]) -> Result[TestOptions, String] {
+  let mut target = Wasm
+  let mut coverage = false
+  let mut log : String? = None
+  let mut rest = args
+  while !rest.is_empty() {
+    match rest {
+      ["--target", value, .. tail] => {
+        guard Target::parse(value) is Some(parsed) else {
+          return Err("test: unknown target \{value}")
+        }
+        target = parsed
+        rest = tail
+      }
+      ["--coverage", .. tail] => {
+        coverage = true
+        rest = tail
+      }
+      ["--log", value, .. tail] => {
+        log = Some(value)
+        rest = tail
+      }
+      ["--target" | "--log" as flag] =>
+        return Err("test: \{flag} needs a value")
+      [other, ..] => return Err("test: unknown argument \{other}")
+      [] => ()
+    }
+  }
+  match log {
+    Some(log) => Ok({ target, coverage, log, })
+    None => Err("test: --log <file> is required")
+  }
+}
+
+///|
+fn test_plan(options : TestOptions) -> TestPlan {
+  let args = ["test", "--target", options.target.name()]
+  if options.coverage {
+    {
+      prepare: [{ program: "moon", args: ["coverage", "clean"], }],
+      run: { program: "moon", args: [..args, "--enable-coverage"], },
+    }
+  } else {
+    { prepare: [], run: { program: "moon", args, }, }
+  }
+}
+
+///|
+fn Command::to_string(self : Command) -> String {
+  [self.program, ..self.args].join(" ")
+}
+
+///|
+/// The line that `ci.mbtx test` appends to GITHUB_OUTPUT.
+fn github_output(exit_code : Int) -> String {
+  "exit_code=\{exit_code}\n"
+}
+
+///|
+/// The directory part of a path, if the path has one.
+fn parent_dir(path : String) -> String? {
+  let index = match (path.rev_find("/"), path.rev_find("\\")) {
+    (Some(slash), Some(backslash)) =>
+      Some(if slash > backslash { slash } else { backslash })
+    (Some(slash), None) => Some(slash)
+    (None, backslash) => backslash
+  }
+  match index {
+    None => None
+    Some(0) => Some(path.view(end_offset=1).to_owned())
+    Some(end) => Some(path.view(end_offset=end).to_owned())
+  }
+}
+
+///|
+fn parse_conformance_args(
+  args : ArrayView[String],
+) -> Result[ConformanceOptions, String] {
+  let mut log : String? = None
+  // None: the flag is absent. Some(None): the flag has an empty value.
+  let mut exit_code : Int?? = None
+  let mut target = Wasm
+  let mut output_dir : String? = None
+  let mut rest = args
+  while !rest.is_empty() {
+    match rest {
+      ["--exit-code", "", .. tail] => {
+        exit_code = Some(None)
+        rest = tail
+      }
+      ["--exit-code", value, .. tail] => {
+        let code = @string.parse_int(value) catch {
+          _ =>
+            return Err(
+              "conformance: --exit-code must be an integer or empty: \{value}",
+            )
+        }
+        exit_code = Some(Some(code))
+        rest = tail
+      }
+      ["--target", value, .. tail] => {
+        guard Target::parse(value) is Some(parsed) else {
+          return Err("conformance: unknown target \{value}")
+        }
+        target = parsed
+        rest = tail
+      }
+      ["--output-dir", value, .. tail] => {
+        output_dir = Some(value)
+        rest = tail
+      }
+      ["--exit-code" | "--target" | "--output-dir" as flag] =>
+        return Err("conformance: \{flag} needs a value")
+      [value, .. tail] if log is None && !value.has_prefix("-") => {
+        log = Some(value)
+        rest = tail
+      }
+      [other, ..] => return Err("conformance: unknown argument \{other}")
+      [] => ()
+    }
+  }
+  guard log is Some(log) else { Err("conformance: <log> is required") }
+  guard exit_code is Some(exit_code) else {
+    Err("conformance: --exit-code is required")
+  }
+  guard output_dir is Some(output_dir) else {
+    Err("conformance: --output-dir is required")
+  }
+  Ok({ log, exit_code, target, output_dir, })
+}
+
+// -------------------------------------------------------------- records
+
+///|
+fn Suite::id(self : Suite) -> String {
+  match self {
+    IonFiles => "ion-files"
+    IonReaders => "ion-readers"
+    IonDsl => "ion-dsl"
+    Isl10 => "isl-1.0"
+    Isl20 => "isl-2.0"
+    IonHash => "ion-hash"
+  }
+}
+
+///|
+fn Suite::title(self : Suite) -> String {
+  match self {
+    IonFiles => "Ion 1.0 corpus"
+    IonReaders => "Ion readers and writers"
+    IonDsl => "Ion conformance DSL"
+    Isl10 => "Ion Schema 1.0"
+    Isl20 => "Ion Schema 2.0"
+    IonHash => "Ion Hash identity serialization"
+  }
+}
+
+///|
+fn Suite::unit(self : Suite) -> String {
+  match self {
+    IonFiles => "files"
+    IonReaders => "checks"
+    IonDsl | Isl10 | Isl20 | IonHash => "cases"
+  }
+}
+
+///|
+fn Suite::parse(id : String) -> Suite? {
+  match suites.search_by(suite => suite.id() == id) {
+    Some(index) => Some(suites[index])
+    None => None
+  }
+}
+
+///|
+fn Count::key(self : Count) -> String {
+  match self {
+    Total => "total"
+    Passed => "passed"
+    Skipped => "skipped"
+    KnownFailures => "known_failures"
+    NotApplicable => "not_applicable"
+    Unexpected => "unexpected"
+    Stale => "stale"
+    Files => "files"
+    OutOfScope => "out_of_scope"
+  }
+}
+
+///|
+/// The counts that the summary tables show, in column order.
+let table_counts : Array[Count] = [
+  Total,
+  Passed,
+  Skipped,
+  KnownFailures,
+  NotApplicable,
+  Unexpected,
+  Stale,
+]
+
+///|
+fn Counts::get(self : Counts, count : Count) -> Int {
+  match count {
+    Total => self.total
+    Passed => self.passed
+    Skipped => self.skipped
+    KnownFailures => self.known_failures
+    NotApplicable => self.not_applicable
+    Unexpected => self.unexpected
+    Stale => self.stale
+    Files => self.files
+    OutOfScope => self.out_of_scope
+  }
+}
+
+///|
+/// The change from `before` to `self`.
+fn Counts::minus(self : Counts, before : Counts) -> Counts {
+  {
+    total: self.total - before.total,
+    passed: self.passed - before.passed,
+    skipped: self.skipped - before.skipped,
+    known_failures: self.known_failures - before.known_failures,
+    not_applicable: self.not_applicable - before.not_applicable,
+    unexpected: self.unexpected - before.unexpected,
+    stale: self.stale - before.stale,
+    files: self.files - before.files,
+    out_of_scope: self.out_of_scope - before.out_of_scope,
+  }
+}
+
+///|
+fn Counts::failed(self : Counts) -> Bool {
+  self.unexpected != 0 || self.stale != 0
+}
+
+///|
+fn Status::name(self : Status) -> String {
+  match self {
+    Passed => "passed"
+    Failed => "failed"
+    Incomplete => "incomplete"
+  }
+}
+
+///|
+fn SuiteState::name(self : SuiteState) -> String {
+  match self {
+    Reported => "reported"
+    Excluded => "excluded"
+    Missing => "missing"
+  }
+}
+
+///|
+/// A count is a JSON integer that is not negative. Booleans, fractions and
+/// null are not counts.
+fn decode_count(fields : Map[String, Json], count : Count) -> Int? {
+  match fields.get(count.key()) {
+    Some(Number(value, ..)) if value >= 0.0 &&
+      value == value.floor() &&
+      value <= 2147483647.0 => Some(value.to_int())
+    _ => None
+  }
+}
+
+///|
+/// Check one CONFORMANCE record. `results` holds the records before it.
+fn decode_record(
+  json : Json,
+  results : Map[Suite, SuiteResult],
+) -> Result[SuiteResult, String] {
+  guard json is Object(fields) &&
+    fields.get("suite") is Some(String(id)) &&
+    Suite::parse(id) is Some(suite) else {
+    return Err("unknown corpus suite")
+  }
+  if results.contains(suite) {
+    return Err("duplicate result for \{id}")
+  }
+  let values : Array[Int] = []
+  for count in counts {
+    match decode_count(fields, count) {
+      Some(value) => values.push(value)
+      None => return Err("invalid count \{count.key()} for \{id}")
+    }
+  }
+  let counts : Counts = {
+    total: values[0],
+    passed: values[1],
+    skipped: values[2],
+    known_failures: values[3],
+    not_applicable: values[4],
+    unexpected: values[5],
+    stale: values[6],
+    files: values[7],
+    out_of_scope: values[8],
+  }
+  let accounted = counts.passed +
+    counts.skipped +
+    counts.known_failures +
+    counts.not_applicable +
+    counts.unexpected
+  if accounted != counts.total {
+    return Err("counts do not add up for \{id}")
+  }
+  guard fields.get("details") is Some(Array(items)) else {
+    return Err("invalid details for \{id}")
+  }
+  let details : Array[String] = []
+  for item in items {
+    guard item is String(detail) else {
+      return Err("invalid details for \{id}")
+    }
+    details.push(detail)
+  }
+  Ok({ suite, counts, details, })
+}
+
+///|
+/// Check the records in order. A record is a JSON value, or the error that
+/// parsing its text gave.
+fn decode_records(
+  records : Array[Result[Json, String]],
+  excluded : Map[Suite, String],
+) -> (Map[Suite, SuiteResult], Array[String]) {
+  let results : Map[Suite, SuiteResult] = Map([])
+  let errors : Array[String] = []
+  for record in records {
+    match record {
+      Err(error) => errors.push(error)
+      Ok(json) =>
+        match decode_record(json, results) {
+          Err(error) => errors.push(error)
+          Ok(result) => {
+            results[result.suite] = result
+            if excluded.contains(result.suite) {
+              errors.push(
+                "excluded suite reported results; remove its target exclusion: \{result.suite.id()}",
+              )
+            }
+          }
+        }
+    }
+  }
+  for suite in suites {
+    if !results.contains(suite) && !excluded.contains(suite) {
+      errors.push("no result reported for \{suite.id()}")
+    }
+  }
+  (results, errors)
+}
+
+///|
+/// The CONFORMANCE records of a test log. Lines end with `\n`, `\r\n` or
+/// `\r`.
+fn log_records(log : String) -> Array[Result[Json, String]] {
+  let records = []
+  for line in log.split("\n") {
+    for part in line.split("\r") {
+      if part.strip_prefix(record_prefix) is Some(text) {
+        records.push(
+          try @json.parse(text) catch {
+            error => Err("invalid JSON: \{error}")
+          } noraise {
+            json => Ok(json)
+          },
+        )
+      }
+    }
+  }
+  records
+}
+
+///|
+fn exclusions_for(target : Target) -> Map[Suite, String] {
+  let excluded : Map[Suite, String] = Map([])
+  if target is WasmGc {
+    for suite in suites {
+      if suite != IonHash {
+        excluded[suite] = wasm_gc_exclusion
+      }
+    }
+  }
+  excluded
+}
+
+///|
+/// Make the report of a test run from its log and exit code. A run passes
+/// only when the exit code is 0, every suite that the target runs reports
+/// valid counts, and no suite has unexpected results or stale exclusions.
+fn make_report(
+  log : String,
+  exit_code : Int?,
+  target : Target,
+  environment : Environment,
+) -> Report {
+  let excluded = exclusions_for(target)
+  let (results, errors) = decode_records(log_records(log), excluded)
+  if exit_code is None {
+    errors.push("test command did not report an exit code")
+  }
+  let failed = (exit_code is Some(code) && code != 0) ||
+    results.values().any(result => result.counts.failed())
+  let status = if failed {
+    Failed
+  } else if !errors.is_empty() {
+    Incomplete
+  } else {
+    Passed
+  }
+  {
+    status,
+    test_exit_code: exit_code,
+    target,
+    runner_os: environment.runner_os,
+    excluded_suites: excluded,
+    commit: environment.commit,
+    corpora: environment.corpora,
+    suites: results,
+    errors,
+    comparison: None,
+  }
+}
+
+// ----------------------------------------------------------------- JSON
+
+///|
+fn optional_string(value : String?) -> Json {
+  match value {
+    Some(text) => Json::string(text)
+    None => Json::null()
+  }
+}
+
+///|
+fn optional_int(value : Int?) -> Json {
+  match value {
+    Some(number) => Json::number(number.to_double())
+    None => Json::null()
+  }
+}
+
+///|
+fn Corpora::entries(self : Corpora) -> Array[(String, String?)] {
+  [
+    ("ion-tests", self.ion_tests),
+    ("ion-schema-tests", self.ion_schema_tests),
+    ("ion-hash-fixture-sha256", self.ion_hash_fixture_sha256),
+  ]
+}
+
+///|
+fn Corpora::get(self : Corpora, name : String) -> String? {
+  for entry in self.entries() {
+    if entry.0 == name {
+      return entry.1
+    }
+  }
+  None
+}
+
+///|
+fn Corpora::to_json(self : Corpora) -> Json {
+  let fields : Map[String, Json] = Map([])
+  for entry in self.entries() {
+    fields[entry.0] = optional_string(entry.1)
+  }
+  Json::object(fields)
+}
+
+///|
+fn Counts::write_json(self : Counts, fields : Map[String, Json]) -> Unit {
+  for count in counts {
+    fields[count.key()] = Json::number(self.get(count).to_double())
+  }
+}
+
+///|
+fn Counts::to_json(self : Counts) -> Json {
+  let fields : Map[String, Json] = Map([])
+  self.write_json(fields)
+  Json::object(fields)
+}
+
+///|
+/// The record in the field order of the CONFORMANCE lines.
+fn SuiteResult::to_json(self : SuiteResult) -> Json {
+  let fields : Map[String, Json] = { "suite": Json::string(self.suite.id()) }
+  self.counts.write_json(fields)
+  fields["details"] = Json::array(self.details.map(Json::string))
+  Json::object(fields)
+}
+
+///|
+fn Report::to_json(self : Report) -> Json {
+  let excluded : Map[String, Json] = Map([])
+  for suite, reason in self.excluded_suites {
+    excluded[suite.id()] = Json::string(reason)
+  }
+  let results : Map[String, Json] = Map([])
+  for suite, result in self.suites {
+    results[suite.id()] = result.to_json()
+  }
+  let fields : Map[String, Json] = {
+    "schema_version": Json::number(1.0),
+    "status": Json::string(self.status.name()),
+    "test_exit_code": optional_int(self.test_exit_code),
+    "target": Json::string(self.target.name()),
+    "runner_os": Json::string(self.runner_os),
+    "excluded_suites": Json::object(excluded),
+    "commit": optional_string(self.commit),
+    "corpora": self.corpora.to_json(),
+    "suites": Json::object(results),
+    "errors": Json::array(self.errors.map(Json::string)),
+  }
+  if self.comparison is Some(comparison) {
+    fields["comparison"] = comparison.to_json()
+  }
+  Json::object(fields)
+}
+
+///|
+fn Comparison::to_json(self : Comparison) -> Json {
+  match self {
+    NoBaseline(reason) =>
+      { "status": Json::string("unavailable"), "reason": Json::string(reason) }
+    Compared(run, changes) => {
+      let suite_changes : Map[String, Json] = Map([])
+      for suite, change in changes.suites {
+        suite_changes[suite.id()] = {
+          "baseline_state": Json::string(change.baseline_state.name()),
+          "current_state": Json::string(change.current_state.name()),
+          "delta": match change.delta {
+            Some(delta) => delta.to_json()
+            None => Json::null()
+          },
+          "exclusion_changed": Json::boolean(change.exclusion_changed),
+        }
+      }
+      {
+        "status": Json::string("available"),
+        "run_id": Json::number(run.run_id.to_double()),
+        "url": Json::string(run.url),
+        "commit": Json::string(run.commit),
+        "current_commit": optional_string(changes.current_commit),
+        "baseline_corpora": changes.baseline_corpora.to_json(),
+        "current_corpora": changes.current_corpora.to_json(),
+        "corpus_changes": Json::array(changes.corpus_changes.map(Json::string)),
+        "suites": Json::object(suite_changes),
+      }
+    }
+  }
+}
+
+///|
+fn unicode_escape(code : Int) -> String {
+  "\\u" + code.to_string(radix=16).pad_start(4, '0')
+}
+
+///|
+/// JSON text with an indent of 2 and only ASCII characters, the same as
+/// Python `json.dumps(value, indent=2)`. Characters outside ASCII occur only
+/// in strings, so they become `\uXXXX` escapes (UTF-16 surrogate pairs above
+/// U+FFFF).
+fn python_json(json : Json) -> String {
+  ascii_only(json.stringify(indent=2))
+}
+
+// ------------------------------------------------------------- Markdown
+
+///|
+/// Escape text for a Markdown table cell: HTML special characters, the cell
+/// separator and line breaks.
+fn escape(text : String) -> String {
+  let out = StringBuilder()
+  for char in text {
+    match char {
+      '&' => out.write_string("&amp;")
+      '<' => out.write_string("&lt;")
+      '>' => out.write_string("&gt;")
+      '|' => out.write_string("&#124;")
+      '\n' => out.write_char(' ')
+      other => out.write_char(other)
+    }
+  }
+  out.to_string()
+}
+
+///|
+fn signed(value : Int) -> String {
+  if value >= 0 {
+    "+\{value}"
+  } else {
+    value.to_string()
+  }
+}
+
+///|
+fn revision_text(revision : String?) -> String {
+  match revision {
+    Some(text) if text != "" => text
+    _ => "unavailable"
+  }
+}
+
+///|
+fn exit_code_text(exit_code : Int?) -> String {
+  match exit_code {
+    Some(code) => code.to_string()
+    None => "None"
+  }
+}
+
+///|
+/// Compare strings by code point, like Python `sorted`.
+fn compare_code_points(left : String, right : String) -> Int {
+  let a = left.iter().collect()
+  let b = right.iter().collect()
+  let shorter = if a.length() < b.length() { a.length() } else { b.length() }
+  for i in 0..<shorter {
+    if a[i] != b[i] {
+      return a[i].compare(b[i])
+    }
+  }
+  a.length().compare(b.length())
+}
+
+///|
+fn table_row(cells : Array[String]) -> String {
+  "| " + cells.join(" | ") + " |"
+}
+
+///|
+fn render_markdown(report : Report) -> String {
+  let lines = [
+    "## Corpus conformance",
+    "",
+    "Result: **\{report.status.name()}**. Target: `\{escape(report.target.name())}`.",
+    "Runner OS: \{escape(report.runner_os)}.",
+    "Test command exit code: \{exit_code_text(report.test_exit_code)}.",
+    "",
+    "| Corpus | Unit | Total | Passed | Skipped | Known failures | N/A | Unexpected | Stale exclusions | Status |",
+    "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+  ]
+  for suite in suites {
+    match report.suites.get(suite) {
+      None => {
+        let status = if report.excluded_suites.contains(suite) {
+          "Excluded"
+        } else {
+          "Not reported"
+        }
+        lines.push(
+          table_row([
+            suite.title(),
+            suite.unit(),
+            "-",
+            "-",
+            "-",
+            "-",
+            "-",
+            "-",
+            "-",
+            status,
+          ]),
+        )
+      }
+      Some(result) => {
+        let status = if result.counts.failed() { "Failed" } else { "Passed" }
+        lines.push(
+          table_row(
+            [
+              suite.title(),
+              suite.unit(),
+              ..table_counts.map(count => result.counts.get(count).to_string()),
+              status,
+            ],
+          ),
+        )
+      }
+    }
+  }
+  lines.append([
+    "",
+    "Counts use each runner's unit; they are not a combined test total.",
+    "Known failures and skipped cases are excluded from passes. N/A cases do not apply to Ion 1.0.",
+    "Stale exclusions fail the suite even when their cases pass.",
+    "",
+    "### Corpus revisions",
+    "",
+    "Commit: `\{escape(revision_text(report.commit))}`.",
+    "",
+  ])
+  for entry in report.corpora.entries() {
+    lines.push("- \{entry.0}: `\{escape(revision_text(entry.1))}`.")
+  }
+  if !report.excluded_suites.is_empty() {
+    lines.append(["", "### Target exclusions", ""])
+    let reasons : Array[String] = []
+    for _, reason in report.excluded_suites {
+      if !reasons.contains(reason) {
+        reasons.push(reason)
+      }
+    }
+    reasons.sort_by(compare_code_points)
+    for reason in reasons {
+      lines.push("- " + escape(reason))
+    }
+  }
+  for suite, result in report.suites {
+    let counts = result.counts
+    if counts.files != 0 ||
+      counts.out_of_scope != 0 ||
+      !result.details.is_empty() {
+      lines.append([
+        "",
+        "<details>",
+        "<summary>\{suite.title()} details</summary>",
+        "",
+      ])
+      if counts.files != 0 {
+        lines.push("Files: \{counts.files}.")
+      }
+      if suite is IonDsl {
+        lines.push("Ion 1.1 test forms not run: \{counts.out_of_scope}.")
+      } else if counts.out_of_scope != 0 {
+        lines.push("Corpus files omitted: \{counts.out_of_scope}.")
+      }
+      if !result.details.is_empty() {
+        lines.push("")
+        for detail in result.details {
+          lines.push("- " + escape(detail))
+        }
+      }
+      lines.append(["", "</details>"])
+    }
+  }
+  if !report.errors.is_empty() {
+    lines.append(["", "### Reporting errors", ""])
+    for error in report.errors {
+      lines.push("- " + escape(error))
+    }
+  }
+  if report.comparison is Some(comparison) {
+    lines.append(render_comparison(comparison))
+  }
+  lines.append([
+    "", "The conformance-results artifact contains this summary, JSON counts, and the full test log.",
+    "",
+  ])
+  lines.join("\n")
+}
+
+///|
+fn render_comparison(comparison : Comparison) -> Array[String] {
+  let lines = ["", "### Change from successful main baseline", ""]
+  match comparison {
+    NoBaseline(reason) => lines.push("Baseline unavailable: \{escape(reason)}.")
+    Compared(run, changes) => {
+      lines.append([
+        "Baseline: [run \{run.run_id}](\{run.url}), commit `\{escape(run.commit)}`.",
+        "",
+      ])
+      if changes.corpus_changes.is_empty() {
+        lines.append(["Corpus revisions unchanged from the baseline.", ""])
+      } else {
+        lines.append([
+          "Corpus revisions changed: \{changes.corpus_changes.join(", ")}. Count changes may include added or removed corpus cases.",
+          "",
+        ])
+        for name in changes.corpus_changes {
+          let before = escape(revision_text(changes.baseline_corpora.get(name)))
+          let after = escape(revision_text(changes.current_corpora.get(name)))
+          lines.push("- \{name}: `\{before}` → `\{after}`.")
+        }
+        lines.push("")
+      }
+      lines.append([
+        "Each delta compares the same OS, target, suite, and unit. Positive counts are increases, not necessarily improvements.",
+        "", "| Corpus | Unit | Δ Total | Δ Passed | Δ Skipped | Δ Known failures | Δ N/A | Δ Unexpected | Δ Stale | Suite state |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+      ])
+      for suite, change in changes.suites {
+        let state = change.baseline_state.name() +
+          " → " +
+          change.current_state.name() +
+          (if change.exclusion_changed { "; exclusion changed" } else { "" })
+        let deltas = match change.delta {
+          Some(delta) => table_counts.map(count => signed(delta.get(count)))
+          None => table_counts.map(_ => "-")
+        }
+        lines.push(table_row([suite.title(), suite.unit(), ..deltas, state]))
+      }
+      for suite, change in changes.suites {
+        if change.delta is Some(delta) &&
+          (delta.files != 0 || delta.out_of_scope != 0) {
+          lines.append([
+            "",
+            "\{suite.title()}: Δ corpus files \{signed(delta.files)}; Δ out-of-scope files/forms \{signed(delta.out_of_scope)}.",
+          ])
+        }
+      }
+    }
+  }
+  lines
+}
+
+// ----------------------------------------------------------- comparison
+
+///|
+fn suite_state(report : Report, suite : Suite) -> SuiteState {
+  if report.suites.contains(suite) {
+    Reported
+  } else if report.excluded_suites.contains(suite) {
+    Excluded
+  } else {
+    Missing
+  }
+}
+
+///|
+/// Compare the current report with the baseline. Each delta compares the
+/// same suite and unit; a suite that is missing or excluded on either side
+/// has no delta.
+fn compare_report(current : Report, baseline : Baseline[Report]) -> Comparison {
+  match baseline {
+    Unavailable(reason) => NoBaseline(reason)
+    Available(run, previous) => {
+      let corpus_changes = current.corpora
+        .entries()
+        .filter(entry => entry.1 != previous.corpora.get(entry.0))
+        .map(entry => entry.0)
+      let changes : Map[Suite, SuiteChange] = Map([])
+      for suite in suites {
+        changes[suite] = {
+          baseline_state: suite_state(previous, suite),
+          current_state: suite_state(current, suite),
+          delta: match (previous.suites.get(suite), current.suites.get(suite)) {
+            (Some(before), Some(after)) =>
+              Some(after.counts.minus(before.counts))
+            _ => None
+          },
+          exclusion_changed: previous.excluded_suites.get(suite) !=
+          current.excluded_suites.get(suite),
+        }
+      }
+      Compared(run, {
+        current_commit: current.commit,
+        baseline_corpora: previous.corpora,
+        current_corpora: current.corpora,
+        corpus_changes,
+        suites: changes,
+      })
+    }
+  }
+}
+
+///|
+fn decode_corpora(fields : Map[String, Json]) -> Corpora? {
+  let values : Array[String?] = []
+  for name in ["ion-tests", "ion-schema-tests", "ion-hash-fixture-sha256"] {
+    match fields.get(name) {
+      None | Some(Null) => values.push(None)
+      Some(String(revision)) => values.push(Some(revision))
+      Some(_) => return None
+    }
+  }
+  Some({
+    ion_tests: values[0],
+    ion_schema_tests: values[1],
+    ion_hash_fixture_sha256: values[2],
+  })
+}
+
+///|
+fn decode_exclusions(fields : Map[String, Json]) -> Map[Suite, String]? {
+  let excluded : Map[Suite, String] = Map([])
+  for id, value in fields {
+    guard value is String(reason) else { return None }
+    if Suite::parse(id) is Some(suite) {
+      excluded[suite] = reason
+    }
+  }
+  Some(excluded)
+}
+
+///|
+/// The report of an earlier run, if it can be a baseline for `current`: a
+/// complete, passing schema 1 report of the same target and runner OS whose
+/// records are all valid.
+fn compatible_baseline(current : Report, previous : Json) -> Report? {
+  guard previous is Object(fields) else { return None }
+  guard fields.get("schema_version") is Some(Number(version, ..)) &&
+    version == 1.0 &&
+    fields.get("status") is Some(String("passed")) &&
+    fields.get("target") is Some(String(target)) &&
+    target == current.target.name() &&
+    fields.get("runner_os") is Some(String(runner_os)) &&
+    runner_os == current.runner_os else {
+    return None
+  }
+  guard fields.get("corpora") is Some(Object(corpora)) &&
+    decode_corpora(corpora) is Some(corpora) &&
+    fields.get("excluded_suites") is Some(Object(excluded)) &&
+    decode_exclusions(excluded) is Some(excluded) &&
+    fields.get("suites") is Some(Object(records)) &&
+    fields.get("errors") is Some(Array([])) &&
+    fields.get("test_exit_code") is Some(Number(exit_code, ..)) &&
+    exit_code == 0.0 else {
+    return None
+  }
+  let (results, errors) = decode_records(
+    records.values().map(record => Ok(record)).collect(),
+    excluded,
+  )
+  let keyed_by_suite = records
+    .iter()
+    .all(entry => {
+      entry.1 is Object(record) &&
+      record.get("suite") is Some(String(id)) &&
+      id == entry.0
+    })
+  guard errors.is_empty() &&
+    keyed_by_suite &&
+    !results.values().any(result => result.counts.failed()) else {
+    return None
+  }
+  Some({
+    status: Passed,
+    test_exit_code: Some(0),
+    target: current.target,
+    runner_os,
+    excluded_suites: excluded,
+    commit: match fields.get("commit") {
+      Some(String(commit)) => Some(commit)
+      _ => None
+    },
+    corpora,
+    suites: results,
+    errors: [],
+    comparison: None,
+  })
+}
+
+// ------------------------------------------------------- baseline search
+
+///|
+/// The name of the conformance artifact that CI uploads for a runner OS and
+/// target, or `None` for an OS that CI does not use.
+fn artifact_for(runner_os : String, target : Target) -> String? {
+  let runner = match runner_os {
+    "Linux" => "ubuntu-latest"
+    "Windows" => "windows-latest"
+    "macOS" | "Darwin" => "macos-latest"
+    _ => return None
+  }
+  Some("conformance-results-\{runner}-\{target.name()}")
+}
+
+///|
+fn string_field(fields : Map[String, Json], key : String) -> String? {
+  match fields.get(key) {
+    Some(String(value)) => Some(value)
+    _ => None
+  }
+}
+
+///|
+/// The runs of a `workflows/ci.yml/runs` listing.
+fn decode_runs(listing : Json) -> Array[WorkflowRun]? {
+  guard listing is Object(fields) &&
+    fields.get("workflow_runs") is Some(Array(items)) else {
+    return None
+  }
+  let runs : Array[WorkflowRun] = []
+  for item in items {
+    guard item is Object(run) &&
+      run.get("id") is Some(Number(id, ..)) &&
+      run.get("html_url") is Some(String(html_url)) &&
+      run.get("head_sha") is Some(String(head_sha)) else {
+      return None
+    }
+    runs.push({
+      id: id.to_int64(),
+      head_branch: string_field(run, "head_branch"),
+      conclusion: string_field(run, "conclusion"),
+      event: string_field(run, "event"),
+      html_url,
+      head_sha,
+    })
+  }
+  Some(runs)
+}
+
+///|
+/// The runs that can hold a baseline, newest first: successful pushes to
+/// main that started before the current run.
+fn candidate_runs(
+  runs : Array[WorkflowRun],
+  current_id : Int64,
+) -> Array[WorkflowRun] {
+  let candidates = runs.filter(run => {
+    run.id < current_id &&
+    run.head_branch == Some("main") &&
+    run.conclusion == Some("success") &&
+    run.event == Some("push")
+  })
+  candidates.sort_by((a, b) => b.id.compare(a.id))
+  candidates
+}
+
+///|
+/// The artifacts of a `runs/<id>/artifacts` listing.
+fn decode_artifacts(listing : Json) -> Array[Artifact]? {
+  guard listing is Object(fields) &&
+    fields.get("artifacts") is Some(Array(items)) else {
+    return None
+  }
+  let artifacts : Array[Artifact] = []
+  for item in items {
+    guard item is Object(artifact) &&
+      artifact.get("id") is Some(Number(id, ..)) &&
+      artifact.get("name") is Some(String(name)) else {
+      return None
+    }
+    artifacts.push({
+      id: id.to_int64(),
+      name,
+      expired: artifact.get("expired") is Some(True),
+      size_in_bytes: match artifact.get("size_in_bytes") {
+        Some(Number(size, ..)) => Some(size.to_int())
+        _ => None
+      },
+    })
+  }
+  Some(artifacts)
+}
+
+///|
+/// The unexpired artifacts with the given name, in listing order.
+fn candidate_artifacts(
+  artifacts : Array[Artifact],
+  name : String,
+) -> Array[Artifact] {
+  artifacts.filter(artifact => artifact.name == name && !artifact.expired)
+}
+
+///|
+fn artifact_too_large(artifact : Artifact) -> Bool {
+  artifact.size_in_bytes is Some(size) && size > max_artifact_bytes
+}
+
+///|
+/// What a downloaded report is worth as a baseline.
+enum ReportVerdict[T] {
+  Accepted(String?, T)
+  Incompatible
+  Invalid
+}
+
+///|
+fn report_commit(json : Json) -> String? {
+  match json {
+    Object(fields) =>
+      match fields.get("commit") {
+        Some(String(commit)) if commit != "" => Some(commit)
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn[T] judge_report(
+  file : ReportFile,
+  select : (Json) -> T?,
+) -> ReportVerdict[T] {
+  match file {
+    Missing | TooLarge => Invalid
+    Contents(bytes) => {
+      let json = @json.parse(@utf8.decode(bytes)) catch { _ => return Invalid }
+      match select(json) {
+        Some(value) => Accepted(report_commit(json), value)
+        None => Incompatible
+      }
+    }
+  }
+}
+
+///|
+fn[T] request_failed(message : String) -> BaselineStep[T] {
+  Done(Unavailable("Baseline unavailable: " + message))
+}
+
+///|
+/// The fixed inputs of one baseline search.
+struct Search[T] {
+  repository : String
+  artifact_name : String
+  select : (Json) -> T?
+}
+
+///|
+/// Start the search for the newest compatible report in an artifact of an
+/// earlier successful main run. `repository` and `run_id` are
+/// GITHUB_REPOSITORY and GITHUB_RUN_ID; `select` returns the baseline that
+/// a report gives, or `None` when the report is not compatible.
+fn[T] search_baseline(
+  repository : String?,
+  run_id : String?,
+  artifact_name : String,
+  select : (Json) -> T?,
+) -> BaselineStep[T] {
+  guard repository is Some(repository) &&
+    repository != "" &&
+    run_id is Some(run_id) &&
+    run_id != "" else {
+    return Done(Unavailable(not_in_github_actions))
+  }
+  let current_id = @string.parse_int64(run_id) catch {
+    _ => return request_failed("GITHUB_RUN_ID is not a number: \{run_id}")
+  }
+  let search : Search[T] = { repository, artifact_name, select, }
+  ListRuns(repository, response => {
+    match response {
+      Err(message) => request_failed(message)
+      Ok(listing) =>
+        match decode_runs(listing) {
+          None => request_failed("the workflow run listing is not valid")
+          Some(runs) =>
+            search.runs(
+              candidate_runs(runs, current_id)[:],
+              no_compatible_artifact,
+            )
+        }
+    }
+  })
+}
+
+///|
+fn[T] Search::runs(
+  self : Search[T],
+  runs : ArrayView[WorkflowRun],
+  reason : String,
+) -> BaselineStep[T] {
+  match runs {
+    [] => Done(Unavailable(reason))
+    [run, .. rest] =>
+      ListArtifacts(self.repository, run, response => {
+        match response {
+          Err(message) => request_failed(message)
+          Ok(listing) =>
+            match decode_artifacts(listing) {
+              None =>
+                request_failed(
+                  "the artifact listing of run \{run.id} is not valid",
+                )
+              Some(artifacts) =>
+                self.artifacts(
+                  run,
+                  candidate_artifacts(artifacts, self.artifact_name)[:],
+                  rest,
+                  reason,
+                )
+            }
+        }
+      })
+  }
+}
+
+///|
+fn[T] Search::artifacts(
+  self : Search[T],
+  run : WorkflowRun,
+  artifacts : ArrayView[Artifact],
+  runs : ArrayView[WorkflowRun],
+  reason : String,
+) -> BaselineStep[T] {
+  match artifacts {
+    [] => self.runs(runs, reason)
+    [artifact, .. rest] if artifact_too_large(artifact) =>
+      self.artifacts(run, rest, runs, invalid_reports)
+    [artifact, .. rest] =>
+      DownloadReport(self.repository, run, artifact, response => {
+        match response {
+          Err(message) => request_failed(message)
+          Ok(file) =>
+            match judge_report(file, self.select) {
+              Accepted(commit, value) => {
+                let commit = match commit {
+                  Some(commit) => commit
+                  None => run.head_sha
+                }
+                Done(
+                  Available(
+                    { run_id: run.id, url: run.html_url, commit, },
+                    value,
+                  ),
+                )
+              }
+              Incompatible => self.artifacts(run, rest, runs, reason)
+              Invalid => self.artifacts(run, rest, runs, invalid_reports)
+            }
+        }
+      })
+  }
+}
+
+// ------------------------------------------------------------------ I/O
+
+///|
+fn runs_endpoint(repository : String) -> String {
+  "repos/\{repository}/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=20"
+}
+
+///|
+fn artifacts_endpoint(repository : String, run_id : Int64) -> String {
+  "repos/\{repository}/actions/runs/\{run_id}/artifacts?per_page=100"
+}
+
+///|
+async fn gh_api(endpoint : String) -> Result[Json, String] {
+  let output = @async.with_timeout_opt(request_timeout_ms, async fn() {
+    @process.collect_output("gh", ["api", "--allow-escape-sequences", endpoint])
+  }) catch {
+    _ => return Err(github_api_unavailable)
+  }
+  match output {
+    None => Err("gh api timed out after 30 seconds")
+    Some((0, stdout, _)) =>
+      try @json.parse(stdout.text()) catch {
+        _ => Err("the GitHub API returned invalid JSON")
+      } noraise {
+        json => Ok(json)
+      }
+    Some(_) => Err(github_api_unavailable)
+  }
+}
+
+///|
+async fn download_into(
+  dir : String,
+  repository : String,
+  run : WorkflowRun,
+  artifact : Artifact,
+  report_file : String,
+) -> Result[ReportFile, String] {
+  let output = @async.with_timeout_opt(request_timeout_ms, async fn() {
+    @process.collect_output("gh", [
+      "run",
+      "download",
+      run.id.to_string(),
+      "-R",
+      repository,
+      "-n",
+      artifact.name,
+      "-D",
+      dir,
+    ])
+  }) catch {
+    _ => return Err(github_api_unavailable)
+  }
+  match output {
+    None => Err("gh run download timed out after 30 seconds")
+    Some((0, _, _)) => {
+      let path = dir + "/" + report_file
+      if !@fs.exists(path) {
+        Ok(Missing)
+      } else if @fs.file_size(path) > max_report_bytes {
+        Ok(TooLarge)
+      } else {
+        Ok(Contents(@fs.read_file(path).binary()))
+      }
+    }
+    Some(_) => Err(github_api_unavailable)
+  }
+}
+
+///|
+/// Download one artifact into a temporary directory and read only its
+/// report file.
+async fn download_report(
+  repository : String,
+  run : WorkflowRun,
+  artifact : Artifact,
+  report_file : String,
+) -> Result[ReportFile, String] {
+  let dir = @fs.tmpdir(prefix="ci-baseline-") catch {
+    error => return Err("cannot make a temporary directory: \{error}")
+  }
+  let result = download_into(dir, repository, run, artifact, report_file) catch {
+    error => Err("cannot read the artifact: \{error}")
+  }
+  @fs.rmdir(dir, recursive=true) catch {
+    _ => ()
+  }
+  result
+}
+
+///|
+/// Find the newest compatible report of an earlier successful main run of
+/// the CI workflow. Every failure gives `Unavailable` with the reason; it
+/// never fails the current run.
+async fn[T] find_baseline(
+  artifact_name : String,
+  report_file : String,
+  select : (Json) -> T?,
+) -> Baseline[T] {
+  let first = search_baseline(
+    @env.get_env_var("GITHUB_REPOSITORY"),
+    @env.get_env_var("GITHUB_RUN_ID"),
+    artifact_name,
+    select,
+  )
+  for step = first {
+    match step {
+      Done(baseline) => break baseline
+      ListRuns(repository, next) =>
+        continue next(gh_api(runs_endpoint(repository)))
+      ListArtifacts(repository, run, next) =>
+        continue next(gh_api(artifacts_endpoint(repository, run.id)))
+      DownloadReport(repository, run, artifact, next) =>
+        continue next(download_report(repository, run, artifact, report_file))
+    }
+  }
+}
+
+///|
+async fn git_revision(dir : String) -> String? {
+  if !@fs.exists(dir + "/.git") {
+    return None
+  }
+  let (code, stdout, _) = @process.collect_output("git", [
+    "-C", dir, "rev-parse", "HEAD",
+  ]) catch {
+    _ => return None
+  }
+  if code != 0 {
+    return None
+  }
+  let text = stdout.text() catch { _ => return None }
+  Some(text.trim().to_owned())
+}
+
+///|
+async fn file_sha256(path : String) -> String? {
+  if !@fs.exists(path) {
+    return None
+  }
+  Some(
+    @crypto.bytes_to_hex_string(@crypto.sha256(@fs.read_file(path).binary())),
+  )
+}
+
+///|
+/// The OS name of Python `platform.system()`: Linux, Darwin or Windows.
+async fn platform_system() -> String {
+  if @env.get_env_var("OS") is Some("Windows_NT") {
+    return "Windows"
+  }
+  let (code, stdout, _) = @process.collect_output("uname", ["-s"]) catch {
+    _ => return "unknown"
+  }
+  let text = stdout.text() catch { _ => return "unknown" }
+  if code == 0 {
+    text.trim().to_owned()
+  } else {
+    "unknown"
+  }
+}
+
+///|
+async fn runner_os() -> String {
+  match @env.get_env_var("RUNNER_OS") {
+    Some(os) => os
+    None => platform_system()
+  }
+}
+
+///|
+/// The value of an environment variable that is set and not empty.
+fn non_empty_env(name : String) -> String? {
+  match @env.get_env_var(name) {
+    Some(value) if value != "" => Some(value)
+    _ => None
+  }
+}
+
+///|
+/// Run a command and copy its merged stdout and stderr to our stdout and to
+/// the log file as the output arrives.
+async fn tee(command : Command, log_path : String) -> Int {
+  if parent_dir(log_path) is Some(dir) {
+    @fs.mkdir(dir, recursive=true, allow_exist=true)
+  }
+  let log = @fs.open(log_path, mode=WriteOnly, create_mode=CreateOrTruncate)
+  defer log.close()
+  let (reader, output) = @process.read_from_process()
+  defer reader.close()
+  @async.with_task_group(group => {
+    let process = @process.spawn(
+      group,
+      command.program,
+      command.args,
+      stdout=output,
+      stderr=output,
+    )
+    while reader.read_some() is Some(chunk) {
+      @stdio.stdout.write(chunk)
+      log.write(chunk)
+    }
+    process.wait()
+  })
+}
+
+///|
+async fn run_test(options : TestOptions) -> Int {
+  let plan = test_plan(options)
+  for command in plan.prepare {
+    let code = @process.run(command.program, command.args)
+    if code != 0 {
+      return code
+    }
+  }
+  let code = tee(plan.run, options.log)
+  if non_empty_env("GITHUB_OUTPUT") is Some(path) {
+    @fs.write_file(
+      path,
+      github_output(code),
+      append=true,
+      create_mode=OpenOrCreate,
+    )
+  }
+  code
+}
+
+///|
+async fn run_conformance(options : ConformanceOptions) -> Int {
+  let log = if @fs.exists(options.log) {
+    @utf8.decode_lossy(@fs.read_file(options.log).binary())
+  } else {
+    ""
+  }
+  let environment : Environment = {
+    runner_os: runner_os(),
+    commit: git_revision("."),
+    corpora: {
+      ion_tests: git_revision("tests/ion-tests"),
+      ion_schema_tests: git_revision("tests/ion-schema-tests"),
+      ion_hash_fixture_sha256: file_sha256("tests/fixtures/ion_hash_tests.ion"),
+    },
+  }
+  let report = make_report(log, options.exit_code, options.target, environment)
+  let baseline = match artifact_for(report.runner_os, report.target) {
+    Some(name) =>
+      find_baseline(name, "conformance.json", json => {
+        compatible_baseline(report, json)
+      })
+    None =>
+      Unavailable("No baseline artifact for runner OS \{report.runner_os}")
+  }
+  let report = { ..report, comparison: Some(compare_report(report, baseline)), }
+  let markdown = render_markdown(report)
+  @fs.mkdir(options.output_dir, recursive=true, allow_exist=true)
+  @fs.write_file(
+    options.output_dir + "/conformance.json",
+    python_json(report.to_json()) + "\n",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    options.output_dir + "/conformance.md",
+    markdown,
+    create_mode=CreateOrTruncate,
+  )
+  match non_empty_env("GITHUB_STEP_SUMMARY") {
+    Some(path) =>
+      @fs.write_file(path, markdown, append=true, create_mode=OpenOrCreate)
+    None => println(markdown)
+  }
+  match report.status {
+    Passed => 0
+    Failed | Incomplete => 1
+  }
+}
+
+///|
+fn usage_error(message : String) -> Int {
+  eprintln(message)
+  eprintln(usage)
+  2
+}
+
+// ------------------------------------------------------------- features
+
+///|
+/// Scenario state for `features/ci_test.feature`.
+struct TestWorld {
+  mut parsed : Result[TestOptions, String]
+}
+
+///|
+fn TestWorld::new() -> TestWorld {
+  { parsed: Err("no arguments parsed"), }
+}
+
+///|
+fn TestWorld::options(self : TestWorld) -> TestOptions raise {
+  match self.parsed {
+    Ok(options) => options
+    Err(message) => fail("expected options, got the error \{message}")
+  }
+}
+
+///|
+impl @moonspec.World for TestWorld with fn configure(self, setup) {
+  setup.when1("I parse the test arguments {string}", fn(text : String) {
+    let args = text.split(" ").map(arg => arg.to_owned()).collect()
+    self.parsed = parse_test_args(args)
+  })
+  setup.then1("the commands are:", fn(doc : @moonspec.DocString) raise {
+    let plan = test_plan(self.options())
+    let lines = plan.prepare.map(command => command.to_string())
+    lines.push(plan.run.to_string())
+    @expect.expect(lines.join("\n")).to_equal(doc.content)
+  })
+  setup.then1("the log file is {string}", fn(path : String) raise {
+    @expect.expect(self.options().log).to_equal(path)
+  })
+  setup.then1("the log directory is {string}", fn(dir : String) raise {
+    @expect.expect(parent_dir(self.options().log)).to_equal(Some(dir))
+  })
+  setup.then0("the log has no parent directory", fn() raise {
+    @expect.expect(parent_dir(self.options().log)).to_equal(None)
+  })
+  setup.then1("the arguments are rejected with {string}", fn(
+    message : String,
+  ) raise {
+    @expect.expect(self.parsed).to_equal(Err(message))
+  })
+  setup.then2("the GitHub output for exit code {int} is {string}", fn(
+    code : Int,
+    line : String,
+  ) raise {
+    @expect.expect(github_output(code)).to_equal(line + "\n")
+  })
+}
+
+///|
+/// One CONFORMANCE line of a test log in the feature tests.
+struct LogRecord {
+  suite : String
+  fields : Map[String, Json]
+  line_end : String
+}
+
+///|
+/// A faked artifact and report of an earlier run.
+struct FakeRun {
+  id : Int64
+  mut expired : Bool
+  mut size_in_bytes : Int
+  mut report : ReportFile
+  mut download_fails : Bool
+}
+
+///|
+/// Scenario state for `features/conformance.feature` and
+/// `features/baseline.feature`.
+struct ConformanceWorld {
+  records : Array[LogRecord]
+  extra_lines : Array[String]
+  mut report : Report?
+  mut baseline : Baseline[Report]?
+  mut baseline_json : Json?
+  mut comparison : Comparison?
+  mut parsed : Result[ConformanceOptions, String]
+  // GitHub fakes
+  mut repository : String?
+  mut run_id : String?
+  mut current_run : Int64
+  mut listing : Json?
+  mut artifacts : Json?
+  fake_runs : Array[FakeRun]
+  mut api_fails : Bool
+  requests : Array[String]
+}
+
+///|
+fn ConformanceWorld::new() -> ConformanceWorld {
+  {
+    records: [],
+    extra_lines: [],
+    report: None,
+    baseline: None,
+    baseline_json: None,
+    comparison: None,
+    parsed: Err("no arguments parsed"),
+    repository: None,
+    run_id: None,
+    current_run: 0,
+    listing: None,
+    artifacts: None,
+    fake_runs: [],
+    api_fails: false,
+    requests: [],
+  }
+}
+
+///|
+let linux_environment : Environment = {
+  runner_os: "Linux",
+  commit: None,
+  corpora: {
+    ion_tests: None,
+    ion_schema_tests: None,
+    ion_hash_fixture_sha256: None,
+  },
+}
+
+///|
+fn passing_record(suite : String) -> LogRecord {
+  let fields : Map[String, Json] = { "suite": Json::string(suite) }
+  for count in counts {
+    fields[count.key()] = Json::number(0.0)
+  }
+  fields["total"] = Json::number(10.0)
+  fields["passed"] = Json::number(10.0)
+  fields["details"] = Json::array([])
+  { suite, fields, line_end: "", }
+}
+
+///|
+fn passing_log() -> String {
+  render_log(suites.map(suite => passing_record(suite.id())), [])
+}
+
+///|
+fn render_log(
+  records : Array[LogRecord],
+  extra_lines : Array[String],
+) -> String {
+  let lines = ["compiler and test output"]
+  for record in records {
+    lines.push(
+      "CONFORMANCE " + Json::object(record.fields).stringify() + record.line_end,
+    )
+  }
+  lines.append(extra_lines)
+  lines.join("\n")
+}
+
+///|
+/// The passing report of an earlier run at the given commit.
+fn passing_baseline(commit : String) -> Report {
+  make_report(passing_log(), Some(0), Wasm, {
+    ..linux_environment,
+    commit: Some(commit),
+  })
+}
+
+///|
+fn ConformanceWorld::record(
+  self : ConformanceWorld,
+  suite : String,
+) -> LogRecord raise {
+  match self.records.search_by(record => record.suite == suite) {
+    Some(index) => self.records[index]
+    None => fail("no record for \{suite}")
+  }
+}
+
+///|
+fn ConformanceWorld::current(self : ConformanceWorld) -> Report raise {
+  match self.report {
+    Some(report) => report
+    None => fail("no report was made")
+  }
+}
+
+///|
+fn ConformanceWorld::changes(self : ConformanceWorld) -> Changes raise {
+  match self.comparison {
+    Some(Compared(_, changes)) => changes
+    other => fail("expected a comparison, got \{Repr(other)}")
+  }
+}
+
+///|
+fn ConformanceWorld::options(
+  self : ConformanceWorld,
+) -> ConformanceOptions raise {
+  match self.parsed {
+    Ok(options) => options
+    Err(message) => fail("expected options, got the error \{message}")
+  }
+}
+
+///|
+fn ConformanceWorld::fake_run(
+  self : ConformanceWorld,
+  id : Int64,
+) -> FakeRun raise {
+  match self.fake_runs.search_by(run => run.id == id) {
+    Some(index) => self.fake_runs[index]
+    None => fail("no fake run \{id}")
+  }
+}
+
+///|
+fn ConformanceWorld::make(
+  self : ConformanceWorld,
+  target : String,
+  exit_code : Int?,
+) -> Unit raise {
+  guard Target::parse(target) is Some(target) else {
+    fail("unknown target \{target}")
+  }
+  let report = make_report(
+    render_log(self.records, self.extra_lines),
+    exit_code,
+    target,
+    linux_environment,
+  )
+  self.report = Some(
+    match self.baseline {
+      Some(baseline) =>
+        { ..report, comparison: Some(compare_report(report, baseline)), }
+      None => report
+    },
+  )
+}
+
+///|
+fn parse_json_value(text : String) -> Json raise {
+  @json.parse(text)
+}
+
+///|
+fn set_field(json : Json, key : String, value : Json) -> Json raise {
+  guard json is Object(fields) else { fail("not a JSON object") }
+  let copy = fields.copy()
+  copy[key] = value
+  Json::object(copy)
+}
+
+///|
+fn fake_report(json : Json) -> ReportFile {
+  Contents(@utf8.encode(json.stringify()))
+}
+
+///|
+fn ConformanceWorld::respond_runs(
+  self : ConformanceWorld,
+) -> Result[Json, String] {
+  if self.api_fails {
+    return Err(github_api_unavailable)
+  }
+  match self.listing {
+    Some(listing) => Ok(listing)
+    None =>
+      Ok({
+        "workflow_runs": Json::array(
+          self.fake_runs.map(run => run_json(run.id, "main", "success", "push")),
+        ),
+      })
+  }
+}
+
+///|
+fn run_json(
+  id : Int64,
+  branch : String,
+  conclusion : String,
+  event : String,
+) -> Json {
+  {
+    "id": Json::number(id.to_double()),
+    "head_branch": Json::string(branch),
+    "conclusion": Json::string(conclusion),
+    "event": Json::string(event),
+    "html_url": Json::string("https://github.com/owner/repo/actions/runs/\{id}"),
+    "head_sha": Json::string("head-\{id}"),
+  }
+}
+
+///|
+fn ConformanceWorld::respond_artifacts(
+  self : ConformanceWorld,
+  run : WorkflowRun,
+) -> Result[Json, String] raise {
+  if self.api_fails {
+    return Err(github_api_unavailable)
+  }
+  let fake = self.fake_run(run.id)
+  Ok({
+    "artifacts": [
+      {
+        "id": Json::number(fake.id.to_double()),
+        "name": Json::string("conformance-results-ubuntu-latest-wasm"),
+        "expired": Json::boolean(fake.expired),
+        "size_in_bytes": Json::number(fake.size_in_bytes.to_double()),
+      },
+    ],
+  })
+}
+
+///|
+fn ConformanceWorld::respond_download(
+  self : ConformanceWorld,
+  run : WorkflowRun,
+) -> Result[ReportFile, String] raise {
+  let fake = self.fake_run(run.id)
+  if self.api_fails || fake.download_fails {
+    return Err(github_api_unavailable)
+  }
+  Ok(fake.report)
+}
+
+///|
+/// Run the baseline search against the GitHub fakes.
+fn ConformanceWorld::search(self : ConformanceWorld) -> Baseline[Report] raise {
+  let current = make_report(
+    render_log(self.records, self.extra_lines),
+    Some(0),
+    Wasm,
+    linux_environment,
+  )
+  let first = search_baseline(
+    self.repository,
+    self.run_id,
+    "conformance-results-ubuntu-latest-wasm",
+    json => compatible_baseline(current, json),
+  )
+  for step = first {
+    match step {
+      Done(baseline) => break baseline
+      ListRuns(_, next) => {
+        self.requests.push("list workflow runs")
+        continue next(self.respond_runs())
+      }
+      ListArtifacts(_, run, next) => {
+        self.requests.push("list artifacts of run \{run.id}")
+        continue next(self.respond_artifacts(run))
+      }
+      DownloadReport(_, run, artifact, next) => {
+        self.requests.push("download artifact \{artifact.id} of run \{run.id}")
+        continue next(self.respond_download(run))
+      }
+    }
+  }
+}
+
+///|
+fn ids(text : String) -> Array[Int64] raise {
+  let result = []
+  for part in text.split(",") {
+    result.push(@string.parse_int64(part.trim()))
+  }
+  result
+}
+
+///|
+fn parse_suite_state(name : String) -> SuiteState raise {
+  match name {
+    "reported" => Reported
+    "excluded" => Excluded
+    "missing" => Missing
+    other => fail("unknown suite state \{other}")
+  }
+}
+
+///|
+fn count_of(key : String) -> Count raise {
+  match counts.search_by(count => count.key() == key) {
+    Some(index) => counts[index]
+    None => fail("unknown count \{key}")
+  }
+}
+
+///|
+fn suite_of(id : String) -> Suite raise {
+  match Suite::parse(id) {
+    Some(suite) => suite
+    None => fail("unknown suite \{id}")
+  }
+}
+
+///|
+impl @moonspec.World for ConformanceWorld with fn configure(self, setup) {
+  // The test log
+  setup.given0("every suite reports 10 passed cases", fn() {
+    self.records.clear()
+    for suite in suites {
+      self.records.push(passing_record(suite.id()))
+    }
+  })
+  setup.given0("an empty test log", fn() { self.records.clear() })
+  setup.given1("suite {string} reports 10 passed cases", fn(suite : String) {
+    self.records.push(passing_record(suite))
+  })
+  setup.given1("suite {string} reports 10 passed cases again", fn(
+    suite : String,
+  ) {
+    self.records.push(passing_record(suite))
+  })
+  setup.given1(
+    "suite {string} reports 10 passed cases with a Windows line end",
+    fn(suite : String) {
+      self.records.push({ ..passing_record(suite), line_end: "\r", })
+    },
+  )
+  setup.given1("suite {string} reports nothing", fn(suite : String) {
+    self.records.retain(record => record.suite != suite)
+  })
+  setup.given3("suite {string} has {word} set to {}", fn(
+    suite : String,
+    key : String,
+    value : String,
+  ) raise {
+    self.record(suite).fields[key] = parse_json_value(value)
+  })
+  setup.given1("the log also contains:", fn(doc : @moonspec.DocString) {
+    for line in doc.content.split("\n") {
+      self.extra_lines.push(line.to_owned())
+    }
+  })
+  setup.given1("no baseline is available because {string}", fn(
+    reason : String,
+  ) {
+    self.baseline = Some(Unavailable(reason))
+  })
+  // Making the report
+  setup.when2("the {word} tests exit with code {int}", fn(
+    target : String,
+    code : Int,
+  ) raise {
+    self.make(target, Some(code))
+  })
+  setup.when1("the {word} tests report no exit code", fn(
+    target : String,
+  ) raise {
+    self.make(target, None)
+  })
+  setup.then1("the status is {string}", fn(status : String) raise {
+    @expect.expect(self.current().status.name()).to_equal(status)
+  })
+  setup.then1("the errors are:", fn(doc : @moonspec.DocString) raise {
+    @expect.expect(self.current().errors.join("\n")).to_equal(doc.content)
+  })
+  setup.then1("an error contains {string}", fn(text : String) raise {
+    let errors = self.current().errors
+    if !errors.iter().any(error => error.contains(text)) {
+      fail("no error contains \{text}: \{Repr(errors)}")
+    }
+  })
+  setup.then1("{int} suites are excluded", fn(count : Int) raise {
+    @expect.expect(self.current().excluded_suites.length()).to_equal(count)
+  })
+  setup.then1("the summary is:", fn(doc : @moonspec.DocString) raise {
+    @expect.expect(render_markdown(self.current())).to_equal(doc.content + "\n")
+  })
+  setup.then1("the summary contains:", fn(doc : @moonspec.DocString) raise {
+    let markdown = render_markdown(self.current())
+    if !markdown.contains(doc.content) {
+      fail("the summary does not contain:\n\{doc.content}\n---\n\{markdown}")
+    }
+  })
+  setup.then1("the summary does not contain {string}", fn(text : String) raise {
+    @expect.expect(render_markdown(self.current()).contains(text)).to_be_false()
+  })
+  setup.then1("the JSON report is:", fn(doc : @moonspec.DocString) raise {
+    @expect.expect(python_json(self.current().to_json())).to_equal(doc.content)
+  })
+  setup.then1("the JSON report contains:", fn(doc : @moonspec.DocString) raise {
+    let json = python_json(self.current().to_json())
+    if !json.contains(doc.content) {
+      fail("the JSON report does not contain:\n\{doc.content}\n---\n\{json}")
+    }
+  })
+  setup.then3(
+    "the artifact for runner OS {string} and target {word} is {string}",
+    fn(runner_os : String, target : String, artifact : String) raise {
+      guard Target::parse(target) is Some(target) else {
+        fail("unknown target \{target}")
+      }
+      @expect.expect(artifact_for(runner_os, target)).to_equal(Some(artifact))
+    },
+  )
+  setup.then1("the runner OS {string} has no baseline artifact", fn(
+    runner_os : String,
+  ) raise {
+    @expect.expect(artifact_for(runner_os, Wasm)).to_equal(None)
+  })
+  // Arguments
+  setup.when1("I parse the conformance arguments:", fn(
+    doc : @moonspec.DocString,
+  ) {
+    let args = doc.content.split("\n").map(arg => arg.to_owned()).collect()
+    self.parsed = parse_conformance_args(args)
+  })
+  setup.when1("I parse the conformance arguments {string}", fn(text : String) {
+    let args = text.split(" ").map(arg => arg.to_owned()).collect()
+    self.parsed = parse_conformance_args(args)
+  })
+  setup.then1("the log path is {string}", fn(path : String) raise {
+    @expect.expect(self.options().log).to_equal(path)
+  })
+  setup.then1("the exit code is {int}", fn(code : Int) raise {
+    @expect.expect(self.options().exit_code).to_equal(Some(code))
+  })
+  setup.then0("there is no exit code", fn() raise {
+    @expect.expect(self.options().exit_code).to_equal(None)
+  })
+  setup.then1("the target is {word}", fn(target : String) raise {
+    @expect.expect(self.options().target.name()).to_equal(target)
+  })
+  setup.then1("the output directory is {string}", fn(dir : String) raise {
+    @expect.expect(self.options().output_dir).to_equal(dir)
+  })
+  setup.then1("the conformance arguments are rejected with {string}", fn(
+    message : String,
+  ) raise {
+    @expect.expect(self.parsed).to_equal(Err(message))
+  })
+  // Run and artifact selection
+  setup.given1("the current workflow run is {long}", fn(id : Int64) {
+    self.current_run = id
+  })
+  setup.given1("the workflow runs:", fn(table : @moonspec.DataTable) raise {
+    let runs = table
+      .as_maps()
+      .map(row => {
+        run_json(
+          @string.parse_int64(row["id"]),
+          row["head_branch"],
+          row["conclusion"],
+          row["event"],
+        )
+      })
+    self.listing = Some({ "workflow_runs": Json::array(runs) })
+  })
+  setup.then1("the candidate runs are {string}", fn(expected : String) raise {
+    guard self.listing is Some(listing) && decode_runs(listing) is Some(runs) else {
+      fail("the run listing is not valid")
+    }
+    let selected = candidate_runs(runs, self.current_run).map(run => run.id)
+    @expect.expect(selected).to_equal(ids(expected))
+  })
+  setup.given1("the artifacts:", fn(table : @moonspec.DataTable) raise {
+    let artifacts = table
+      .as_maps()
+      .map(row => {
+        let artifact : Json = {
+          "id": Json::number(@string.parse_int64(row["id"]).to_double()),
+          "name": Json::string(row["name"]),
+          "expired": Json::boolean(row["expired"] == "true"),
+        }
+        artifact
+      })
+    self.artifacts = Some({ "artifacts": Json::array(artifacts) })
+  })
+  setup.then2("the candidate artifacts named {string} are {string}", fn(
+    name : String,
+    expected : String,
+  ) raise {
+    guard self.artifacts is Some(listing) &&
+      decode_artifacts(listing) is Some(artifacts) else {
+      fail("the artifact listing is not valid")
+    }
+    let selected = candidate_artifacts(artifacts, name).map(artifact => {
+      artifact.id
+    })
+    @expect.expect(selected).to_equal(ids(expected))
+  })
+  // The baseline search
+  setup.given2("CI runs workflow run {long} of {string}", fn(
+    id : Int64,
+    repository : String,
+  ) {
+    self.repository = Some(repository)
+    self.run_id = Some(id.to_string())
+  })
+  setup.given2("CI runs workflow run {string} of {string}", fn(
+    id : String,
+    repository : String,
+  ) {
+    self.repository = Some(repository)
+    self.run_id = Some(id)
+  })
+  setup.given1("the successful main runs {} each have a passing report", fn(
+    text : String,
+  ) raise {
+    let report = fake_report(passing_baseline("before").to_json())
+    for id in ids(text) {
+      self.fake_runs.push({
+        id,
+        expired: false,
+        size_in_bytes: 1000,
+        report,
+        download_fails: false,
+      })
+    }
+  })
+  setup.given1("the artifact of run {long} is expired", fn(id : Int64) raise {
+    self.fake_run(id).expired = true
+  })
+  setup.given2("the artifact of run {long} has {int} bytes", fn(
+    id : Int64,
+    size : Int,
+  ) raise {
+    self.fake_run(id).size_in_bytes = size
+  })
+  setup.given3("the report of run {long} has {word} set to {}", fn(
+    id : Int64,
+    key : String,
+    value : String,
+  ) raise {
+    let json = passing_baseline("before").to_json()
+    self.fake_run(id).report = fake_report(
+      set_field(json, key, parse_json_value(value)),
+    )
+  })
+  setup.given1("the report of run {long} is missing", fn(id : Int64) raise {
+    self.fake_run(id).report = Missing
+  })
+  setup.given1("the report of run {long} is over 1 MiB", fn(id : Int64) raise {
+    self.fake_run(id).report = TooLarge
+  })
+  setup.given1("the report of run {long} is not JSON", fn(id : Int64) raise {
+    self.fake_run(id).report = Contents(b"{\"schema_version\": 1,")
+  })
+  setup.given1("the report of run {long} is not UTF-8", fn(id : Int64) raise {
+    self.fake_run(id).report = Contents(b"{\"commit\": \"\xff\"}")
+  })
+  setup.given1("the download of run {long} fails", fn(id : Int64) raise {
+    self.fake_run(id).download_fails = true
+  })
+  setup.given0("the GitHub API fails", fn() { self.api_fails = true })
+  setup.given1("the run listing is {}", fn(text : String) raise {
+    self.listing = Some(parse_json_value(text))
+  })
+  setup.when0("I search for the baseline", fn() raise {
+    self.baseline = Some(self.search())
+  })
+  setup.then2("the baseline is run {long} at commit {string}", fn(
+    id : Int64,
+    commit : String,
+  ) raise {
+    guard self.baseline is Some(Available(run, _)) else {
+      fail("expected a baseline, got \{Repr(self.baseline)}")
+    }
+    @expect.expect(run.run_id).to_equal(id)
+    @expect.expect(run.commit).to_equal(commit)
+  })
+  setup.then1("the baseline URL is {string}", fn(url : String) raise {
+    guard self.baseline is Some(Available(run, _)) else {
+      fail("expected a baseline, got \{Repr(self.baseline)}")
+    }
+    @expect.expect(run.url).to_equal(url)
+  })
+  setup.then1("the baseline is unavailable because {string}", fn(
+    reason : String,
+  ) raise {
+    @expect.expect(self.baseline).to_equal(Some(Unavailable(reason)))
+  })
+  setup.then1("the requests are:", fn(doc : @moonspec.DocString) raise {
+    @expect.expect(self.requests.join("\n")).to_equal(doc.content)
+  })
+  // Comparison
+  setup.given2(
+    "the baseline is the passing report of run {long} at commit {string}",
+    fn(id : Int64, commit : String) {
+      let previous = passing_baseline(commit)
+      self.baseline = Some(
+        Available(
+          {
+            run_id: id,
+            url: "https://github.com/owner/repo/actions/runs/\{id}",
+            commit,
+          },
+          previous,
+        ),
+      )
+      self.baseline_json = Some(previous.to_json())
+    },
+  )
+  setup.given2("the baseline report has {word} set to {}", fn(
+    key : String,
+    value : String,
+  ) raise {
+    guard self.baseline_json is Some(json) else { fail("no baseline report") }
+    self.baseline_json = Some(set_field(json, key, parse_json_value(value)))
+  })
+  setup.when1("the ion-tests revision changes to {string}", fn(
+    revision : String,
+  ) raise {
+    let report = self.current()
+    self.report = Some({
+      ..report,
+      corpora: { ..report.corpora, ion_tests: Some(revision), },
+    })
+  })
+  setup.when2("the report excludes {string} because {string}", fn(
+    suite : String,
+    reason : String,
+  ) raise {
+    let report = self.current()
+    let suite = suite_of(suite)
+    let suites = report.suites.copy()
+    suites.remove(suite)
+    let excluded = report.excluded_suites.copy()
+    excluded[suite] = reason
+    self.report = Some({ ..report, suites, excluded_suites: excluded, })
+  })
+  setup.when0("I compare the reports", fn() raise {
+    guard self.baseline is Some(baseline) else { fail("no baseline") }
+    self.comparison = Some(compare_report(self.current(), baseline))
+  })
+  setup.then0("the comparison is the unavailable baseline", fn() raise {
+    guard self.baseline is Some(Unavailable(reason)) else {
+      fail("the baseline is available")
+    }
+    @expect.expect(self.comparison).to_equal(Some(NoBaseline(reason)))
+  })
+  setup.then3("the {string} delta of {word} is {int}", fn(
+    suite : String,
+    key : String,
+    delta : Int,
+  ) raise {
+    guard self.changes().suites.get(suite_of(suite)) is Some(change) &&
+      change.delta is Some(counts) else {
+      fail("no delta for \{suite}")
+    }
+    @expect.expect(counts.get(count_of(key))).to_equal(delta)
+  })
+  setup.then3("suite {string} went from {word} to {word}", fn(
+    suite : String,
+    before : String,
+    after : String,
+  ) raise {
+    guard self.changes().suites.get(suite_of(suite)) is Some(change) else {
+      fail("no change for \{suite}")
+    }
+    @expect.expect(change.baseline_state).to_equal(parse_suite_state(before))
+    @expect.expect(change.current_state).to_equal(parse_suite_state(after))
+  })
+  setup.then1("the exclusion of {string} changed", fn(suite : String) raise {
+    guard self.changes().suites.get(suite_of(suite)) is Some(change) else {
+      fail("no change for \{suite}")
+    }
+    @expect.expect(change.exclusion_changed).to_be_true()
+  })
+  setup.then1("the corpus changes are {string}", fn(expected : String) raise {
+    @expect.expect(self.changes().corpus_changes.join(", ")).to_equal(expected)
+  })
+  setup.then1("the comparison summary is:", fn(
+    doc : @moonspec.DocString,
+  ) raise {
+    guard self.comparison is Some(comparison) else { fail("no comparison") }
+    @expect.expect(render_comparison(comparison).join("\n")).to_equal(
+      "\n" + doc.content,
+    )
+  })
+  setup.then1("the comparison JSON is:", fn(doc : @moonspec.DocString) raise {
+    guard self.comparison is Some(comparison) else { fail("no comparison") }
+    @expect.expect(python_json(comparison.to_json())).to_equal(doc.content)
+  })
+  setup.then0("the baseline report is compatible", fn() raise {
+    guard self.baseline_json is Some(json) &&
+      self.baseline is Some(Available(_, previous)) else {
+      fail("no baseline report")
+    }
+    @expect.expect(compatible_baseline(self.current(), json)).to_equal(
+      Some(previous),
+    )
+  })
+  setup.then0("the baseline report is incompatible", fn() raise {
+    guard self.baseline_json is Some(json) else { fail("no baseline report") }
+    @expect.expect(compatible_baseline(self.current(), json)).to_equal(None)
+  })
+}
+
+///|
+async test "ci test feature" {
+  @moonspec.run_or_fail(
+    TestWorld::new,
+    @moonspec.RunOptions::new([
+      @moonspec.FeatureSource::File("features/ci_test.feature"),
+    ]),
+  )
+}
+
+///|
+async test "conformance feature" {
+  @moonspec.run_or_fail(
+    ConformanceWorld::new,
+    @moonspec.RunOptions::new([
+      @moonspec.FeatureSource::File("features/conformance.feature"),
+    ]),
+  )
+}
+
+///|
+async test "baseline feature" {
+  @moonspec.run_or_fail(
+    ConformanceWorld::new,
+    @moonspec.RunOptions::new([
+      @moonspec.FeatureSource::File("features/baseline.feature"),
+    ]),
+  )
+}
+
+// ---------------------------------------------------------------- bench
+
+///|
+/// The options of `ci.mbtx bench`.
+struct BenchOptions {
+  output_dir : String
+  items : Int
+  samples : Int
+  sample_ms : Int
+  cli_items : Int
+} derive(Debug, Eq)
+
+///|
+/// The workload sizes that a report measured. Two reports compare only when
+/// their configs are equal.
+struct BenchConfig {
+  items : Int
+  samples : Int
+  sample_ms : Int
+  cli_items : Int
+} derive(Debug, Eq)
+
+///|
+enum Shape {
+  Many
+  Large
+} derive(Debug, Eq)
+
+///|
+/// One benchmark driver operation on one fixture shape.
+struct Workload {
+  shape : Shape
+  mode : String
+} derive(Debug, Eq)
+
+///|
+/// The median of the samples of one workload. `samples` keeps the driver
+/// output of each sample as it was.
+struct Metric {
+  median_ms : Double
+  mib_per_second : Double
+  samples : Array[Json]
+} derive(Debug, Eq)
+
+///|
+struct CliSample {
+  elapsed_ms : Double
+  peak_rss_bytes : Int64
+} derive(Debug, Eq)
+
+///|
+/// The CLI `print -` measurement.
+struct CliResult {
+  input_bytes : Int64
+  median_ms : Double
+  median_peak_rss_bytes : Double
+  samples : Array[CliSample]
+} derive(Debug, Eq)
+
+///|
+/// The performance report. It passed when it has no errors. Its JSON form
+/// keeps the field names of the Python report (schema version 1).
+struct BenchReport {
+  commit : String
+  runner_os : String
+  architecture : String
+  toolchain : String
+  cpu : String
+  config : BenchConfig
+  metrics : Array[(String, Metric)]
+  cli : CliResult?
+  errors : Array[String]
+  comparison : Baseline[BenchChanges]?
+} derive(Debug, Eq)
+
+///|
+/// What the comparison needs from a compatible earlier report.
+struct PreviousBench {
+  toolchain : Json
+  cpu : Json
+  metrics : Map[String, Double]
+  peak_rss_bytes : Double
+} derive(Debug, Eq)
+
+///|
+/// A toolchain or CPU that differs from the baseline.
+struct EnvironmentChange {
+  key : String
+  previous : Json
+  current : String
+} derive(Debug, Eq)
+
+///|
+struct MetricChange {
+  baseline_ms : Double
+  change_percent : Double
+} derive(Debug, Eq)
+
+///|
+struct BenchChanges {
+  current_commit : String
+  environment_changes : Array[EnvironmentChange]
+  metrics : Array[(String, MetricChange)]
+  cli_peak_rss_change_percent : Double?
+} derive(Debug, Eq)
+
+// ------------------------------------------------------ bench functions
+
+///|
+let bench_modes : Array[String] = [
+  "read-text-sync", "read-text-stream", "read-binary-sync", "read-binary-stream",
+  "write-text-sync", "write-text-stream", "write-binary-sync", "write-binary-stream",
+  "hash",
+]
+
+///|
+/// The modes that only the large shape runs.
+let large_only_modes : Array[String] = [
+  "write-text-incremental", "write-binary-incremental",
+]
+
+///|
+let bench_driver : String = "_build/native/release/build/benchmarks/benchmarks.exe"
+
+///|
+let bench_cli : Command = {
+  program: "_build/native/release/build/ion.exe",
+  args: ["print", "-"],
+}
+
+///|
+let bench_artifact : String = "performance-results-ubuntu-latest-native"
+
+///|
+/// One line of the CLI input.
+let cli_line : String = "{name: \"ion\", values: [1, 2, 3], tag: sample}\n"
+
+///|
+/// The time limit of each benchmark command.
+let bench_timeout_ms : Int = 180000
+
+///|
+let invalid_measurements : String = "benchmark returned invalid measurements"
+
+///|
+let changed_output : String = "benchmark output changed between samples"
+
+///|
+/// A failed measurement. The message goes into the report.
+suberror BenchFailure {
+  BenchFailure(String)
+}
+
+///|
+fn parse_bench_args(args : ArrayView[String]) -> Result[BenchOptions, String] {
+  let mut output_dir = "_build/performance"
+  let mut items = 5000
+  let mut samples = 5
+  let mut sample_ms = 100
+  let mut cli_items = 300000
+  let mut rest = args
+  while !rest.is_empty() {
+    match rest {
+      ["--output-dir", value, .. tail] => {
+        output_dir = value
+        rest = tail
+      }
+      [
+        "--items"
+        | "--samples"
+        | "--sample-ms"
+        | "--cli-items" as flag,
+        value,
+        .. tail,
+      ] => {
+        let number = @string.parse_int(value) catch {
+          _ => return Err("bench: \{flag} must be an integer: \{value}")
+        }
+        match flag {
+          "--items" => items = number
+          "--samples" => samples = number
+          "--sample-ms" => sample_ms = number
+          _ => cli_items = number
+        }
+        rest = tail
+      }
+      [
+        "--output-dir"
+        | "--items"
+        | "--samples"
+        | "--sample-ms"
+        | "--cli-items" as flag,
+      ] => return Err("bench: \{flag} needs a value")
+      [other, ..] => return Err("bench: unknown argument \{other}")
+      [] => ()
+    }
+  }
+  if items <= 0 || samples <= 0 || sample_ms <= 0 || cli_items <= 0 {
+    return Err("bench: sample and workload sizes must be positive")
+  }
+  Ok({ output_dir, items, samples, sample_ms, cli_items, })
+}
+
+///|
+fn BenchOptions::config(self : BenchOptions) -> BenchConfig {
+  {
+    items: self.items,
+    samples: self.samples,
+    sample_ms: self.sample_ms,
+    cli_items: self.cli_items,
+  }
+}
+
+///|
+fn Shape::name(self : Shape) -> String {
+  match self {
+    Many => "many"
+    Large => "large"
+  }
+}
+
+///|
+/// The workloads in the order that they run.
+fn bench_workloads() -> Array[Workload] {
+  let workloads = []
+  for shape in [Many, Large] {
+    let modes = match shape {
+      Many => bench_modes
+      Large => [..bench_modes, ..large_only_modes]
+    }
+    for mode in modes {
+      workloads.push({ shape, mode, })
+    }
+  }
+  workloads
+}
+
+///|
+fn Workload::name(self : Workload) -> String {
+  self.shape.name() + "/" + self.mode
+}
+
+///|
+fn driver_command(workload : Workload, options : BenchOptions) -> Command {
+  {
+    program: bench_driver,
+    args: [
+      workload.mode,
+      workload.shape.name(),
+      options.items.to_string(),
+      options.sample_ms.to_string(),
+    ],
+  }
+}
+
+///|
+/// The fields of one driver sample that the summary checks.
+struct BenchSample {
+  iterations : Double
+  elapsed_ms : Double
+  input_bytes : Double
+  checksum : Json
+}
+
+///|
+fn decode_sample(json : Json) -> BenchSample? {
+  guard json is Object(fields) &&
+    fields.get("iterations") is Some(Number(iterations, ..)) &&
+    fields.get("elapsed_ms") is Some(Number(elapsed_ms, ..)) &&
+    fields.get("input_bytes") is Some(Number(input_bytes, ..)) &&
+    fields.get("checksum") is Some(checksum) else {
+    return None
+  }
+  Some({ iterations, elapsed_ms, input_bytes, checksum, })
+}
+
+///|
+/// The median, like Python `statistics.median`. An empty list has none.
+fn median(values : Array[Double]) -> Double? {
+  let sorted = values.copy()
+  sorted.sort()
+  let count = sorted.length()
+  if count == 0 {
+    None
+  } else if count % 2 == 1 {
+    Some(sorted[count / 2])
+  } else {
+    Some((sorted[count / 2 - 1] + sorted[count / 2]) / 2.0)
+  }
+}
+
+///|
+/// Summarize the driver samples of one workload: the median time per
+/// iteration and the fixture throughput at that median. Every sample must
+/// measure something and give the same input size and checksum.
+fn summarize(samples : Array[Json]) -> Result[Metric, String] {
+  let decoded : Array[BenchSample] = []
+  for sample in samples {
+    match decode_sample(sample) {
+      Some(sample) => decoded.push(sample)
+      None => return Err(invalid_measurements)
+    }
+  }
+  if decoded.is_empty() ||
+    decoded
+    .iter()
+    .any(sample => {
+      sample.iterations <= 0.0 ||
+      sample.elapsed_ms <= 0.0 ||
+      sample.input_bytes <= 0.0
+    }) {
+    return Err(invalid_measurements)
+  }
+  let first = decoded[0]
+  if decoded
+    .iter()
+    .any(sample => {
+      sample.input_bytes != first.input_bytes ||
+      sample.checksum != first.checksum
+    }) {
+    return Err(changed_output)
+  }
+  guard median(decoded.map(sample => sample.elapsed_ms / sample.iterations))
+    is Some(median_ms) else {
+    return Err(invalid_measurements)
+  }
+  Ok({
+    median_ms,
+    mib_per_second: first.input_bytes / (1024.0 * 1024.0) / (median_ms / 1000.0),
+    samples,
+  })
+}
+
+///|
+/// The input of the CLI measurement: one small struct per line.
+fn cli_input(items : Int) -> String {
+  let out = StringBuilder()
+  for _ in 0..<items {
+    out.write_string(cli_line)
+  }
+  out.to_string()
+}
+
+///|
+/// Run the CLI under the system `time`, which reports the peak RSS of the
+/// CLI alone. BSD time (Darwin) prints it to stderr in bytes; GNU time writes
+/// it in KiB to the stats file.
+fn timed_command(darwin : Bool, cli : Command, stats_path : String) -> Command {
+  if darwin {
+    { program: "/usr/bin/time", args: ["-l", cli.program, ..cli.args], }
+  } else {
+    {
+      program: "/usr/bin/time",
+      args: ["-f", "%M", "-o", stats_path, cli.program, ..cli.args],
+    }
+  }
+}
+
+///|
+fn all_digits(text : StringView) -> Bool {
+  !text.is_empty() && text.iter().all(char => char >= '0' && char <= '9')
+}
+
+///|
+/// The peak RSS in the stderr of BSD `time -l`: the line
+/// `<bytes>  maximum resident set size`.
+fn darwin_peak_rss(text : String) -> Int64? {
+  for line in text.split("\n") {
+    let line = line.trim()
+    guard line.strip_suffix("maximum resident set size") is Some(prefix) else {
+      continue
+    }
+    let digits = prefix.trim_end()
+    if digits.length() < prefix.length() && all_digits(digits) {
+      return Some(@string.parse_int64(digits)) catch { _ => None }
+    }
+  }
+  None
+}
+
+///|
+/// The peak RSS in bytes from the stats file of GNU `time -f %M`, in KiB.
+fn gnu_peak_rss(text : String) -> Int64? {
+  let kib = @string.parse_int64(text.trim()) catch { _ => return None }
+  Some(kib * 1024L)
+}
+
+///|
+/// The first `model name` or `Hardware` value of /proc/cpuinfo.
+fn cpu_from_cpuinfo(text : String) -> String? {
+  for line in text.split("\n") {
+    if line.has_prefix("model name") || line.has_prefix("Hardware") {
+      let value = match line.find(":") {
+        Some(index) => line.view(start_offset=index + 1)
+        None => line
+      }
+      return Some(value.trim().to_owned())
+    }
+  }
+  None
+}
+
+///|
+fn truncate_chars(text : String, limit : Int) -> String {
+  let out = StringBuilder()
+  let mut count = 0
+  for char in text {
+    if count == limit {
+      break
+    }
+    out.write_char(char)
+    count += 1
+  }
+  out.to_string()
+}
+
+///|
+fn BenchReport::status(self : BenchReport) -> String {
+  if self.errors.is_empty() {
+    "passed"
+  } else {
+    "failed"
+  }
+}
+
+///|
+/// The report after a failed measurement: the error (cut to 4000
+/// characters) and no comparison.
+fn BenchReport::fail(self : BenchReport, message : String) -> BenchReport {
+  {
+    ..self,
+    comparison: None,
+    errors: [..self.errors, truncate_chars(message, 4000)],
+  }
+}
+
+///|
+fn BenchConfig::to_json(self : BenchConfig) -> Json {
+  {
+    "items": Json::number(self.items.to_double()),
+    "samples": Json::number(self.samples.to_double()),
+    "sample_ms": Json::number(self.sample_ms.to_double()),
+    "cli_items": Json::number(self.cli_items.to_double()),
+    "rss_method": Json::string("external-time"),
+  }
+}
+
+///|
+/// The config as Python `str(dict)` prints it.
+fn BenchConfig::python_repr(self : BenchConfig) -> String {
+  "{'items': \{self.items}, 'samples': \{self.samples}, 'sample_ms': \{self.sample_ms}, 'cli_items': \{self.cli_items}, 'rss_method': 'external-time'}"
+}
+
+///|
+fn BenchReport::to_json(self : BenchReport) -> Json {
+  let metrics : Map[String, Json] = Map([])
+  for entry in self.metrics {
+    let (name, metric) = entry
+    metrics[name] = {
+      "median_ms": Json::number(metric.median_ms),
+      "mib_per_second": Json::number(metric.mib_per_second),
+      "samples": Json::array(metric.samples),
+    }
+  }
+  let fields : Map[String, Json] = {
+    "schema_version": Json::number(1.0),
+    "status": Json::string(self.status()),
+    "commit": Json::string(self.commit),
+    "runner_os": Json::string(self.runner_os),
+    "target": Json::string("native"),
+    "architecture": Json::string(self.architecture),
+    "toolchain": Json::string(self.toolchain),
+    "cpu": Json::string(self.cpu),
+    "config": self.config.to_json(),
+    "metrics": Json::object(metrics),
+    "errors": Json::array(self.errors.map(Json::string)),
+  }
+  if self.cli is Some(cli) {
+    fields["cli"] = {
+      "input_bytes": Json::number(cli.input_bytes.to_double()),
+      "median_ms": Json::number(cli.median_ms),
+      "median_peak_rss_bytes": Json::number(cli.median_peak_rss_bytes),
+      "samples": Json::array(
+        cli.samples.map(sample => {
+          "elapsed_ms": Json::number(sample.elapsed_ms),
+          "peak_rss_bytes": Json::number(sample.peak_rss_bytes.to_double()),
+        }),
+      ),
+    }
+  }
+  if self.comparison is Some(comparison) {
+    fields["comparison"] = bench_comparison_json(comparison)
+  }
+  Json::object(fields)
+}
+
+///|
+fn environment_changes_json(changes : Array[EnvironmentChange]) -> Json {
+  let fields : Map[String, Json] = Map([])
+  for change in changes {
+    fields[change.key] = {
+      "previous": change.previous,
+      "current": Json::string(change.current),
+    }
+  }
+  Json::object(fields)
+}
+
+///|
+fn bench_comparison_json(comparison : Baseline[BenchChanges]) -> Json {
+  match comparison {
+    Unavailable(reason) =>
+      { "status": Json::string("unavailable"), "reason": Json::string(reason) }
+    Available(run, changes) => {
+      let metrics : Map[String, Json] = Map([])
+      for entry in changes.metrics {
+        let (name, change) = entry
+        metrics[name] = {
+          "baseline_ms": Json::number(change.baseline_ms),
+          "change_percent": Json::number(change.change_percent),
+        }
+      }
+      let fields : Map[String, Json] = {
+        "status": Json::string("available"),
+        "run_id": Json::number(run.run_id.to_double()),
+        "url": Json::string(run.url),
+        "commit": Json::string(run.commit),
+        "current_commit": Json::string(changes.current_commit),
+        "environment_changes": environment_changes_json(
+          changes.environment_changes,
+        ),
+        "metrics": Json::object(metrics),
+      }
+      if changes.cli_peak_rss_change_percent is Some(percent) {
+        fields["cli_peak_rss_change_percent"] = Json::number(percent)
+      }
+      Json::object(fields)
+    }
+  }
+}
+
+///|
+/// A JSON number that is finite and above zero.
+fn positive_number(json : Json?) -> Double? {
+  match json {
+    Some(Number(value, ..)) if value > 0.0 && !value.is_inf() && !value.is_nan() =>
+      Some(value)
+    _ => None
+  }
+}
+
+///|
+fn decode_bench_config(fields : Map[String, Json]) -> BenchConfig? {
+  guard fields.length() == 5 &&
+    fields.get("rss_method") is Some(String("external-time")) else {
+    return None
+  }
+  let values : Array[Int] = []
+  for key in ["items", "samples", "sample_ms", "cli_items"] {
+    match fields.get(key) {
+      Some(Number(value, ..)) if value == value.floor() &&
+        value.abs() <= 2147483647.0 => values.push(value.to_int())
+      _ => return None
+    }
+  }
+  Some({
+    items: values[0],
+    samples: values[1],
+    sample_ms: values[2],
+    cli_items: values[3],
+  })
+}
+
+///|
+/// The parts of an earlier report that the comparison uses, if the report
+/// can be a baseline for `current`: a passing schema 1 report of the same
+/// runner OS, target, architecture and config, with a positive median time
+/// for every metric and a positive CLI peak RSS.
+fn bench_baseline(current : BenchReport, previous : Json) -> PreviousBench? {
+  guard previous is Object(fields) &&
+    fields.get("schema_version") is Some(Number(version, ..)) &&
+    version == 1.0 &&
+    fields.get("status") is Some(String("passed")) &&
+    fields.get("runner_os") is Some(String(runner_os)) &&
+    runner_os == current.runner_os &&
+    fields.get("target") is Some(String("native")) &&
+    fields.get("architecture") is Some(String(architecture)) &&
+    architecture == current.architecture &&
+    fields.get("config") is Some(Object(config)) &&
+    decode_bench_config(config) == Some(current.config) &&
+    fields.get("metrics") is Some(Object(metrics)) &&
+    fields.get("cli") is Some(Object(cli)) &&
+    positive_number(cli.get("median_peak_rss_bytes")) is Some(peak_rss_bytes) else {
+    return None
+  }
+  let medians : Map[String, Double] = Map([])
+  for name, metric in metrics {
+    guard metric is Object(metric) &&
+      positive_number(metric.get("median_ms")) is Some(median_ms) else {
+      return None
+    }
+    medians[name] = median_ms
+  }
+  Some({
+    toolchain: fields.get("toolchain").unwrap_or(Json::null()),
+    cpu: fields.get("cpu").unwrap_or(Json::null()),
+    metrics: medians,
+    peak_rss_bytes,
+  })
+}
+
+///|
+/// Compare the current measurements with the baseline. The changes are
+/// informational; a toolchain or CPU change is named so that readers
+/// interpret the deltas with care.
+fn compare_bench(
+  current : BenchReport,
+  baseline : Baseline[PreviousBench],
+) -> Baseline[BenchChanges] {
+  match baseline {
+    Unavailable(reason) => Unavailable(reason)
+    Available(run, previous) => {
+      let environment_changes = [
+          ("toolchain", previous.toolchain, current.toolchain),
+          ("cpu", previous.cpu, current.cpu),
+        ]
+        .filter(entry => entry.1 != Json::string(entry.2))
+        .map(entry => { key: entry.0, previous: entry.1, current: entry.2, })
+      let metrics : Array[(String, MetricChange)] = []
+      for entry in current.metrics {
+        let (name, metric) = entry
+        if previous.metrics.get(name) is Some(baseline_ms) {
+          metrics.push(
+            (
+              name,
+              {
+                baseline_ms,
+                change_percent: (metric.median_ms / baseline_ms - 1.0) * 100.0,
+              },
+            ),
+          )
+        }
+      }
+      let cli_peak_rss_change_percent = match current.cli {
+        Some(cli) =>
+          Some(
+            (cli.median_peak_rss_bytes / previous.peak_rss_bytes - 1.0) * 100.0,
+          )
+        None => None
+      }
+      Available(run, {
+        current_commit: current.commit,
+        environment_changes,
+        metrics,
+        cli_peak_rss_change_percent,
+      })
+    }
+  }
+}
+
+///|
+/// Escape characters outside ASCII as `\uXXXX`, as Python `json.dumps`
+/// does by default. Such characters occur only in JSON strings.
+fn ascii_only(text : String) -> String {
+  let out = StringBuilder()
+  for char in text {
+    let code = char.to_int()
+    if code < 0x7F {
+      out.write_char(char)
+    } else if code <= 0xFFFF {
+      out.write_string(unicode_escape(code))
+    } else {
+      let offset = code - 0x10000
+      out.write_string(unicode_escape(0xD800 + (offset >> 10)))
+      out.write_string(unicode_escape(0xDC00 + (offset & 0x3FF)))
+    }
+  }
+  out.to_string()
+}
+
+///|
+/// JSON text with the default separators of Python `json.dumps`: `, `
+/// between items and `: ` after keys.
+fn python_json_compact(json : Json) -> String {
+  fn render(json : Json) -> String {
+    match json {
+      Object(fields) => {
+        let items = []
+        for key, value in fields {
+          items.push(Json::string(key).stringify() + ": " + render(value))
+        }
+        "{" + items.join(", ") + "}"
+      }
+      Array(items) => "[" + items.map(render).join(", ") + "]"
+      other => other.stringify()
+    }
+  }
+
+  ascii_only(render(json))
+}
+
+///|
+/// Format like the Python format spec `.<digits>f` (`+.<digits>f` with
+/// `plus`): the exact binary value, rounded half to even.
+fn format_fixed(value : Double, digits : Int, plus? : Bool = false) -> String {
+  let bits = value.reinterpret_as_int64()
+  let sign = if bits < 0L { "-" } else if plus { "+" } else { "" }
+  let exponent_bits = ((bits >> 52) & 0x7FFL).to_int()
+  let fraction = bits & 0xFFFFFFFFFFFFFL
+  if exponent_bits == 0x7FF {
+    return sign + (if fraction == 0L { "inf" } else { "nan" })
+  }
+  let (mantissa, exponent) = if exponent_bits == 0 {
+    (fraction, -1074)
+  } else {
+    (fraction | (1L << 52), exponent_bits - 1075)
+  }
+  let mantissa = @bigint.BigInt::from_int64(mantissa)
+  let scale = @bigint.BigInt::from_int(10).pow(@bigint.BigInt::from_int(digits))
+  let scaled = if exponent >= 0 {
+    mantissa.shl(exponent) * scale
+  } else {
+    let numerator = mantissa * scale
+    let denominator = @bigint.BigInt::from_int(1).shl(-exponent)
+    let quotient = numerator / denominator
+    let twice_remainder = (numerator - quotient * denominator).shl(1)
+    let order = twice_remainder.compare(denominator)
+    let odd = !(quotient % @bigint.BigInt::from_int(2)).is_zero()
+    if order > 0 || (order == 0 && odd) {
+      quotient + @bigint.BigInt::from_int(1)
+    } else {
+      quotient
+    }
+  }
+  let text = scaled.to_string().pad_start(digits + 1, '0')
+  if digits == 0 {
+    sign + text
+  } else {
+    let point = text.length() - digits
+    sign +
+    text.view(end_offset=point).to_owned() +
+    "." +
+    text.view(start_offset=point).to_owned()
+  }
+}
+
+///|
+/// An integer with `,` between groups of three digits, like Python `{:,}`.
+fn thousands(value : Int64) -> String {
+  let digits = value.abs().to_string()
+  let out = StringBuilder()
+  let count = digits.length()
+  for i, char in digits {
+    if i > 0 && (count - i) % 3 == 0 {
+      out.write_char(',')
+    }
+    out.write_char(char)
+  }
+  (if value < 0L { "-" } else { "" }) + out.to_string()
+}
+
+///|
+fn render_bench(report : BenchReport) -> String {
+  let lines = [
+    "## Native performance",
+    "",
+    "Status: **\{report.status()}**. Timing and memory changes are informational; no thresholds fail CI.",
+    "",
+    "Commit: `\{report.commit}`. OS: \{report.runner_os}; architecture: \{report.architecture}.",
+    "",
+    "Toolchain: `\{report.toolchain.replace_all(old="\n", new=" / ")}`.",
+    "",
+    "Workloads: \{report.config.python_repr()}. Release builds; fixture setup and warmup excluded from samples.",
+    "",
+  ]
+  let baseline = match report.comparison {
+    Some(comparison) => comparison
+    None => Unavailable("Current measurements failed")
+  }
+  match baseline {
+    Available(run, changes) => {
+      lines.append([
+        "Baseline: [main CI run \{run.run_id}](\{run.url}), commit `\{run.commit}`.",
+        "",
+      ])
+      if !changes.environment_changes.is_empty() {
+        let changed = python_json_compact(
+          environment_changes_json(changes.environment_changes),
+        )
+        lines.append([
+          "Environment changed: `\{changed}`. Interpret deltas with care.",
+          "",
+        ])
+      }
+    }
+    Unavailable(reason) =>
+      lines.append(["Baseline unavailable: \{reason}.", ""])
+  }
+  lines.append([
+    "Throughput uses the serialized fixture size; Ion Hash operates on parsed values.",
+    "", "| Workload / operation | Median ms | Fixture MiB/s | Change vs main |",
+    "| --- | ---: | ---: | ---: |",
+  ])
+  for entry in report.metrics {
+    let (name, metric) = entry
+    let change = match baseline {
+      Available(_, changes) =>
+        match changes.metrics.search_by(change => change.0 == name) {
+          Some(index) =>
+            format_fixed(changes.metrics[index].1.change_percent, 1, plus=true) +
+            "%"
+          None => "n/a"
+        }
+      Unavailable(_) => "n/a"
+    }
+    lines.push(
+      "| \{name} | \{format_fixed(metric.median_ms, 3)} | \{format_fixed(metric.mib_per_second, 2)} | \{change} |",
+    )
+  }
+  if report.cli is Some(cli) {
+    let mib = format_fixed(cli.median_peak_rss_bytes / (1024.0 * 1024.0), 2)
+    lines.append([
+      "",
+      "CLI `print -`: \{thousands(cli.input_bytes)} input bytes, median \{format_fixed(cli.median_ms, 1)} ms, median peak RSS \{mib} MiB.",
+    ])
+    if baseline is Available(_, changes) &&
+      changes.cli_peak_rss_change_percent is Some(percent) {
+      lines.push(
+        "Peak RSS change vs main: \{format_fixed(percent, 1, plus=true)}%.",
+      )
+    }
+    lines.push(
+      "RSS includes the process/runtime; input is prepared on disk and output is discarded.",
+    )
+  }
+  lines.push("")
+  for error in report.errors {
+    lines.push("Execution error: " + error)
+  }
+  lines.join("\n") + "\n"
+}
+
+// ------------------------------------------------------------ bench I/O
+
+///|
+fn failure_message(error : Error) -> String {
+  match error {
+    BenchFailure(message) => message
+    other => other.to_string()
+  }
+}
+
+///|
+/// Run a command with the time limit and give its stdout (and stderr when
+/// `combined`). A failed command fails with its stderr.
+async fn bench_command(
+  command : Command,
+  combined? : Bool = false,
+) -> String raise BenchFailure {
+  let output = @async.with_timeout_opt(bench_timeout_ms, async fn() {
+    @process.collect_output(command.program, command.args)
+  }) catch {
+    error => raise BenchFailure("\{command.program}: \{error}")
+  }
+  guard output is Some((code, stdout, stderr)) else {
+    raise BenchFailure(
+      "Command '\{command.to_string()}' timed out after 180 seconds",
+    )
+  }
+  let out = @utf8.decode_lossy(stdout.binary())
+  let err = @utf8.decode_lossy(stderr.binary())
+  if code != 0 {
+    raise BenchFailure(err)
+  }
+  if combined {
+    out + err
+  } else {
+    out
+  }
+}
+
+///|
+/// Run the CLI once under the system `time`, with the input file as stdin
+/// and stdout discarded. Elapsed time has millisecond resolution.
+async fn measure_cli(cli : Command, source : String) -> CliSample {
+  let dir = @fs.tmpdir(prefix="ion-cli-rss-")
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  measure_cli_in(dir, cli, source)
+}
+
+///|
+async fn measure_cli_in(
+  dir : String,
+  cli : Command,
+  source : String,
+) -> CliSample {
+  let stats = dir + "/rss"
+  let errors = dir + "/stderr"
+  let darwin = platform_system() == "Darwin"
+  let timed = timed_command(darwin, cli, stats)
+  let start = @async.now()
+  let code = @async.with_timeout_opt(bench_timeout_ms, async fn() {
+    @process.run(
+      timed.program,
+      timed.args,
+      stdin=@process.redirect_from_file(source),
+      stdout=@process.redirect_to_file("/dev/null"),
+      stderr=@process.redirect_to_file(errors),
+    )
+  })
+  let elapsed_ms = (@async.now() - start).to_double()
+  guard code is Some(code) else {
+    raise BenchFailure(
+      "Command '\{timed.to_string()}' timed out after 180 seconds",
+    )
+  }
+  let diagnostics = @utf8.decode_lossy(@fs.read_file(errors).binary())
+  if code != 0 {
+    raise BenchFailure(
+      "CLI benchmark failed: " + truncate_chars(diagnostics, 2000),
+    )
+  }
+  let rss = if darwin {
+    guard darwin_peak_rss(diagnostics) is Some(rss) else {
+      raise BenchFailure("system time did not report CLI peak RSS")
+    }
+    rss
+  } else {
+    let text = @utf8.decode_lossy(@fs.read_file(stats).binary())
+    guard gnu_peak_rss(text) is Some(rss) else {
+      raise BenchFailure("system time returned invalid CLI peak RSS")
+    }
+    rss
+  }
+  if rss <= 0L {
+    raise BenchFailure("system time returned invalid CLI peak RSS")
+  }
+  { elapsed_ms, peak_rss_bytes: rss, }
+}
+
+///|
+/// Measure `ion print -` on the CLI input `samples` times.
+async fn measure_cli_workload(options : BenchOptions) -> CliResult {
+  let dir = @fs.tmpdir(prefix="ion-benchmark-")
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  measure_cli_workload_in(dir, options)
+}
+
+///|
+async fn measure_cli_workload_in(
+  dir : String,
+  options : BenchOptions,
+) -> CliResult {
+  let source = dir + "/large.ion"
+  @fs.write_file(source, cli_input(options.cli_items))
+  let samples : Array[CliSample] = []
+  for _ in 0..<options.samples {
+    samples.push(measure_cli(bench_cli, source))
+  }
+  guard median(samples.map(sample => sample.elapsed_ms)) is Some(median_ms) &&
+    median(samples.map(sample => sample.peak_rss_bytes.to_double()))
+    is Some(median_peak_rss_bytes) else {
+    raise BenchFailure("no CLI samples")
+  }
+  {
+    input_bytes: @fs.file_size(source),
+    median_ms,
+    median_peak_rss_bytes,
+    samples,
+  }
+}
+
+///|
+/// Build the release, run every workload and the CLI measurement, and
+/// compare with the baseline. `metrics` collects the workloads as they
+/// finish, so a failure keeps the metrics measured before it.
+async fn measure_bench(
+  base : BenchReport,
+  options : BenchOptions,
+  metrics : Array[(String, Metric)],
+) -> BenchReport {
+  let build_log = bench_command(
+    { program: "moon", args: ["build", "--target", "native", "--release"], },
+    combined=true,
+  )
+  @fs.write_file(options.output_dir + "/build.log", build_log)
+  for workload in bench_workloads() {
+    let samples : Array[Json] = []
+    for _ in 0..<options.samples {
+      let stdout = bench_command(driver_command(workload, options))
+      samples.push(
+        @json.parse(stdout) catch {
+          error => raise BenchFailure(error.to_string())
+        },
+      )
+    }
+    match summarize(samples) {
+      Ok(metric) => metrics.push((workload.name(), metric))
+      Err(message) => raise BenchFailure(message)
+    }
+  }
+  let current = { ..base, metrics, cli: Some(measure_cli_workload(options)), }
+  let baseline = find_baseline(bench_artifact, "performance.json", json => {
+    bench_baseline(current, json)
+  })
+  { ..current, comparison: Some(compare_bench(current, baseline)), }
+}
+
+///|
+/// The trimmed stdout of a command that succeeds.
+async fn trimmed_output(program : String, args : Array[String]) -> String? {
+  let (code, stdout, _) = @process.collect_output(program, args) catch {
+    _ => return None
+  }
+  if code != 0 {
+    return None
+  }
+  Some(@utf8.decode_lossy(stdout.binary()).trim().to_owned())
+}
+
+///|
+/// The machine name of Python `platform.machine()`.
+async fn machine() -> String {
+  if @env.get_env_var("OS") is Some("Windows_NT") {
+    return @env.get_env_var("PROCESSOR_ARCHITECTURE").unwrap_or("unknown")
+  }
+  match trimmed_output("uname", ["-m"]) {
+    Some(name) if name != "" => name
+    _ => "unknown"
+  }
+}
+
+///|
+/// The CPU name: /proc/cpuinfo on Linux, else the processor name of
+/// `uname -p`, else the machine name.
+async fn cpu_identifier(machine : String) -> String {
+  if @fs.exists("/proc/cpuinfo") {
+    let text = @utf8.decode_lossy(@fs.read_file("/proc/cpuinfo").binary())
+    if cpu_from_cpuinfo(text) is Some(cpu) {
+      return cpu
+    }
+  }
+  match trimmed_output("uname", ["-p"]) {
+    Some(processor) if processor != "" && processor != "unknown" => processor
+    _ => machine
+  }
+}
+
+///|
+async fn run_bench(options : BenchOptions) -> Int {
+  @fs.mkdir(options.output_dir, recursive=true, allow_exist=true)
+  let commit = match non_empty_env("GITHUB_SHA") {
+    Some(sha) => sha
+    None =>
+      bench_command({ program: "git", args: ["rev-parse", "HEAD"], })
+      .trim()
+      .to_owned() catch {
+        error => {
+          eprintln("bench: cannot read the commit: \{failure_message(error)}")
+          return 1
+        }
+      }
+  }
+  let toolchain = bench_command({
+      program: "moon",
+      args: ["version", "--all", "--no-path"],
+    })
+    .trim()
+    .to_owned() catch {
+      error => {
+        eprintln("bench: cannot read the toolchain: \{failure_message(error)}")
+        return 1
+      }
+    }
+  let architecture = machine()
+  let base : BenchReport = {
+    commit,
+    runner_os: match non_empty_env("RUNNER_OS") {
+      Some(os) => os
+      None => platform_system()
+    },
+    architecture,
+    toolchain,
+    cpu: cpu_identifier(architecture),
+    config: options.config(),
+    metrics: [],
+    cli: None,
+    errors: [],
+    comparison: None,
+  }
+  let metrics : Array[(String, Metric)] = []
+  let report = measure_bench(base, options, metrics) catch {
+    error => { ..base, metrics, }.fail(failure_message(error))
+  }
+  @fs.write_file(
+    options.output_dir + "/performance.json",
+    python_json(report.to_json()) + "\n",
+    create_mode=CreateOrTruncate,
+  )
+  let summary = render_bench(report)
+  @fs.write_file(
+    options.output_dir + "/performance.md",
+    summary,
+    create_mode=CreateOrTruncate,
+  )
+  if non_empty_env("GITHUB_STEP_SUMMARY") is Some(path) {
+    @fs.write_file(path, summary, append=true, create_mode=OpenOrCreate)
+  }
+  println(summary)
+  if report.errors.is_empty() {
+    0
+  } else {
+    1
+  }
+}
+
+// -------------------------------------------------------- bench feature
+
+///|
+/// Scenario state for `features/bench.feature`.
+struct BenchWorld {
+  mut parsed : Result[BenchOptions, String]
+  samples : Array[Json]
+  mut metric : Result[Metric, String]
+  mut report : BenchReport?
+  mut previous : Json?
+}
+
+///|
+fn BenchWorld::new() -> BenchWorld {
+  {
+    parsed: Err("no arguments parsed"),
+    samples: [],
+    metric: Err("no samples summarized"),
+    report: None,
+    previous: None,
+  }
+}
+
+///|
+/// The report of the Python tests: two metrics and a CLI measurement.
+fn fixture_report() -> BenchReport {
+  {
+    commit: "after",
+    runner_os: "Linux",
+    architecture: "x86_64",
+    toolchain: "moon new\nmoonc v1 → x",
+    cpu: "cpu",
+    config: { items: 5000, samples: 5, sample_ms: 100, cli_items: 300000, },
+    metrics: [
+      (
+        "many/read-text-sync",
+        { median_ms: 0.12345, mib_per_second: 2.675, samples: [], },
+      ),
+      (
+        "large/read-text-sync",
+        { median_ms: 10.0, mib_per_second: 2.0, samples: [], },
+      ),
+    ],
+    cli: Some({
+      input_bytes: 14100000L,
+      median_ms: 4.25,
+      median_peak_rss_bytes: 2048.0,
+      samples: [],
+    }),
+    errors: [],
+    comparison: None,
+  }
+}
+
+///|
+fn BenchWorld::options(self : BenchWorld) -> BenchOptions raise {
+  match self.parsed {
+    Ok(options) => options
+    Err(message) => fail("expected options, got the error \{message}")
+  }
+}
+
+///|
+fn BenchWorld::current(self : BenchWorld) -> BenchReport raise {
+  match self.report {
+    Some(report) => report
+    None => fail("no bench report")
+  }
+}
+
+///|
+fn BenchWorld::changes(self : BenchWorld) -> BenchChanges raise {
+  match self.current().comparison {
+    Some(Available(_, changes)) => changes
+    other => fail("expected a comparison, got \{Repr(other)}")
+  }
+}
+
+///|
+fn BenchWorld::previous_json(self : BenchWorld) -> Json raise {
+  match self.previous {
+    Some(json) => json
+    None => fail("no baseline bench report")
+  }
+}
+
+///|
+/// Replace the value at a path of object keys.
+fn set_path(json : Json, path : ArrayView[String], value : Json) -> Json raise {
+  match path {
+    [] => value
+    [key, .. rest] => {
+      guard json is Object(fields) else { fail("not a JSON object at \{key}") }
+      let inner = match fields.get(key) {
+        Some(inner) => inner
+        None => Json::object(Map([]))
+      }
+      let copy = fields.copy()
+      copy[key] = set_path(inner, rest, value)
+      Json::object(copy)
+    }
+  }
+}
+
+///|
+impl @moonspec.World for BenchWorld with fn configure(self, setup) {
+  setup.when1("I parse the bench arguments {string}", fn(text : String) {
+    let args = text
+      .split(" ")
+      .filter(arg => arg != "")
+      .map(arg => arg.to_owned())
+      .collect()
+    self.parsed = parse_bench_args(args)
+  })
+  setup.then1("the bench options are:", fn(table : @moonspec.DataTable) raise {
+    let row = table.as_maps()[0]
+    let options = self.options()
+    @expect.expect(options).to_equal({
+      output_dir: row["output_dir"],
+      items: @string.parse_int(row["items"]),
+      samples: @string.parse_int(row["samples"]),
+      sample_ms: @string.parse_int(row["sample_ms"]),
+      cli_items: @string.parse_int(row["cli_items"]),
+    })
+  })
+  setup.then1("the bench arguments are rejected with {string}", fn(
+    message : String,
+  ) raise {
+    @expect.expect(self.parsed).to_equal(Err(message))
+  })
+  setup.then1("the workloads are:", fn(doc : @moonspec.DocString) raise {
+    let names = bench_workloads().map(workload => workload.name())
+    @expect.expect(names.join("\n")).to_equal(doc.content)
+  })
+  setup.then2("the driver command of {string} is {string}", fn(
+    name : String,
+    expected : String,
+  ) raise {
+    let workloads = bench_workloads()
+    guard workloads.search_by(workload => workload.name() == name)
+      is Some(index) else {
+      fail("no workload \{name}")
+    }
+    let command = driver_command(workloads[index], self.options())
+    @expect.expect(command.to_string()).to_equal(expected)
+  })
+  setup.given1("the benchmark samples:", fn(table : @moonspec.DataTable) raise {
+    for row in table.as_maps() {
+      let sample : Map[String, Json] = Map([])
+      for key in ["iterations", "elapsed_ms", "input_bytes", "checksum"] {
+        sample[key] = @json.parse(row[key])
+      }
+      self.samples.push(Json::object(sample))
+    }
+  })
+  setup.when0("I summarize the samples", fn() {
+    self.metric = summarize(self.samples)
+  })
+  setup.then2("the median is {float} ms at {float} MiB\\/s", fn(
+    median : Double,
+    mib : Double,
+  ) raise {
+    guard self.metric is Ok(metric) else {
+      fail("expected a metric, got \{Repr(self.metric)}")
+    }
+    @expect.expect(metric.median_ms).to_equal(median)
+    @expect.expect(metric.mib_per_second).to_equal(mib)
+  })
+  setup.then1("the metric keeps the {int} samples", fn(count : Int) raise {
+    guard self.metric is Ok(metric) else {
+      fail("expected a metric, got \{Repr(self.metric)}")
+    }
+    @expect.expect(metric.samples).to_equal(self.samples)
+    @expect.expect(metric.samples.length()).to_equal(count)
+  })
+  setup.then1("the summary fails with {string}", fn(message : String) raise {
+    @expect.expect(self.metric).to_equal(Err(message))
+  })
+  setup.then3(
+    "the CLI input for {int} items has {int} bytes and starts with:",
+    fn(items : Int, bytes : Int, doc : @moonspec.DocString) raise {
+      let input = cli_input(items)
+      @expect.expect(@utf8.encode(input).length()).to_equal(bytes)
+      @expect.expect(input.has_prefix(doc.content + "\n")).to_be_true()
+    },
+  )
+  setup.then1("the timed command on Darwin is {string}", fn(
+    expected : String,
+  ) raise {
+    let cli : Command = { program: "ion.exe", args: ["print", "-"], }
+    @expect.expect(timed_command(true, cli, "rss").to_string()).to_equal(
+      expected,
+    )
+  })
+  setup.then1("the timed command on Linux is {string}", fn(
+    expected : String,
+  ) raise {
+    let cli : Command = { program: "ion.exe", args: ["print", "-"], }
+    @expect.expect(timed_command(false, cli, "rss").to_string()).to_equal(
+      expected,
+    )
+  })
+  setup.then2("the Darwin peak RSS of this output is {long} bytes:", fn(
+    bytes : Int64,
+    doc : @moonspec.DocString,
+  ) raise {
+    @expect.expect(darwin_peak_rss(doc.content)).to_equal(Some(bytes))
+  })
+  setup.then1("the Darwin peak RSS of this output is unknown:", fn(
+    doc : @moonspec.DocString,
+  ) raise {
+    @expect.expect(darwin_peak_rss(doc.content)).to_equal(None)
+  })
+  setup.then2("the GNU peak RSS of {string} is {word}", fn(
+    stats : String,
+    expected : String,
+  ) raise {
+    let rss = gnu_peak_rss(stats.replace_all(old="\\n", new="\n"))
+    let expected = if expected == "unknown" {
+      None
+    } else {
+      Some(@string.parse_int64(expected))
+    }
+    @expect.expect(rss).to_equal(expected)
+  })
+  setup.given0("the current bench report", fn() {
+    self.report = Some(fixture_report())
+  })
+  setup.given1("the baseline bench report is the current report with:", fn(
+    table : @moonspec.DataTable,
+  ) raise {
+    let mut json = set_path(self.current().to_json(), ["commit"], "before")
+    for key, value in table.as_maps()[0] {
+      json = match key {
+        "toolchain" => set_path(json, ["toolchain"], Json::string(value))
+        "cli peak RSS" =>
+          set_path(json, ["cli", "median_peak_rss_bytes"], @json.parse(value))
+        metric =>
+          set_path(json, ["metrics", metric, "median_ms"], @json.parse(value))
+      }
+    }
+    self.previous = Some(json)
+  })
+  setup.given1("the baseline bench report has no metric {string}", fn(
+    name : String,
+  ) raise {
+    guard self.previous_json() is Object(fields) &&
+      fields.get("metrics") is Some(Object(metrics)) else {
+      fail("no metrics")
+    }
+    let kept = metrics.copy()
+    kept.remove(name)
+    self.previous = Some(
+      set_path(self.previous_json(), ["metrics"], Json::object(kept)),
+    )
+  })
+  setup.given2("the baseline bench report has {word} set to {}", fn(
+    key : String,
+    value : String,
+  ) raise {
+    self.previous = Some(
+      set_path(self.previous_json(), [key], @json.parse(value)),
+    )
+  })
+  setup.then0("the baseline bench report is compatible", fn() raise {
+    let previous = bench_baseline(self.current(), self.previous_json())
+    @expect.expect(previous is Some(_)).to_be_true()
+  })
+  setup.then0("the baseline bench report is incompatible", fn() raise {
+    @expect.expect(bench_baseline(self.current(), self.previous_json())).to_equal(
+      None,
+    )
+  })
+  setup.when2("I compare with the bench baseline of run {long} at {string}", fn(
+    run_id : Int64,
+    url : String,
+  ) raise {
+    let current = self.current()
+    guard bench_baseline(current, self.previous_json()) is Some(previous) else {
+      fail("the baseline bench report is incompatible")
+    }
+    let baseline = Available({ run_id, url, commit: "before", }, previous)
+    self.report = Some({
+      ..current,
+      comparison: Some(compare_bench(current, baseline)),
+    })
+  })
+  setup.then2("the change of {string} is {float}%", fn(
+    name : String,
+    percent : Double,
+  ) raise {
+    let metrics = self.changes().metrics
+    guard metrics.search_by(entry => entry.0 == name) is Some(index) else {
+      fail("no change for \{name}")
+    }
+    @expect.expect(metrics[index].1.change_percent).to_equal(percent)
+  })
+  setup.then1("{string} has no change", fn(name : String) raise {
+    let metrics = self.changes().metrics
+    @expect.expect(metrics.search_by(entry => entry.0 == name)).to_equal(None)
+  })
+  setup.then1("the peak RSS change is {float}%", fn(percent : Double) raise {
+    @expect.expect(self.changes().cli_peak_rss_change_percent).to_equal(
+      Some(percent),
+    )
+  })
+  setup.then1("the bench status is {string}", fn(status : String) raise {
+    @expect.expect(self.current().status()).to_equal(status)
+  })
+  setup.then1("the bench summary is:", fn(doc : @moonspec.DocString) raise {
+    @expect.expect(render_bench(self.current())).to_equal(doc.content + "\n")
+  })
+  setup.when1("the bench baseline is unavailable because {string}", fn(
+    reason : String,
+  ) raise {
+    let current = self.current()
+    self.report = Some({
+      ..current,
+      comparison: Some(compare_bench(current, Unavailable(reason))),
+    })
+  })
+  setup.then1("the bench comparison is unavailable because {string}", fn(
+    reason : String,
+  ) raise {
+    @expect.expect(self.current().comparison).to_equal(
+      Some(Unavailable(reason)),
+    )
+  })
+  setup.when1("the measurements fail with {string}", fn(
+    message : String,
+  ) raise {
+    self.report = Some({ ..self.current(), cli: None, }.fail(message))
+  })
+  setup.when1("the measurements fail with {int} characters of output", fn(
+    count : Int,
+  ) raise {
+    self.report = Some(self.current().fail("x".repeat(count)))
+  })
+  setup.then1("the bench error has {int} characters", fn(count : Int) raise {
+    @expect.expect(self.current().errors.map(error => error.length())).to_equal([
+        count,
+      ],
+    )
+  })
+  setup.then0("the JSON of the current report is a compatible baseline", fn() raise {
+    let current = self.current()
+    let json = @json.parse(python_json(current.to_json()))
+    @expect.expect(bench_baseline(current, json) is Some(_)).to_be_true()
+  })
+  setup.then3("{} formatted with {string} is {string}", fn(
+    value : String,
+    spec : String,
+    expected : String,
+  ) raise {
+    let value = @string.parse_double(value)
+    let plus = spec.has_prefix("+")
+    let digits_text = spec.trim_start(chars="+.").trim_end(chars="f")
+    let digits = @string.parse_int(digits_text)
+    @expect.expect(format_fixed(value, digits, plus~)).to_equal(expected)
+  })
+  setup.then2("the CPU of this cpuinfo is {string}:", fn(
+    cpu : String,
+    doc : @moonspec.DocString,
+  ) raise {
+    @expect.expect(cpu_from_cpuinfo(doc.content)).to_equal(Some(cpu))
+  })
+  setup.then1("the cpuinfo has no CPU name:", fn(
+    doc : @moonspec.DocString,
+  ) raise {
+    @expect.expect(cpu_from_cpuinfo(doc.content)).to_equal(None)
+  })
+  setup.then2("{long} with thousands separators is {string}", fn(
+    value : Int64,
+    expected : String,
+  ) raise {
+    @expect.expect(thousands(value)).to_equal(expected)
+  })
+}
+
+///|
+async test "bench feature" {
+  @moonspec.run_or_fail(
+    BenchWorld::new,
+    @moonspec.RunOptions::new([
+      @moonspec.FeatureSource::File("features/bench.feature"),
+    ]),
+  )
+}
+
+///|
+async test "measure_cli gives the peak RSS of the command alone and reports its failure" {
+  // The system time command is the RSS runner; skip where it is absent.
+  if !@fs.exists("/usr/bin/time") {
+    return
+  }
+  let dir = @fs.tmpdir(prefix="ci-measure-cli-")
+  let source = dir + "/input"
+  @fs.write_file(source, "sample")
+  // The command fails unless its stdin is the input file.
+  let sample = measure_cli(
+    { program: "/bin/sh", args: ["-c", "test \"$(cat)\" = sample"], },
+    source,
+  )
+  @expect.expect(sample.peak_rss_bytes > 0L).to_be_true()
+  @expect.expect(sample.peak_rss_bytes < 64L * 1024L * 1024L).to_be_true()
+  @expect.expect(sample.elapsed_ms >= 0.0).to_be_true()
+  let failure = try
+    measure_cli(
+      { program: "/bin/sh", args: ["-c", "echo sample failure >&2; exit 1"], },
+      source,
+    )
+  catch {
+    error => failure_message(error)
+  } noraise {
+    sample => fail("expected a CLI failure, got \{Repr(sample)}")
+  }
+  @fs.rmdir(dir, recursive=true)
+  @expect.expect(failure.has_prefix("CLI benchmark failed: ")).to_be_true()
+  @expect.expect(failure.contains("sample failure")).to_be_true()
+}
+
+///|
+async fn main {
+  let code = match @env.args()[1:] {
+    ["test", .. rest] =>
+      match parse_test_args(rest) {
+        Ok(options) => run_test(options)
+        Err(message) => usage_error(message)
+      }
+    ["bench", .. rest] =>
+      match parse_bench_args(rest) {
+        Ok(options) => run_bench(options)
+        Err(message) => usage_error(message)
+      }
+    ["conformance", .. rest] =>
+      match parse_conformance_args(rest) {
+        Ok(options) => run_conformance(options)
+        Err(message) => usage_error(message)
+      }
+    _ => usage_error("ci.mbtx: unknown command")
+  }
+  @sys.exit(code)
+}

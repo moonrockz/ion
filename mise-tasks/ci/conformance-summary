@@ -2,5 +2,4 @@
 #MISE description="Publish the corpus conformance summary from a test log"
 set -euo pipefail
 
-python=$(command -v python3 || command -v python)
-exec "$python" .github/scripts/conformance_summary.py "$@"
+exec moon run -q --target wasm scripts/ci.mbtx -- conformance "$@"

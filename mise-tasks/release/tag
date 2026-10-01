@@ -3,6 +3,4 @@
 #USAGE arg "<version>" help="Release version, for example 0.4.0"
 set -euo pipefail
 
-tag="v${1#v}"
-git tag -a "$tag" -m "Release $tag"
-exec git push origin "$tag"
+exec moon run -q --target wasm scripts/release.mbtx -- tag "$@"

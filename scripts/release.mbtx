@@ -1,0 +1,736 @@
+///|
+import {
+  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.4/process",
+  "moonbitlang/async@0.22.4/fs",
+  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonrockz/moonspec@0.10.0",
+  "moonrockz/expect@0.6.0",
+}
+
+///|
+/// Release tooling for the Release workflow.
+///
+/// Usage:
+///   release.mbtx version          print the next version (git-cliff)
+///   release.mbtx plan             decide the version of a Release run
+///   release.mbtx notes [version]  print the release notes (git-cliff)
+///   release.mbtx tag <version>    create and push the release tag
+///   release.mbtx credentials      write ~/.moon/credentials.json
+///   release.mbtx assets           collect the CLI binaries into release/
+
+///|
+let usage : String = "Usage: release.mbtx version | plan | notes [<version>] | tag <version> | credentials | assets"
+
+///|
+/// The version when git-cliff cannot compute one.
+let initial_version : String = "0.1.0"
+
+///|
+let token_var : String = "MOONCAKES_USER_TOKEN"
+
+///|
+/// The directory that `assets` fills with the release binaries.
+let release_dir : String = "release"
+
+///|
+/// A subcommand of the script.
+enum Command {
+  Version
+  Plan
+  Notes(String?)
+  Tag(String)
+  Credentials
+  Assets
+} derive(Eq, Debug)
+
+///|
+/// Read the subcommand from the script arguments.
+fn parse_command(args : ArrayView[String]) -> Command? {
+  match args {
+    ["version"] => Some(Version)
+    ["plan"] => Some(Plan)
+    ["notes"] => Some(Notes(None))
+    ["notes", version] => Some(Notes(Some(version)))
+    ["tag", version] => Some(Tag(version))
+    ["credentials"] => Some(Credentials)
+    ["assets"] => Some(Assets)
+    _ => None
+  }
+}
+
+///|
+/// The next version from the git-cliff exit code and stdout, without the
+/// leading `v`.
+fn choose_version(exit_code : Int, stdout : String) -> String {
+  let version = without_v(stdout.trim().to_owned())
+  if exit_code == 0 && version != "" {
+    version
+  } else {
+    initial_version
+  }
+}
+
+///|
+/// `text` without one leading `v`.
+fn without_v(text : String) -> String {
+  if text.has_prefix("v") {
+    text.view(start_offset=1).to_owned()
+  } else {
+    text
+  }
+}
+
+///|
+/// Where the release version comes from.
+enum VersionSource {
+  /// A tag push: the tag names the version.
+  FromTag(String)
+  /// Any other run: git-cliff computes it from the commits.
+  FromCommits
+} derive(Eq, Debug)
+
+///|
+/// Releases run from a tag push, a push to main, or a manual run on main.
+fn version_source(
+  event_name : String?,
+  ref_type : String?,
+  ref_name : String?,
+) -> Result[VersionSource, String] {
+  if event_name is Some("workflow_dispatch") && !(ref_name is Some("main")) {
+    let current = ref_name.unwrap_or("")
+    return Err("releases run only from main (current: \{current})")
+  }
+  match (ref_type, ref_name) {
+    (Some("tag"), Some(name)) => Ok(FromTag(without_v(name)))
+    _ => Ok(FromCommits)
+  }
+}
+
+///|
+/// The decision of a Release run, written to GITHUB_OUTPUT.
+struct Plan {
+  version : String
+  prerelease : Bool
+  tag_exists : Bool
+} derive(Eq, Debug)
+
+///|
+/// The release version must be the one in moon.mod. A version with a `-`
+/// suffix is a prerelease.
+fn decide_plan(
+  version : String,
+  module_version : String?,
+  tag_exists : Bool,
+) -> Result[Plan, String] {
+  match module_version {
+    Some(v) if v == version =>
+      Ok({ version, prerelease: version.contains("-"), tag_exists, })
+    Some(v) => Err("moon.mod has version \{v}, but the release is \{version}")
+    None => Err("moon.mod has no version, but the release is \{version}")
+  }
+}
+
+///|
+/// Lines for GITHUB_OUTPUT.
+fn plan_outputs(plan : Plan) -> String {
+  (
+    $|version=\{plan.version}
+    $|prerelease=\{plan.prerelease}
+    $|tag_exists=\{plan.tag_exists}
+    $|
+  )
+}
+
+///|
+/// The `version = "..."` value of a moon.mod file.
+fn mod_version(moon_mod : String) -> String? {
+  for line in moon_mod.split("\n") {
+    if version_value(line) is Some(value) {
+      return Some(value)
+    }
+  }
+  None
+}
+
+///|
+fn version_value(line : StringView) -> String? {
+  let line = line.trim()
+  guard line.has_prefix("version") else { return None }
+  let rest = line.view(start_offset=7).trim_start()
+  guard rest.has_prefix("=") else { return None }
+  let value = rest.view(start_offset=1).trim()
+  guard value.length() >= 2 && value.has_prefix("\"") && value.has_suffix("\"") else {
+    return None
+  }
+  Some(value.view(start_offset=1, end_offset=value.length() - 1).to_owned())
+}
+
+///|
+/// Which release notes git-cliff renders.
+enum NotesTarget {
+  /// The notes of the latest tag.
+  Latest
+  /// The commits after the latest tag, under a new tag.
+  Unreleased(String)
+} derive(Eq, Debug)
+
+///|
+/// The notes of a tagged version are the latest tag's; the notes of a version
+/// without a tag are the unreleased commits under that tag.
+fn notes_target(version : String?, tag_exists : Bool) -> NotesTarget {
+  match version {
+    Some(v) if !tag_exists => Unreleased(tag_name(v))
+    _ => Latest
+  }
+}
+
+///|
+/// The `git cliff` arguments that render the notes.
+fn cliff_args(target : NotesTarget) -> Array[String] {
+  match target {
+    Latest => ["--latest", "--strip", "header"]
+    Unreleased(tag) => ["--unreleased", "--tag", tag, "--strip", "header"]
+  }
+}
+
+///|
+/// The release tag of a version: `v<version>`.
+fn tag_name(version : String) -> String {
+  "v\{without_v(version)}"
+}
+
+///|
+/// A program and its arguments.
+struct Invocation {
+  program : String
+  args : Array[String]
+} derive(Eq, Debug)
+
+///|
+/// Create the annotated release tag, then push it to origin.
+fn tag_invocations(version : String) -> Array[Invocation] {
+  let tag = tag_name(version)
+  [
+    { program: "git", args: ["tag", "-a", tag, "-m", "Release \{tag}"], },
+    { program: "git", args: ["push", "origin", tag], },
+  ]
+}
+
+///|
+/// The token, or an error message when it is missing or empty.
+fn require_token(value : String?) -> Result[String, String] {
+  match value {
+    Some(token) if token != "" => Ok(token)
+    _ => Err("\{token_var} is not set")
+  }
+}
+
+///|
+/// `{"token": ...}` with correct JSON escaping.
+fn credentials_json(token : String) -> String {
+  "{\"token\": \{token.to_json().stringify()}}\n"
+}
+
+///|
+/// A build artifact and the release asset that it becomes.
+struct Asset {
+  source : String
+  target : String
+  executable : Bool
+} derive(Eq, Debug)
+
+///|
+/// The native CLI builds (downloaded to artifacts/) and their release names.
+fn release_assets() -> Array[Asset] {
+  [
+    {
+      source: "artifacts/ion-linux-amd64/ion.exe",
+      target: "release/ion-linux-amd64",
+      executable: true,
+    },
+    {
+      source: "artifacts/ion-macos-arm64/ion.exe",
+      target: "release/ion-macos-arm64",
+      executable: true,
+    },
+    {
+      source: "artifacts/ion-windows-amd64.exe/ion.exe",
+      target: "release/ion-windows-amd64.exe",
+      executable: false,
+    },
+  ]
+}
+
+///|
+/// All build artifacts must be present.
+fn check_artifacts(missing : Array[String]) -> Result[Unit, String] {
+  match missing {
+    [] => Ok(())
+    _ => Err("missing build artifacts: \{missing.join(", ")}")
+  }
+}
+
+///|
+/// One line of the release/ listing.
+fn listing_line(name : String, size : Int64) -> String {
+  "\{name} (\{size} bytes)"
+}
+
+///|
+fn fail_with(message : String) -> Unit {
+  eprintln("Error: \{message}")
+  @sys.exit(1)
+}
+
+///|
+/// The exit code and stdout of a command; its stderr is discarded.
+async fn stdout_of(
+  cmd : String,
+  args : Array[String],
+  cwd? : StringView,
+  extra_env? : Map[String, String] = {},
+) -> (Int, String) {
+  // Collect stderr only to discard it; this needs no null device.
+  let (code, out, _) = @process.collect_output(cmd, args, cwd?, extra_env~) catch {
+    _ => (1, b"", b"")
+  }
+  (code, out.text())
+}
+
+///|
+async fn computed_version() -> String {
+  let (code, out) = stdout_of("git", ["cliff", "--bumped-version"])
+  choose_version(code, out)
+}
+
+///|
+/// The tag `v<version>` exists in the repository at `cwd`.
+async fn tag_exists(version : String, cwd? : StringView) -> Bool {
+  let (_, out) = stdout_of("git", ["tag", "-l", tag_name(version)], cwd?)
+  out.trim() != ""
+}
+
+///|
+/// The `git` arguments that print the notes of `version` (or of the latest
+/// tag) in the repository at `cwd`.
+async fn notes_command(version : String?, cwd? : StringView) -> Array[String] {
+  let exists = match version {
+    Some(v) => tag_exists(v, cwd?)
+    None => false
+  }
+  ["cliff"] + cliff_args(notes_target(version, exists))
+}
+
+///|
+async fn run_plan() -> Unit {
+  let source = match
+    version_source(
+      @env.get_env_var("GITHUB_EVENT_NAME"),
+      @env.get_env_var("GITHUB_REF_TYPE"),
+      @env.get_env_var("GITHUB_REF_NAME"),
+    ) {
+    Ok(source) => source
+    Err(message) => {
+      fail_with(message)
+      return
+    }
+  }
+  let version = match source {
+    FromTag(version) => version
+    FromCommits => computed_version()
+  }
+  let module_version = mod_version(@fs.read_file("moon.mod").text())
+  match decide_plan(version, module_version, tag_exists(version)) {
+    Err(message) => fail_with(message)
+    Ok(plan) =>
+      match @env.get_env_var("GITHUB_OUTPUT") {
+        Some(path) if path != "" =>
+          @fs.write_file(
+            path,
+            plan_outputs(plan),
+            create_mode=OpenOrCreate,
+            append=true,
+          )
+        _ => println(plan_outputs(plan).trim_end())
+      }
+  }
+}
+
+///|
+async fn run_notes(version : String?) -> Unit {
+  let code = @process.run("git", notes_command(version))
+  if code != 0 {
+    @sys.exit(code)
+  }
+}
+
+///|
+async fn run_tag(version : String) -> Unit {
+  for i in tag_invocations(version) {
+    let code = @process.run(i.program, i.args)
+    if code != 0 {
+      fail_with("`\{invocation_line(i)}` failed with exit code \{code}")
+    }
+  }
+}
+
+///|
+async fn run_credentials() -> Unit {
+  let token = match require_token(@env.get_env_var(token_var)) {
+    Ok(token) => token
+    Err(message) => {
+      fail_with(message)
+      return
+    }
+  }
+  let home = match @env.get_env_var("HOME") {
+    Some(home) if home != "" => home
+    _ => {
+      fail_with("HOME is not set; cannot locate ~/.moon")
+      return
+    }
+  }
+  let dir = "\{home}/.moon"
+  @fs.mkdir(dir, recursive=true, allow_exist=true)
+  @fs.write_file("\{dir}/credentials.json", credentials_json(token))
+  println("Mooncakes credentials written to ~/.moon/credentials.json")
+}
+
+///|
+async fn run_assets() -> Unit {
+  let assets = release_assets()
+  let missing = []
+  for asset in assets {
+    if !@fs.exists(asset.source) {
+      missing.push(asset.source)
+    }
+  }
+  if check_artifacts(missing) is Err(message) {
+    fail_with(message)
+    return
+  }
+  @fs.mkdir(release_dir, recursive=true, allow_exist=true)
+  for asset in assets {
+    @fs.write_file(asset.target, @fs.read_file(asset.source))
+    if asset.executable {
+      @fs.chmod(asset.target, 0o755)
+    }
+  }
+  for name in @fs.readdir(release_dir, sort=true) {
+    println(listing_line(name, @fs.file_size("\{release_dir}/\{name}")))
+  }
+}
+
+///|
+async fn main {
+  match parse_command(@env.args()[1:]) {
+    Some(Version) => println(computed_version())
+    Some(Plan) => run_plan()
+    Some(Notes(version)) => run_notes(version)
+    Some(Tag(version)) => run_tag(version)
+    Some(Credentials) => run_credentials()
+    Some(Assets) => run_assets()
+    None => {
+      eprintln(usage)
+      @sys.exit(2)
+    }
+  }
+}
+
+///|
+/// Scenario state for `features/release.feature`.
+struct ReleaseWorld {
+  mut exit_code : Int
+  mut stdout : String
+  mut event_name : String?
+  mut ref_type : String?
+  mut ref_name : String?
+  mut computed : String
+  mut module_version : String?
+  mut tag_exists : Bool
+  mut plan : Result[Plan, String]
+  mut text : String
+  mut token : String?
+  mut result : Result[String, String]
+  missing : Array[String]
+  mut check : Result[Unit, String]
+}
+
+///|
+fn ReleaseWorld::new() -> ReleaseWorld {
+  {
+    exit_code: 0,
+    stdout: "",
+    event_name: None,
+    ref_type: None,
+    ref_name: None,
+    computed: initial_version,
+    module_version: None,
+    tag_exists: false,
+    plan: Err("not run"),
+    text: "",
+    token: None,
+    result: Err("not run"),
+    missing: [],
+    check: Err("not run"),
+  }
+}
+
+///|
+fn yes(answer : String) -> Bool {
+  answer == "yes"
+}
+
+///|
+fn command_name(command : Command?) -> String {
+  match command {
+    Some(Version) => "version"
+    Some(Plan) => "plan"
+    Some(Notes(None)) => "notes"
+    Some(Notes(Some(v))) => "notes \{v}"
+    Some(Tag(v)) => "tag \{v}"
+    Some(Credentials) => "credentials"
+    Some(Assets) => "assets"
+    None => "usage"
+  }
+}
+
+///|
+fn plan_summary(plan : Result[Plan, String]) -> String {
+  match plan {
+    Ok(p) => plan_outputs(p).trim_end().split("\n").join(" ")
+    Err(message) => "error: \{message}"
+  }
+}
+
+///|
+fn invocation_line(i : Invocation) -> String {
+  ([i.program] + i.args).join(" ")
+}
+
+///|
+impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
+  setup.given2("git-cliff exits with {int} and prints {string}", fn(
+    code : Int,
+    stdout : String,
+  ) {
+    self.exit_code = code
+    self.stdout = stdout
+  })
+  setup.then1("the next version is {string}", fn(expected : String) raise {
+    @expect.expect(choose_version(self.exit_code, self.stdout)).to_equal(
+      expected,
+    )
+  })
+  setup.given1("the event is {string}", fn(event : String) {
+    self.event_name = Some(event)
+  })
+  setup.given2("the ref type is {string} and the ref name is {string}", fn(
+    ref_type : String,
+    ref_name : String,
+  ) {
+    self.ref_type = Some(ref_type)
+    self.ref_name = Some(ref_name)
+  })
+  setup.given1("git-cliff computes the version {string}", fn(v : String) {
+    self.computed = v
+  })
+  setup.given1("moon.mod has the version {string}", fn(v : String) {
+    self.module_version = Some(v)
+  })
+  setup.given0("moon.mod has no version", fn() { self.module_version = None })
+  setup.given1("the tag for the version exists: {string}", fn(answer : String) {
+    self.tag_exists = yes(answer)
+  })
+  setup.when0("I plan the release", fn() {
+    self.plan = match
+      version_source(self.event_name, self.ref_type, self.ref_name) {
+      Err(message) => Err(message)
+      Ok(FromTag(version)) =>
+        decide_plan(version, self.module_version, self.tag_exists)
+      Ok(FromCommits) =>
+        decide_plan(self.computed, self.module_version, self.tag_exists)
+    }
+  })
+  setup.then1("the plan outputs are {string}", fn(expected : String) raise {
+    @expect.expect(plan_summary(self.plan)).to_equal(expected)
+  })
+  setup.then1("planning fails with {string}", fn(message : String) raise {
+    @expect.expect(self.plan).to_equal(Err(message))
+  })
+  setup.then1("the plan output lines are:", fn(
+    doc : @moonspec.DocString,
+  ) raise {
+    @expect.expect(self.plan.map(plan_outputs)).to_equal(Ok(doc.content + "\n"))
+  })
+  setup.given1("the moon.mod line {string}", fn(line : String) {
+    self.text = "name = \"moonrockz/ion\"\n\n\{line}\n"
+  })
+  setup.then1("the module version is {string}", fn(expected : String) raise {
+    let expected = if expected == "none" { None } else { Some(expected) }
+    @expect.expect(mod_version(self.text)).to_equal(expected)
+  })
+  setup.when2(
+    "I make the notes for version {string} and the tag exists: {string}",
+    fn(version : String, answer : String) {
+      let version = if version == "" { None } else { Some(version) }
+      self.result = Ok(cliff_args(notes_target(version, yes(answer))).join(" "))
+    },
+  )
+  setup.then1("git-cliff runs with {string}", fn(expected : String) raise {
+    @expect.expect(self.result).to_equal(Ok(expected))
+  })
+  setup.when1("I tag the version {string}", fn(version : String) {
+    self.text = version
+  })
+  setup.then1("the tag is {string}", fn(expected : String) raise {
+    @expect.expect(tag_name(self.text)).to_equal(expected)
+  })
+  setup.then1("the commands are:", fn(doc : @moonspec.DocString) raise {
+    @expect.expect(tag_invocations(self.text).map(invocation_line).join("\n")).to_equal(
+      doc.content,
+    )
+  })
+  setup.given1("the token is {string}", fn(token : String) {
+    self.token = Some(token)
+  })
+  setup.given0("no token is set", fn() { self.token = None })
+  setup.when0("I render the credentials", fn() {
+    self.result = require_token(self.token).map(credentials_json)
+  })
+  setup.then1("the credentials file is:", fn(doc : @moonspec.DocString) raise {
+    @expect.expect(self.result).to_equal(Ok(doc.content + "\n"))
+  })
+  setup.then1("rendering fails with {string}", fn(message : String) raise {
+    @expect.expect(self.result).to_equal(Err(message))
+  })
+  setup.then1("the release assets are:", fn(table : @moonspec.DataTable) raise {
+    let expected = table
+      .as_maps()
+      .map(row => {
+        source: row.get("source").unwrap_or(""),
+        target: row.get("target").unwrap_or(""),
+        executable: yes(row.get("executable").unwrap_or("")),
+      })
+    @expect.expect(release_assets()).to_equal(expected)
+  })
+  setup.given1("the build artifact {string} is missing", fn(path : String) {
+    self.missing.push(path)
+  })
+  setup.when0("I check the build artifacts", fn() {
+    self.check = check_artifacts(self.missing)
+  })
+  setup.then1("the check fails with {string}", fn(message : String) raise {
+    @expect.expect(self.check).to_equal(Err(message))
+  })
+  setup.then0("the check passes", fn() raise {
+    @expect.expect(self.check).to_equal(Ok(()))
+  })
+  setup.then3("the listing of {string} with {int} bytes is {string}", fn(
+    name : String,
+    size : Int,
+    expected : String,
+  ) raise {
+    @expect.expect(listing_line(name, size.to_int64())).to_equal(expected)
+  })
+  setup.when1("I read the arguments {string}", fn(arguments : String) {
+    let args = arguments
+      .split(" ")
+      .filter(a => a != "")
+      .map(a => a.to_owned())
+      .collect()
+    self.text = command_name(parse_command(args))
+  })
+  setup.then1("the command is {string}", fn(expected : String) raise {
+    @expect.expect(self.text).to_equal(expected)
+  })
+}
+
+///|
+async test "release feature" {
+  @moonspec.run_or_fail(
+    ReleaseWorld::new,
+    @moonspec.RunOptions::new([
+      @moonspec.FeatureSource::File("features/release.feature"),
+    ]),
+  )
+  |> ignore
+}
+
+///|
+/// The directory of the mise-provided git-cliff, so that `git cliff` works in
+/// a repository outside this project. `None` when git-cliff is not installed.
+async fn git_cliff_dir() -> String? {
+  for
+    which in [
+      ["mise", "which", "git-cliff"],
+      ["sh", "-c", "command -v git-cliff"],
+    ] {
+    let (code, path) = stdout_of(which[0], which[1:].to_owned())
+    if code == 0 && parent_dir(path.trim().to_owned()) is Some(dir) {
+      return Some(dir)
+    }
+  }
+  None
+}
+
+///|
+/// The directory part of `path`, or `None` when it has none.
+fn parent_dir(path : String) -> String? {
+  path.rev_find("/").map(i => path.view(end_offset=i).to_owned())
+}
+
+///|
+async test "release notes come from git-cliff in a real repository" {
+  guard git_cliff_dir() is Some(tool_dir) else {
+    println("note: git-cliff is not installed; skipping the release notes test")
+    return
+  }
+  let path = @env.get_env_var("PATH").unwrap_or("")
+  let env = { "PATH": "\{tool_dir}:\{path}" }
+  let cliff_toml = @fs.read_file("../cliff.toml")
+  let repo = @fs.tmpdir(prefix="ion-release-notes")
+  defer @fs.rmdir(repo, recursive=true)
+  async fn git(args : Array[String]) -> Unit {
+    let (code, _) = stdout_of("git", args, cwd=repo, extra_env=env)
+    if code != 0 {
+      fail("`git \{args.join(" ")}` failed with exit code \{code}")
+    }
+  }
+
+  async fn notes() -> String {
+    let args = notes_command(Some("0.2.0"), cwd=repo)
+    let (code, out) = stdout_of("git", args, cwd=repo, extra_env=env)
+    @expect.expect(code).to_equal(0)
+    out
+  }
+
+  git(["init", "--initial-branch=main"])
+  git(["config", "user.name", "Release test"])
+  git(["config", "user.email", "release-test@example.invalid"])
+  git(["config", "commit.gpgsign", "false"])
+  @fs.write_file("\{repo}/cliff.toml", cliff_toml)
+  git(["add", "cliff.toml"])
+  git(["commit", "-m", "feat: previous release feature"])
+  git(["tag", "v0.1.0"])
+  git(["commit", "--allow-empty", "-m", "fix: current release fix"])
+
+  // A manual release uses the unreleased commits under the new version.
+  let unreleased = notes()
+  @expect.expect(unreleased.contains("[0.2.0]")).to_equal(true)
+  @expect.expect(unreleased.contains("Current release fix")).to_equal(true)
+  @expect.expect(unreleased.contains("Previous release feature")).to_equal(
+    false,
+  )
+  @expect.expect(unreleased.contains("[0.1.0]")).to_equal(false)
+
+  // Once the version is tagged, its notes are the latest tag's.
+  git(["tag", "v0.2.0"])
+  let tagged = notes()
+  @expect.expect(tagged.contains("[0.2.0]")).to_equal(true)
+  @expect.expect(tagged.contains("Current release fix")).to_equal(true)
+  @expect.expect(tagged.contains("Previous release feature")).to_equal(false)
+}

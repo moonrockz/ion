@@ -5,20 +5,4 @@
 #USAGE flag "--log <file>" required=#true help="File that receives the test output"
 set -euo pipefail
 
-target="${usage_target:-wasm}"
-log="${usage_log:?--log is required}"
-mkdir -p "$(dirname "$log")"
-flags=()
-if [ "${usage_coverage:-false}" = "true" ]; then
-  moon coverage clean
-  flags+=(--enable-coverage)
-fi
-if moon test --target "$target" ${flags[@]+"${flags[@]}"} 2>&1 | tee "$log"; then
-  status=0
-else
-  status=$?
-fi
-if [ -n "${GITHUB_OUTPUT:-}" ]; then
-  echo "exit_code=$status" >> "$GITHUB_OUTPUT"
-fi
-exit "$status"
+exec moon run -q --target wasm scripts/ci.mbtx -- test "$@"
