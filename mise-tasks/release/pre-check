@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Validate release readiness (format, check, tests)"
+#MISE depends=["setup:submodules"]
+set -euo pipefail
+
+moon fmt --check
+moon check
+exec moon test

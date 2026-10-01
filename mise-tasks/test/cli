@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#MISE description="Smoke-test the ion CLI on the fixtures in tests/fixtures"
+set -euo pipefail
+
+ion() { moon run pkgs -- "$@"; }
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+
+echo "==> Print an Ion fixture"
+ion print tests/fixtures/sample.ion
+
+echo "==> Convert an Ion fixture to JSON"
+ion json tests/fixtures/sample.ion
+
+echo "==> Stream Ion from stdin"
+ion hash - < tests/fixtures/sample.ion
+
+echo "==> Round-trip a fixture through Ion binary"
+ion print --binary tests/fixtures/sample.ion > "$scratch/sample.10n"
+ion print "$scratch/sample.10n" > "$scratch/from-binary.ion"
+ion print tests/fixtures/sample.ion > "$scratch/from-text.ion"
+diff "$scratch/from-text.ion" "$scratch/from-binary.ion"
+
+echo "==> Convert a JSON fixture to Ion"
+ion fromjson tests/fixtures/sample.json
+
+echo "==> Validate fixtures (a violation must exit non-zero)"
+if ion validate tests/fixtures/person.isl person tests/fixtures/person.ion; then
+  echo "Error: validation unexpectedly succeeded" >&2
+  exit 1
+fi

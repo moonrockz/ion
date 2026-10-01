@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Build the wasm target in release mode"
+set -euo pipefail
+
+exec moon build --target wasm --release

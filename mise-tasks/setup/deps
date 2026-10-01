@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Fetch the MoonBit dependencies"
+set -euo pipefail
+
+exec moon update

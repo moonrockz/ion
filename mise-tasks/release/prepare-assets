@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="Collect the native CLI binaries from artifacts/ (downloaded build artifacts) into release/"
+set -euo pipefail
+
+artifacts=artifacts
+release=release
+mkdir -p "$release"
+cp "$artifacts/ion-linux-amd64/ion.exe" "$release/ion-linux-amd64"
+cp "$artifacts/ion-macos-arm64/ion.exe" "$release/ion-macos-arm64"
+cp "$artifacts/ion-windows-amd64.exe/ion.exe" "$release/ion-windows-amd64.exe"
+chmod +x "$release/ion-linux-amd64" "$release/ion-macos-arm64"
+ls -la "$release"

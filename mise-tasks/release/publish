@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Publish the module to mooncakes.io (needs release:credentials first)"
+set -euo pipefail
+
+exec moon publish

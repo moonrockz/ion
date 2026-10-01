@@ -31,7 +31,12 @@ jobs:
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
+      - uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
       - name: Update MoonBit dependencies
         run: |
           moon version --all
-          moon update
+          mise run setup:deps

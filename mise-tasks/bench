@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Sample native release benchmarks and CLI peak RSS"
+set -euo pipefail
+
+exec python3 .github/scripts/performance.py "$@"

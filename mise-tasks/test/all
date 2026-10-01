@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run all checks and tests"
+#MISE depends=["test:check", "test:unit"]
+set -euo pipefail
