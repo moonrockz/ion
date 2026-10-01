@@ -185,7 +185,7 @@ async test "version and help" {
   for args in [["version"], ["--version"], ["-V"]] {
     let run = ion(args)
     assert_eq(run.status, 0)
-    assert_eq(run.out(), "moonrockz/ion 0.2.0\n")
+    assert_eq(run.out(), "moonrockz/ion 0.3.0\n")
   }
   for args in [["help"], ["--help"], ["-h"]] {
     let run = ion(args)
