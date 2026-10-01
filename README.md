@@ -13,17 +13,22 @@ hierarchical data serialization format — and
 
 ## Installation
 
+Install the library, run the CLI with `moonx`, or download a release binary.
+See [Installation](docs/installation.md).
+
 ```bash
 moon add moonrockz/ion
 ```
 
 ## User documentation
 
-Read [Ion and the repository](docs/ion-and-the-repository.md) for the data
-model, package map, and setup. The [cookbook](docs/cookbook/README.md) covers
+[Getting started](docs/getting-started.md) prints one Ion value from the
+command line and from MoonBit. The [cookbook](docs/cookbook/README.md) covers
 text and binary conversion, JSON interoperability, schema validation, and
 [modeling algebraic data types with Ion Schema](docs/cookbook/algebraic-data-types.md).
-See the [documentation index](docs/README.md) for all guides.
+[Ion and the repository](docs/ion-and-the-repository.md) covers the data
+model, package map, and building a checkout. See the
+[documentation index](docs/README.md) for all guides.
 
 ## Packages
 
@@ -108,30 +113,48 @@ if schema.is_valid("person", value) {
 }
 ```
 
-Command line (from the repository root; the CLI is the module root package):
+Command line. `moonx` runs the published module. An installed release
+binary is the same command with the `moonx moonrockz/ion` prefix removed.
+Omit the input file to read stdin. See [Installation](docs/installation.md)
+and [Getting started](docs/getting-started.md).
 
 ```bash
-moon run pkgs -- print data.ion
-moon run pkgs -- print --binary data.ion > data.10n
-moon run pkgs -- hash data.ion
-moon run pkgs -- validate schema.isl person data.ion
+printf '%s\n' '{name: "Ada"}' | moonx moonrockz/ion print
+moonx moonrockz/ion print data.ion
+moonx moonrockz/ion print --binary data.ion > data.10n
+moonx moonrockz/ion hash data.ion
+moonx moonrockz/ion validate schema.isl person data.ion
+```
+
+```bash
+printf '%s\n' '{name: "Ada"}' | ion print
+ion print data.ion
+ion validate schema.isl person data.ion
+```
+
+PowerShell pipes a single-quoted string. `>` would rewrite binary output, so
+that redirect goes through `cmd /c`:
+
+```powershell
+'{name: "Ada"}' | moonx moonrockz/ion print
+moonx moonrockz/ion print data.ion
+cmd /c "moonx moonrockz/ion print --binary data.ion > data.10n"
+moonx moonrockz/ion hash data.ion
+moonx moonrockz/ion validate schema.isl person data.ion
+```
+
+```powershell
+'{name: "Ada"}' | ion print
+ion print data.ion
+ion validate schema.isl person data.ion
 ```
 
 `print`, `json`, `hash`, and `validate` stream their Ion input (text or
-binary, from a file or from stdin with `-`) through `@text/stream` and
+binary, from a file or from stdin) through `@text/stream` and
 `@binary/stream`: each value is read, handled, and dropped in turn, so memory
 stays proportional to the largest value rather than to the input. An error
 stops the command after the values before it are handled. The CLI builds for
 the `native` and `wasm` targets, which `moonbitlang/async` supports.
-
-Once published, the same commands run through `moonx` at the short coordinate:
-
-```bash
-moonx moonrockz/ion version
-moonx moonrockz/ion print data.ion
-moonx moonrockz/ion hash data.ion
-moonx moonrockz/ion validate schema.isl person data.ion
-```
 
 ## Parsing APIs
 

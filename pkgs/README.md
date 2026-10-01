@@ -1,18 +1,19 @@
 # The `ion` command-line tool (`moonrockz/ion`)
 
-The module's root package is the `ion` executable, so a published version
-runs as `moonx moonrockz/ion`. The commands themselves live in
+The module's root package is the `ion` executable. A published version runs
+as `moonx moonrockz/ion`, and a [release binary](../docs/installation.md)
+runs as `ion`. The commands themselves live in
 [`moonrockz/ion/cli`](cli/README.md), which this package runs with the
 process's arguments and standard streams. From a checkout, run it with
 `moon run pkgs -- <command>`, or build a native binary with
 `mise run build:native`.
 
 ```
-ion print [--binary | --pretty] [file|-]        Ion text or binary in; Ion text, pretty text, or binary out
-ion json [file|-]                               Ion text or binary in, JSON out
-ion fromjson [file|-]                           JSON in, Ion text out
-ion hash [file|-]                               Ion Hash (SHA-256) of each value
-ion validate <schema-file> <type-name> [file|-] validate each value
+ion print [--binary | --pretty] [file]          Ion text or binary in; Ion text, pretty text, or binary out
+ion json [file]                                 Ion text or binary in, JSON out
+ion fromjson [file]                             JSON in, Ion text out
+ion hash [file]                                 Ion Hash (SHA-256) of each value
+ion validate <schema-file> <type-name> [file]   validate each value
 ion version                                     also `ion --version` or `ion -V`
 ion help [command]                              also `ion --help` or `ion <command> --help`
 ```
@@ -25,8 +26,18 @@ those shared tables in the input then resolve to their symbols' text.
 is a path relative to the schema file's directory, or to the directory that
 `--schema-root <dir>` names.
 
-A missing file argument, or `-`, reads stdin. Ion input may be text or binary;
-the Ion binary version marker at its start decides.
+Omit the file argument, or pass `-`, to read stdin. A pipe supplies that
+input. Ion input may be text or binary; the Ion binary version marker at
+its start decides. The transcript below is a POSIX shell. On PowerShell,
+pipe a single-quoted string, read `$LASTEXITCODE` instead of `$?`, and write
+binary with `cmd /c` so the redirect keeps the bytes intact:
+
+```powershell
+'{name: "Ada"}' | ion print
+'{"a": [1, 2.5]}' | ion fromjson
+cmd /c "ion print --binary people.ion > people.10n"
+ion print people.10n
+```
 
 ## Examples
 
@@ -37,6 +48,9 @@ $ cat people.ion
 $ ion print people.ion
 {name: "Ada", born: 1815}
 {name: 42}
+
+$ printf '%s\n' '{name: "Ada"}' | ion print
+{name: "Ada"}
 
 $ ion print --binary people.ion > people.10n
 $ ion print people.10n

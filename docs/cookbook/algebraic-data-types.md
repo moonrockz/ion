@@ -109,30 +109,67 @@ and also accepts overlapping branches. Use `one_of` here to express an
 unambiguous variant choice. These constraints follow the
 [ISL 2.0 specification](https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec.html#one_of).
 
-The [shapes.ion](examples/shapes.ion) file contains:
+These values are in [shapes.ion](examples/shapes.ion):
 
 ```ion
 {kind: circle, center: {x: 0.0, y: 0.0}, radius: 2.5}
 {kind: rectangle, width: 3.0, height: 4.0}
 ```
 
-Validate it from the repository root:
+Save the complete [algebraic-types.isl](examples/algebraic-types.isl) schema,
+which includes every type in this article. `validate` reads that file. The
+values can be a pipe.
+
+`moonx moonrockz/ion` runs the published module. `ion` is the release
+binary. The rest of this page uses `moonx`; drop that prefix when `ion` is
+on your `PATH`.
+
+POSIX shell:
 
 ```sh
-moon run pkgs -- validate docs/cookbook/examples/algebraic-types.isl shape docs/cookbook/examples/shapes.ion
+printf '%s\n' \
+  '{kind: circle, center: {x: 0.0, y: 0.0}, radius: 2.5}' \
+  '{kind: rectangle, width: 3.0, height: 4.0}' |
+  moonx moonrockz/ion validate algebraic-types.isl shape
 ```
-
-The command exits with status 0. Now run the deliberate failures:
 
 ```sh
-moon run pkgs -- validate docs/cookbook/examples/algebraic-types.isl shape docs/cookbook/examples/invalid-shapes.ion
+printf '%s\n' \
+  '{kind: circle, center: {x: 0.0, y: 0.0}, radius: 2.5}' \
+  '{kind: rectangle, width: 3.0, height: 4.0}' |
+  ion validate algebraic-types.isl shape
 ```
 
-It exits with status 1. That file tests an unknown tag, missing radius,
-mixed payloads, a string tag, an integer dimension, a zero dimension, and
-a duplicate tag. A `one_of` failure may report the overall branch mismatch;
-validate against `circle` or `rectangle` directly when you want diagnostics
-for a known variant's fields.
+PowerShell:
+
+```powershell
+'{kind: circle, center: {x: 0.0, y: 0.0}, radius: 2.5}', '{kind: rectangle, width: 3.0, height: 4.0}' |
+  moonx moonrockz/ion validate algebraic-types.isl shape
+```
+
+```powershell
+'{kind: circle, center: {x: 0.0, y: 0.0}, radius: 2.5}', '{kind: rectangle, width: 3.0, height: 4.0}' |
+  ion validate algebraic-types.isl shape
+```
+
+The command exits with status 0. A circle without a radius fails and exits
+with status 1:
+
+```sh
+printf '%s\n' '{kind: circle, center: {x: 0.0, y: 0.0}}' |
+  moonx moonrockz/ion validate algebraic-types.isl shape
+```
+
+```powershell
+'{kind: circle, center: {x: 0.0, y: 0.0}}' |
+  moonx moonrockz/ion validate algebraic-types.isl shape
+```
+
+[invalid-shapes.ion](examples/invalid-shapes.ion) collects more failures:
+an unknown tag, mixed payloads, a string tag, an integer dimension, a zero
+dimension, and a duplicate tag. A `one_of` failure may report the overall
+branch mismatch; validate against `circle` or `rectangle` directly when you
+want diagnostics for a known variant's fields.
 
 ## Use symbols for payload-free variants
 
@@ -210,8 +247,17 @@ The branch references `tree` through its list elements. An empty branch
 is valid; add `container_length: range::[1, max]` to the `children` field
 if your domain requires at least one child.
 
+[trees.ion](examples/trees.ion) contains a leaf, an empty branch, and a
+nested branch. Any of them can be piped:
+
 ```sh
-moon run pkgs -- validate docs/cookbook/examples/algebraic-types.isl tree docs/cookbook/examples/trees.ion
+printf '%s\n' '{kind: branch, children: [{kind: leaf, value: 1}]}' |
+  moonx moonrockz/ion validate algebraic-types.isl tree
+```
+
+```powershell
+'{kind: branch, children: [{kind: leaf, value: 1}]}' |
+  moonx moonrockz/ion validate algebraic-types.isl tree
 ```
 
 Every child must be a valid tree. A nested leaf with `value: "1"` fails.

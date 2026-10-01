@@ -6,11 +6,30 @@ decimal scale later.
 
 ## Use the CLI
 
-Import one JSON document from stdin:
+Import one JSON document from stdin. `moonx moonrockz/ion` runs the
+published module. `ion` is the release binary. The rest of this page uses
+`moonx`; drop that prefix when `ion` is on your `PATH`.
+
+POSIX shell:
 
 ```sh
 printf '%s\n' '{"id":7,"status":"shipped","note":null}' |
-  moon run pkgs -- fromjson -
+  moonx moonrockz/ion fromjson
+```
+
+```sh
+printf '%s\n' '{"id":7,"status":"shipped","note":null}' |
+  ion fromjson
+```
+
+PowerShell:
+
+```powershell
+'{"id":7,"status":"shipped","note":null}' | moonx moonrockz/ion fromjson
+```
+
+```powershell
+'{"id":7,"status":"shipped","note":null}' | ion fromjson
 ```
 
 The output is:
@@ -19,10 +38,17 @@ The output is:
 {id: 7, status: "shipped", note: null}
 ```
 
-Export the [people example](examples/people.ion):
+Export two Ion records. The same values are in
+[people.ion](examples/people.ion):
 
 ```sh
-moon run pkgs -- json docs/cookbook/examples/people.ion
+printf '%s\n' '{name: "Ada", born: 1815}' '{name: "Grace", born: 1906}' |
+  moonx moonrockz/ion json
+```
+
+```powershell
+'{name: "Ada", born: 1815}', '{name: "Grace", born: 1906}' |
+  moonx moonrockz/ion json
 ```
 
 This writes a JSON value on each line:
