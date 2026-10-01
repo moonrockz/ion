@@ -63,7 +63,7 @@ test "decimals and floats may not have leading zeros" {
   for text in ["03.4e0", "003e4", "00e0", "04.3", "007d4", "00d0"] {
     assert_true(rejects(text))
   }
-  assert_eq(reads_as("0.4 0e0 0d0 -0.5 0.0e1"), "4d-1\n0e0\n0d0\n-5d-1\n0e0")
+  assert_eq(reads_as("0.4 0e0 0d0 -0.5 0.0e1"), "0.4\n0e0\n0.\n-0.5\n0e0")
 }
 
 ///|
@@ -109,7 +109,7 @@ test "an underscore in a float or decimal must sit between two digits" {
   }
   assert_eq(
     reads_as("1_0.2_5e1_0 1_0.2_5 -1_2.3d1"),
-    "102500000000e0\n1025d-2\n-123d0",
+    "102500000000e0\n10.25\n-123.",
   )
 }
 

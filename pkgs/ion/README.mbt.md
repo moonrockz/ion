@@ -99,7 +99,7 @@ test "decimals keep their precision" {
   debug_inspect(
     price.add(@ion.Decimal::parse("0.25")).map(sum => sum.to_ion_string()),
     content=(
-      #|Some("175d-2")
+      #|Some("1.75")
     ),
   )
 }

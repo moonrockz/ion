@@ -5,9 +5,9 @@ test "explicit JSON number spellings retain integer digits and decimal scale" {
   )
   assert_eq(@text.write_ion(integer), "9007199254740993")
   let decimal = @json.to_ion(Json::number(1.5, repr="1.500"))
-  assert_eq(@text.write_ion(decimal), "1500d-3")
+  assert_eq(@text.write_ion(decimal), "1.500")
   let negative_zero = @json.to_ion(Json::number(-0.0, repr="-0.00"))
-  assert_eq(@text.write_ion(negative_zero), "-0d-2")
+  assert_eq(@text.write_ion(negative_zero), "-0.00")
   let exponential = @json.to_ion(Json::number(0.0025, repr="2.5E-3"))
   guard exponential.kind() is Float(value) else {
     fail("expected an exponent-spelled float")

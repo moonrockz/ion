@@ -257,6 +257,9 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   an optional `TimestampOffset`.
 - **Exact numbers.** Integers and decimals are exact (`BigInt`
   coefficient/exponent), so precision and signed zero round-trip through text.
+  Decimals use positional notation such as `1.50` when the adjusted exponent is
+  at least -6 and the exponent is non-positive. Other decimals retain `d`
+  notation, so positive exponents and very small values preserve their scale.
 - **Decimal arithmetic is opt-in.** `add`/`subtract`/`multiply`/`compare`/
   `to_double` and conversion go through `moonbitlang/x/decimal`, whose decimal is
   normalized and caps the scale, so those helpers document what they drop; the

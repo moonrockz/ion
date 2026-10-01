@@ -17,10 +17,10 @@ test "conversion preserves the value but not the scale or signed zero" {
     @ion.Decimal::parse("1.50").to_x().unwrap(),
   )
   // `x`'s decimal normalizes, so the trailing zero is gone.
-  assert_eq(round_tripped.to_ion_string(), "15d-1")
+  assert_eq(round_tripped.to_ion_string(), "1.5")
   // It has no signed zero, so `-0.` becomes plain `0.`.
   let zero = @ion.Decimal::negative_zero()
-  assert_eq(@ion.Decimal::from_x(zero.to_x().unwrap()).to_ion_string(), "0d0")
+  assert_eq(@ion.Decimal::from_x(zero.to_x().unwrap()).to_ion_string(), "0.")
 }
 
 ///|

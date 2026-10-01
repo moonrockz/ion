@@ -57,6 +57,14 @@ A document is a stream of top-level values. `validate_document` and
 A schema that its version of ISL does not allow raises `IonError::DataModel`
 when it loads, as the ion-schema-tests suite's invalid schemas and types require.
 
+Named types may recurse through container children. If validation revisits a
+named type on the same value without consuming a child, it returns a
+`cyclic schema type reference` violation instead of overflowing the stack.
+This also applies to documents, imported aliases, and annotation values. A
+finite successful `any_of` branch still proves validity; a cycle alone cannot
+become valid through `not` or count as a match for `one_of`. These checks run
+during validation, so loading a cyclic schema remains supported.
+
 ## Schema documents
 
 An ISL 2.0 schema document has the version marker `$ion_schema_2_0`, an optional
