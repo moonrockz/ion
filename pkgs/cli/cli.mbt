@@ -154,7 +154,7 @@ let command_names : Array[String] = [
 /// The command `name`, called `prefix` plus its name: `ion print` to render
 /// its help alone, or `print` as a subcommand of `ion`.
 fn subcommand(name : String, prefix : String) -> @argparse.Command {
-  let ion_input = "The Ion input, text or binary; `-` reads stdin."
+  let ion_input = "The Ion input, text or binary. Omit the file, or pass `-`, to read stdin."
   let required = @argparse.ValueRange::single()
   let named = prefix + name
   match name {
@@ -180,7 +180,11 @@ fn subcommand(name : String, prefix : String) -> @argparse.Command {
       @argparse.Command(
         named,
         about="Read a JSON document and write it as Ion text.",
-        positionals=[input_argument("The JSON input; `-` reads stdin.")],
+        positionals=[
+          input_argument(
+            "The JSON input. Omit the file, or pass `-`, to read stdin.",
+          ),
+        ],
       )
     "hash" =>
       @argparse.Command(

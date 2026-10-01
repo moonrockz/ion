@@ -5,33 +5,75 @@ that retains its values.
 
 ## Use the CLI
 
-The supplied [orders.ion](examples/orders.ion) contains an annotated record
-and a second top-level integer. Print it with indentation:
+This datagram is an annotated record followed by an integer. The same text
+is in [orders.ion](examples/orders.ion).
 
-```sh
-moon run pkgs -- print --pretty docs/cookbook/examples/orders.ion
+```ion
+order::{id: 7, total: 19.990, placed: 2024-05-01T10:00Z, note: null.string}
+42
 ```
 
-Write binary to a scratch file and read it back:
+Print it with indentation. `moonx moonrockz/ion` runs the published module.
+`ion` is the release binary. The rest of this page uses `moonx`; drop that
+prefix when `ion` is on your `PATH`. POSIX shells and PowerShell are both
+shown. In PowerShell, several single-quoted strings separated by commas
+become one value per line.
+
+POSIX shell:
 
 ```sh
-mkdir -p .dev/out
-moon run pkgs -- print --binary docs/cookbook/examples/orders.ion > .dev/out/orders.10n
-moon run pkgs -- print .dev/out/orders.10n
+printf '%s\n' \
+  'order::{id: 7, total: 19.990, placed: 2024-05-01T10:00Z, note: null.string}' \
+  '42' |
+  moonx moonrockz/ion print --pretty
 ```
-
-The CLI detects binary input by its version marker. The output still has
-two top-level values, with the record's annotation, decimal scale,
-timestamp, and typed null intact. Comments and source formatting do not
-survive this conversion.
-
-Omit the input filename or use `-` to read stdin. This pipeline prints the
-binary result as text without a temporary file:
 
 ```sh
-moon run pkgs -- print --binary docs/cookbook/examples/orders.ion |
-  moon run pkgs -- print -
+printf '%s\n' \
+  'order::{id: 7, total: 19.990, placed: 2024-05-01T10:00Z, note: null.string}' \
+  '42' |
+  ion print --pretty
 ```
+
+PowerShell:
+
+```powershell
+'order::{id: 7, total: 19.990, placed: 2024-05-01T10:00Z, note: null.string}', '42' |
+  moonx moonrockz/ion print --pretty
+```
+
+```powershell
+'order::{id: 7, total: 19.990, placed: 2024-05-01T10:00Z, note: null.string}', '42' |
+  ion print --pretty
+```
+
+Omitting the input file reads stdin. Pass a path, such as `orders.ion`,
+when the input is a file. `-` names stdin explicitly.
+
+Write binary and read it back. The CLI detects binary input by its version
+marker. A POSIX pipe passes those bytes through unchanged:
+
+```sh
+printf '%s\n' \
+  'order::{id: 7, total: 19.990, placed: 2024-05-01T10:00Z, note: null.string}' \
+  '42' |
+  moonx moonrockz/ion print --binary |
+  moonx moonrockz/ion print
+```
+
+PowerShell rewrites bytes when it redirects a native command, so write the
+binary file with `cmd /c`, then read that file:
+
+```powershell
+'order::{id: 7, total: 19.990, placed: 2024-05-01T10:00Z, note: null.string}', '42' |
+  Set-Content -Encoding utf8 orders.ion
+cmd /c "moonx moonrockz/ion print --binary orders.ion > orders.10n"
+moonx moonrockz/ion print orders.10n
+```
+
+The output still has two top-level values, with the record's annotation,
+decimal scale, timestamp, and typed null intact. Comments and source
+formatting do not survive this conversion.
 
 ## Use the library
 

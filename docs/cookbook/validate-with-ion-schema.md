@@ -30,17 +30,49 @@ without one as ISL 1.0, whose null and closed-content rules differ.
 
 ## Validate with the CLI
 
-Check every top-level value of [people.ion](examples/people.ion):
+Save the schema above as `person.isl`. The same document is
+[person.isl](examples/person.isl). `validate` reads the schema from that
+path. The values to check can be a pipe; omitting the input file reads
+stdin. [people.ion](examples/people.ion) is the same two records in a file.
+
+`moonx moonrockz/ion` runs the published module. `ion` is the release
+binary. The rest of this page uses `moonx`; drop that prefix when `ion` is
+on your `PATH`. In PowerShell, commas between single-quoted strings put one
+value on each line.
+
+POSIX shell:
 
 ```sh
-moon run pkgs -- validate docs/cookbook/examples/person.isl person docs/cookbook/examples/people.ion
+printf '%s\n' '{name: "Ada", born: 1815}' '{name: "Grace", born: 1906}' |
+  moonx moonrockz/ion validate person.isl person
+```
+
+```sh
+printf '%s\n' '{name: "Ada", born: 1815}' '{name: "Grace", born: 1906}' |
+  ion validate person.isl person
+```
+
+PowerShell:
+
+```powershell
+'{name: "Ada", born: 1815}', '{name: "Grace", born: 1906}' |
+  moonx moonrockz/ion validate person.isl person
+```
+
+```powershell
+'{name: "Ada", born: 1815}', '{name: "Grace", born: 1906}' |
+  ion validate person.isl person
 ```
 
 Valid data produces no output and exits with status 0. Try a bad record:
 
 ```sh
 printf '%s\n' '{name: 42}' |
-  moon run pkgs -- validate docs/cookbook/examples/person.isl person -
+  moonx moonrockz/ion validate person.isl person
+```
+
+```powershell
+'{name: 42}' | moonx moonrockz/ion validate person.isl person
 ```
 
 The command reports on stderr and exits with status 1:

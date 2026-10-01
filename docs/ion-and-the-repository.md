@@ -90,17 +90,11 @@ mise run build:native
 snapshot, property, and conformance tests. `build:native` builds the CLI.
 Use `mise tasks` to see the other operations.
 
-The cookbook uses `moon run pkgs -- <command>` to run this checkout's CLI.
-For example:
-
-```sh
-moon run pkgs -- print --pretty docs/cookbook/examples/people.ion
-moon run pkgs -- help validate
-```
-
-With the published module, use `moonx moonrockz/ion <command>`. With an
-installed executable, use `ion <command>`. These all reach the same command
-interface; see the [CLI reference](../pkgs/README.md).
+From this checkout, run the CLI with `moon run pkgs -- <command>`. Published
+use is [Installation](installation.md): `moonx moonrockz/ion <command>`, or
+`ion <command>` after installing a release binary. Those forms take the same
+arguments, including reading stdin when the input file is omitted. See the
+[CLI reference](../pkgs/README.md) and the [cookbook](cookbook/README.md).
 
 ## Find the implementation and tests
 

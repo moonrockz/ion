@@ -199,7 +199,15 @@ async test "version and help" {
     assert_eq(run.status, 0)
     assert_true(run.out().has_prefix("Usage: ion print [options] [file]\n"))
     assert_true(run.out().contains("--binary"))
+    assert_true(
+      run.out().contains("Omit the file, or pass `-`, to read stdin."),
+    )
   }
+  let fromjson = ion(["help", "fromjson"])
+  assert_eq(fromjson.status, 0)
+  assert_true(
+    fromjson.out().contains("Omit the file, or pass `-`, to read stdin."),
+  )
 }
 
 ///|
