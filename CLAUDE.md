@@ -1,8 +1,10 @@
 # Agentic Instructions
 
-Common agentic instructions can be found in @AGENTS.md.
+Common agentic instructions are in AGENTS.md, imported here:
 
-Only place claude specific agentic instructions in this repo.
+@AGENTS.md
+
+Only place claude specific agentic instructions in this file.
 
 ## Claude Code
 
