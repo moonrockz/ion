@@ -34,9 +34,9 @@ test "scalars round-trip to canonical text" {
 
 ///|
 test "reals round-trip" {
-  assert_eq(rewrite("1.5"), "15d-1")
+  assert_eq(rewrite("1.5"), "1.5")
   assert_eq(rewrite("1d3"), "1d3")
-  assert_eq(rewrite("-0.0"), "-0d-1")
+  assert_eq(rewrite("-0.0"), "-0.0")
   assert_eq(rewrite("1.5e0"), "1.5e0")
   assert_eq(rewrite("nan"), "nan")
   assert_eq(rewrite("+inf"), "+inf")

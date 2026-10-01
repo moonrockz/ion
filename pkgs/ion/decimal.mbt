@@ -85,9 +85,12 @@ fn Decimal::magnitude(self : Decimal) -> BigInt {
 
 ///|
 /// Read an unsigned integer from `text` starting at `start`, allowing Ion's
-/// digit-separating underscores. Returns the value and the index just past the
+/// digit-separating underscores. Returns the digits and the index just past the
 /// run. Raises when the run is empty or an underscore is misplaced.
-fn read_uint_run(text : StringView, start : Int) -> (Int, Int) raise IonError {
+fn read_uint_run(
+  text : StringView,
+  start : Int,
+) -> (String, Int) raise IonError {
   let n = text.length()
   let sb = StringBuilder()
   let mut i = start
@@ -112,10 +115,7 @@ fn read_uint_run(text : StringView, start : Int) -> (Int, Int) raise IonError {
   if last_was_underscore {
     raise IonError::Syntax("number may not end with an underscore")
   }
-  let value : Int = @string.parse_int(sb.to_string()) catch {
-    _ => raise IonError::Syntax("integer is out of range")
-  }
-  (value, i)
+  (sb.to_string(), i)
 }
 
 ///|
@@ -128,8 +128,12 @@ fn read_exponent(text : StringView, start : Int) -> (Int, Int) raise IonError {
     negative = text[i] == '-'
     i += 1
   }
-  let (value, next) = read_uint_run(text, i)
-  (if negative { -value } else { value }, next)
+  let (digits, next) = read_uint_run(text, i)
+  // Parse the sign with the magnitude so Int::min_value is representable.
+  let value = @string.parse_int(if negative { "-" + digits } else { digits }) catch {
+    _ => raise IonError::Syntax("decimal exponent is out of range")
+  }
+  (value, next)
 }
 
 ///|
@@ -204,7 +208,11 @@ pub fn Decimal::parse(text : StringView) -> Decimal raise IonError {
   }
   let coefficient = parse_digits_to_bigint(digits.to_string(), negative)
   let negative_zero = negative && coefficient.is_zero()
-  { coefficient, exponent: exponent - fraction_digits, negative_zero, }
+  let adjusted = exponent.to_int64() - fraction_digits.to_int64()
+  if adjusted < -2147483648L || adjusted > 2147483647L {
+    raise IonError::Syntax("decimal exponent is out of range")
+  }
+  { coefficient, exponent: adjusted.to_int(), negative_zero, }
 }
 
 ///|
@@ -224,10 +232,34 @@ fn parse_digits_to_bigint(digits : String, negative : Bool) -> BigInt {
 }
 
 ///|
-/// Render this decimal as Ion text in the `coefficient` `d` `exponent` form,
-/// for example `123d-2` or `-0d0`. The coefficient and exponent are emitted
-/// verbatim, so precision survives the round-trip.
+/// Render this decimal as Ion text, preserving coefficient, exponent, and
+/// signed zero. Use positional notation for non-positive exponents when the
+/// adjusted exponent is at least -6; otherwise retain `d` notation. Positive
+/// exponents require `d` notation to preserve precision.
 pub fn Decimal::to_ion_string(self : Decimal) -> String {
   let sign = if self.is_negative() { "-" } else { "" }
-  "\{sign}\{self.magnitude()}d\{self.exponent}"
+  let digits = self.magnitude().to_string()
+  if self.exponent == 0 {
+    return "\{sign}\{digits}."
+  }
+  // Widen before adding: even the minimum Int exponent must remain compact.
+  let point = digits.length().to_int64() + self.exponent.to_int64()
+  if self.exponent < 0 && point - 1L >= -6L {
+    let buffer = StringBuilder()
+    buffer.write_string(sign)
+    if point > 0L {
+      let index = point.to_int()
+      buffer.write_view(digits[:index])
+      buffer.write_string(".")
+      buffer.write_view(digits[index:])
+    } else {
+      buffer.write_string("0.")
+      for _ in 0..<(-point).to_int() {
+        buffer.write_string("0")
+      }
+      buffer.write_string(digits)
+    }
+    return buffer.to_string()
+  }
+  "\{sign}\{digits}d\{self.exponent}"
 }

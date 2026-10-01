@@ -51,7 +51,7 @@ fn text(ion : String) -> Bytes {
 async test "print writes each value as Ion text, one per line" {
   let run = ion(["print"], stdin=text("{ a: 1 } [ b , 'c d' ] 2.50"))
   assert_eq(run.status, 0)
-  assert_eq(run.out(), "{a: 1}\n[b, 'c d']\n250d-2\n")
+  assert_eq(run.out(), "{a: 1}\n[b, 'c d']\n2.50\n")
   assert_eq(run.stderr, "")
   // With no arguments, the command line prints stdin.
   assert_eq(ion([], stdin=text("1 2")).out(), "1\n2\n")
@@ -70,7 +70,7 @@ async test "print reads a file, and Ion binary as well as text" {
   assert_eq(ion(["print", "tests/fixtures/sample.ion"]).out(), expected)
   let values = @text.read_ion_datagram("{ name: \"ion\" } sym [1, 2.5]")
   let run = ion(["print"], stdin=@binary.write_binary(values))
-  assert_eq(run.out(), "{name: \"ion\"}\nsym\n[1, 25d-1]\n")
+  assert_eq(run.out(), "{name: \"ion\"}\nsym\n[1, 2.5]\n")
 }
 
 ///|
@@ -125,7 +125,7 @@ async test "json writes each value as JSON, one per line" {
 async test "fromjson reads JSON and writes Ion" {
   let run = ion(["fromjson"], stdin=text("{\"a\": [1, 2.5, \"x\"]}"))
   assert_eq(run.status, 0)
-  assert_eq(run.out(), "{a: [1, 25d-1, \"x\"]}\n")
+  assert_eq(run.out(), "{a: [1, 2.5, \"x\"]}\n")
   let bad = ion(["fromjson"], stdin=text("{\"a\": "))
   assert_eq(bad.status, 1)
   assert_eq(bad.out(), "")

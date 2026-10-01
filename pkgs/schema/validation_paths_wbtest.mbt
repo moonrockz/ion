@@ -75,3 +75,18 @@ test "text measures reject unknown symbol text and incompatible scalar types" {
     assert_false(schema.is_valid("t", @ion.IonValue::int(1)))
   }
 }
+
+///|
+test "programmatic cyclic definitions share the public validation guard" {
+  for constraint in [TypeRef("t"), Not(TypeRef("t")), NullOr(TypeRef("t"))] {
+    let schema = explicit_schema(constraint)
+    for
+      violations in [
+        schema.validate("t", @ion.IonValue::int(1)),
+        schema.validate_document("t", []),
+      ] {
+      assert_eq(violations.length(), 1)
+      assert_eq(violations[0].message(), "cyclic schema type reference: t")
+    }
+  }
+}

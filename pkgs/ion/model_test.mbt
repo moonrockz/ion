@@ -5,11 +5,11 @@ test "decimal preserves coefficient, exponent, and signed zero" {
   let d = @ion.Decimal::parse("-1.230d2")
   assert_eq(d.coefficient().to_string(), "-1230")
   assert_eq(d.exponent(), -1)
-  assert_eq(d.to_ion_string(), "-1230d-1")
+  assert_eq(d.to_ion_string(), "-123.0")
   let zero = @ion.Decimal::parse("-0.0")
   assert_true(zero.is_zero())
   assert_true(zero.is_negative_zero())
-  assert_eq(zero.to_ion_string(), "-0d-1")
+  assert_eq(zero.to_ion_string(), "-0.0")
 }
 
 ///|

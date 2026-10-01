@@ -28,7 +28,7 @@ test "read a datagram and write it back" {
   inspect(
     @text.write_all(values),
     content=(
-      #|{name: "Ion", released: 2016-04-19, rating: 45d-1}
+      #|{name: "Ion", released: 2016-04-19, rating: 4.5}
       #|'a symbol'
       #|[1, 42]
     ),
@@ -52,7 +52,7 @@ test "the writer keeps every value distinct" {
       #|null
       #|true
       #|'null'
-      #|250d-2
+      #|2.50
       #|2.5e0
       #|$ion_symbol_table
     ),

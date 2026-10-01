@@ -26,7 +26,7 @@ test "read JSON as Ion" {
   inspect(
     @text.write_ion(value),
     content=(
-      #|{id: 12345678901234567890, price: 15d-1, ratio: 1e-7, tags: ["a", null]}
+      #|{id: 12345678901234567890, price: 1.5, ratio: 1e-7, tags: ["a", null]}
     ),
   )
 }

@@ -21,23 +21,84 @@ pub fn Violation::message(self : Violation) -> String {
 }
 
 ///|
+/// Named types being evaluated on the current branch. Ion equivalence also
+/// catches cycles through synthetic annotation values, which have new object
+/// identities but can repeat the same value. Documents have a separate key.
+priv enum ValidationFrame {
+  Value(String, @ion.IonValue)
+  Document(String)
+}
+
+///|
+priv struct ValidationContext {
+  active : Array[ValidationFrame]
+  cycles : Array[Violation]
+}
+
+///|
+/// A real child consumes part of the finite input tree. Start a fresh reference
+/// chain there, while sharing cycle diagnostics with logical parent branches.
+fn ValidationContext::child(self : ValidationContext) -> ValidationContext {
+  { active: [], cycles: self.cycles, }
+}
+
+///|
+fn ValidationContext::enter(
+  self : ValidationContext,
+  frame : ValidationFrame,
+  path : String,
+  out : Array[Violation],
+) -> Bool {
+  for active in self.active {
+    let repeated = match (active, frame) {
+      (Value(a, x), Value(b, y)) => a == b && x.equals(y)
+      (Document(a), Document(b)) => a == b
+      _ => false
+    }
+    if repeated {
+      let name = match frame {
+        Value(name, _) | Document(name) => name
+      }
+      let violation : Violation = {
+        path,
+        message: "cyclic schema type reference: " + name,
+      }
+      out.push(violation)
+      self.cycles.push(violation)
+      return false
+    }
+  }
+  self.active.push(frame)
+  true
+}
+
+///|
 /// Validate `value` against the named schema type, returning every violation
-/// found. An empty result means the value is valid.
+/// found. An empty result means the value is valid. If no finite validation
+/// proof exists because type references cycle, return those cycle violations.
 pub fn Schema::validate(
   self : Schema,
   type_name : String,
   value : @ion.IonValue,
 ) -> Array[Violation] {
   let out : Array[Violation] = []
+  let context : ValidationContext = {
+    active: [Value(type_name, value)],
+    cycles: [],
+  }
   match self.find(type_name) {
     None =>
       out.push({ path: "$", message: "unknown schema type: " + type_name, })
     Some(definition) =>
       for constraint in definition.constraints() {
-        check_constraint(self, constraint, value, "$", out)
+        check_constraint(self, context, constraint, value, "$", out)
       }
   }
-  out
+  if context.cycles.is_empty() {
+    out
+  } else {
+    context.cycles
+  }
 }
 
 ///|
@@ -66,18 +127,22 @@ fn in_range(n : Int, lower : Int, upper : Int?) -> Bool {
 /// Whether `value` satisfies `constraint`, discarding any detail.
 fn satisfies(
   schema : Schema,
+  context : ValidationContext,
   constraint : Constraint,
   value : @ion.IonValue,
+  path : String,
 ) -> Bool {
   let out : Array[Violation] = []
-  check_constraint(schema, constraint, value, "$", out)
-  out.is_empty()
+  let cycle_count = context.cycles.length()
+  check_constraint(schema, context, constraint, value, path, out)
+  out.is_empty() && context.cycles.length() == cycle_count
 }
 
 ///|
 /// Check `value` against `constraint`, appending violations to `out`.
 fn check_constraint(
   schema : Schema,
+  context : ValidationContext,
   constraint : Constraint,
   value : @ion.IonValue,
   path : String,
@@ -108,23 +173,27 @@ fn check_constraint(
     }
     NullOr(inner) =>
       if !(value.is_null() && value.ion_type() == @ion.IonType::Null) {
-        check_constraint(schema, inner, value, path, out)
+        check_constraint(schema, context, inner, value, path, out)
       }
     TypeRef(name) =>
       match schema.find(name) {
         None => out.push({ path, message: "unknown schema type: " + name, })
         Some(definition) =>
-          for inner in definition.constraints() {
-            check_constraint(schema, inner, value, path, out)
+          if context.enter(Value(name, value), path, out) {
+            for inner in definition.constraints() {
+              check_constraint(schema, context, inner, value, path, out)
+            }
+            ignore(context.active.pop())
           }
       }
     Element(inner) =>
       match value.kind() {
         @ion.IonValueKind::List(items) | @ion.IonValueKind::Sexp(items) =>
-          check_elements(schema, inner, items, path, out)
+          check_elements(schema, context, inner, items, path, out)
         @ion.IonValueKind::Struct(fields) =>
           check_elements(
             schema,
+            context,
             inner,
             fields.map(field => field.value()),
             path,
@@ -139,7 +208,7 @@ fn check_constraint(
     Fields(field_constraints) =>
       match value.kind() {
         @ion.IonValueKind::Struct(fields) =>
-          check_fields(schema, field_constraints, fields, path, out)
+          check_fields(schema, context, field_constraints, fields, path, out)
         _ =>
           out.push({ path, message: "a fields constraint requires a struct", })
       }
@@ -268,6 +337,7 @@ fn check_constraint(
           for field in fields {
             check_constraint(
               schema,
+              context.child(),
               inner,
               @ion.IonValue::symbol_token(field.name()),
               path + ".(field name)",
@@ -330,12 +400,12 @@ fn check_constraint(
       let symbols = @ion.IonValue::list(
         value.annotations().map(token => @ion.IonValue::symbol_token(token)),
       )
-      check_constraint(schema, inner, symbols, path + "::", out)
+      check_constraint(schema, context, inner, symbols, path + "::", out)
     }
     OrderedElements(slots) =>
       match value.kind() {
         @ion.IonValueKind::List(items) | @ion.IonValueKind::Sexp(items) =>
-          if !matches_in_order(schema, slots, items) {
+          if !matches_in_order(schema, context, slots, items, path) {
             out.push({
               path,
               message: "the elements do not match ordered_elements",
@@ -379,13 +449,20 @@ fn check_constraint(
       }
     AllOf(constraints) =>
       for inner in constraints {
-        check_constraint(schema, inner, value, path, out)
+        check_constraint(schema, context, inner, value, path, out)
       }
     AnyOf(constraints) => {
+      let cycle_count = context.cycles.length()
       let mut ok = false
       for inner in constraints {
-        if satisfies(schema, inner, value) {
+        if satisfies(schema, context, inner, value, path) {
           ok = true
+          // A finite successful branch proves the disjunction. Cyclic
+          // alternatives do not negate that proof, including ISL 1 nullable.
+          while context.cycles.length() > cycle_count {
+            ignore(context.cycles.pop())
+          }
+          break
         }
       }
       if !ok {
@@ -395,7 +472,7 @@ fn check_constraint(
     OneOf(constraints) => {
       let mut count = 0
       for inner in constraints {
-        if satisfies(schema, inner, value) {
+        if satisfies(schema, context, inner, value, path) {
           count += 1
         }
       }
@@ -407,7 +484,7 @@ fn check_constraint(
       }
     }
     Not(inner) =>
-      if satisfies(schema, inner, value) {
+      if satisfies(schema, context, inner, value, path) {
         out.push({ path, message: "value satisfies a 'not' constraint", })
       }
     IsDocument => out.push({ path, message: "a value is not a document", })
@@ -439,6 +516,7 @@ fn check_constraint(
 /// Check a container's elements against `inner`.
 fn check_elements(
   schema : Schema,
+  context : ValidationContext,
   inner : Constraint,
   items : Array[@ion.IonValue],
   path : String,
@@ -447,6 +525,7 @@ fn check_elements(
   for index in 0..<items.length() {
     check_constraint(
       schema,
+      context.child(),
       inner,
       items[index],
       path + "[" + index.to_string() + "]",
@@ -459,6 +538,7 @@ fn check_elements(
 /// Check a struct's fields against the field constraints.
 fn check_fields(
   schema : Schema,
+  context : ValidationContext,
   field_constraints : Array[FieldConstraint],
   fields : Array[@ion.Field],
   path : String,
@@ -479,7 +559,14 @@ fn check_fields(
       })
     }
     for field in matching {
-      check_constraint(schema, constraint.ty, field.value(), field_path, out)
+      check_constraint(
+        schema,
+        context.child(),
+        constraint.ty,
+        field.value(),
+        field_path,
+        out,
+      )
     }
   }
 }
@@ -681,8 +768,10 @@ fn fits_format(f : Double, format : FloatFormat) -> Bool {
 /// first `j` items, so an ambiguous match never backtracks.
 fn matches_in_order(
   schema : Schema,
+  context : ValidationContext,
   slots : Array[(Constraint, Occurs)],
   items : Array[@ion.IonValue],
+  path : String,
 ) -> Bool {
   let n = items.length()
   let mut reached = Array::make(n + 1, false)
@@ -702,7 +791,13 @@ fn matches_in_order(
         }
         if start + count == n ||
           (occurs.upper is Some(upper) && count >= upper) ||
-          !satisfies(schema, constraint, items[start + count]) {
+          !satisfies(
+            schema,
+            context.child(),
+            constraint,
+            items[start + count],
+            path + "[\{start + count}]",
+          ) {
           break
         }
         count += 1
@@ -726,15 +821,23 @@ pub fn Schema::validate_document(
   values : Array[@ion.IonValue],
 ) -> Array[Violation] {
   let out : Array[Violation] = []
+  let context : ValidationContext = {
+    active: [Document(type_name)],
+    cycles: [],
+  }
   match self.find(type_name) {
     None =>
       out.push({ path: "$", message: "unknown schema type: " + type_name, })
     Some(definition) =>
       for constraint in definition.constraints() {
-        check_document(self, constraint, values, "$", out)
+        check_document(self, context, constraint, values, "$", out)
       }
   }
-  out
+  if context.cycles.is_empty() {
+    out
+  } else {
+    context.cycles
+  }
 }
 
 ///|
@@ -751,6 +854,7 @@ pub fn Schema::is_valid_document(
 /// Check a document against `constraint`, appending violations to `out`.
 fn check_document(
   schema : Schema,
+  context : ValidationContext,
   constraint : Constraint,
   values : Array[@ion.IonValue],
   path : String,
@@ -758,28 +862,44 @@ fn check_document(
 ) -> Unit {
   let satisfied = (inner : Constraint) => {
     let violations : Array[Violation] = []
-    check_document(schema, inner, values, path, violations)
-    violations.is_empty()
+    let cycle_count = context.cycles.length()
+    check_document(schema, context, inner, values, path, violations)
+    violations.is_empty() && context.cycles.length() == cycle_count
   }
   match constraint {
     IsDocument => ()
-    NullOr(inner) => check_document(schema, inner, values, path, out)
+    NullOr(inner) => check_document(schema, context, inner, values, path, out)
     TypeRef(name) =>
       match schema.find(name) {
         None => out.push({ path, message: "unknown schema type: " + name, })
         Some(definition) =>
-          for inner in definition.constraints() {
-            check_document(schema, inner, values, path, out)
+          if context.enter(Document(name), path, out) {
+            for inner in definition.constraints() {
+              check_document(schema, context, inner, values, path, out)
+            }
+            ignore(context.active.pop())
           }
       }
     AllOf(constraints) =>
       for inner in constraints {
-        check_document(schema, inner, values, path, out)
+        check_document(schema, context, inner, values, path, out)
       }
-    AnyOf(constraints) =>
-      if !constraints.iter().any(satisfied) {
+    AnyOf(constraints) => {
+      let cycle_count = context.cycles.length()
+      let mut ok = false
+      for inner in constraints {
+        if satisfied(inner) {
+          ok = true
+          while context.cycles.length() > cycle_count {
+            ignore(context.cycles.pop())
+          }
+          break
+        }
+      }
+      if !ok {
         out.push({ path, message: "value does not satisfy any_of", })
       }
+    }
     OneOf(constraints) => {
       let count = constraints.filter(satisfied).length()
       if count != 1 {
@@ -793,7 +913,7 @@ fn check_document(
       if satisfied(inner) {
         out.push({ path, message: "value satisfies a 'not' constraint", })
       }
-    Element(inner) => check_elements(schema, inner, values, path, out)
+    Element(inner) => check_elements(schema, context, inner, values, path, out)
     DistinctElements
     | OrderedElements(_)
     | ContainerLength(_, _)
@@ -801,6 +921,7 @@ fn check_document(
       // As for an S-expression of the values.
       check_constraint(
         schema,
+        context,
         constraint,
         @ion.IonValue::sexp(values),
         path,

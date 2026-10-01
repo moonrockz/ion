@@ -50,8 +50,8 @@ test "JSON integers keep every digit" {
 test "a JSON number's spelling decides its Ion type" {
   // Core drops the spelling of a fractional literal that fits a `Double`, so
   // the number's shortest spelling decides: `1.50` is the Ion decimal `1.5`.
-  assert_eq(@text.write_ion(@json.to_ion(@cjson.parse("1.50"))), "15d-1")
-  assert_eq(@text.write_ion(@json.to_ion(@cjson.parse("2.5e-3"))), "25d-4")
+  assert_eq(@text.write_ion(@json.to_ion(@cjson.parse("1.50"))), "1.5")
+  assert_eq(@text.write_ion(@json.to_ion(@cjson.parse("2.5e-3"))), "0.0025")
   // An integral spelling is an Ion int.
   assert_eq(@text.write_ion(@json.to_ion(@cjson.parse("1e2"))), "100")
   // A spelling whose shortest form carries an exponent is an Ion float.
