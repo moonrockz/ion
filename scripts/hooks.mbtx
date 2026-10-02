@@ -1,0 +1,144 @@
+///|
+import {
+  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.4/process",
+  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/core/env",
+  "moonrockz/moonspec@0.10.0",
+  "moonrockz/expect@0.6.0",
+}
+
+///|
+/// Git hooks installation.
+///
+/// Usage:
+///
+/// - `hooks.mbtx install` removes a local core.hooksPath override, then runs
+///   `lefthook install`, so the hooks in lefthook.yml (which call
+///   `bd hooks run <hook>`) are the ones that run.
+
+///|
+let usage : String = "usage: hooks.mbtx install"
+
+///|
+struct Command {
+  program : String
+  args : Array[String]
+} derive(Debug, Eq)
+
+///|
+fn Command::to_string(self : Command) -> String {
+  [self.program, ..self.args].join(" ")
+}
+
+///|
+/// Removes the core.hooksPath override that `bd init` can set. lefthook 2.1.1
+/// `install --reset-hooks-path` writes the hooks into the old path before it
+/// unsets it, so the override goes first.
+let unset_hooks_path : Command = {
+  program: "git",
+  args: ["config", "--local", "--unset", "core.hooksPath"],
+}
+
+///|
+let lefthook_install : Command = { program: "lefthook", args: ["install"], }
+
+///|
+/// The commands of `install`, in order.
+fn install_commands() -> Array[Command] {
+  [unset_hooks_path, lefthook_install]
+}
+
+///|
+/// The result of removing the override. git exits with 5 when the key is
+/// not set, which is the usual case.
+fn unset_result(code : Int) -> Result[Unit, String] {
+  match code {
+    0 | 5 => Ok(())
+    _ => Err("git config --unset core.hooksPath failed with exit code \{code}")
+  }
+}
+
+///|
+async fn run_command(command : Command) -> Int {
+  @process.run(command.program, command.args) catch {
+    error => {
+      eprintln("\{command.program}: \{error}")
+      127
+    }
+  }
+}
+
+///|
+async fn install() -> Int {
+  match unset_result(run_command(unset_hooks_path)) {
+    Ok(_) => run_command(lefthook_install)
+    Err(message) => {
+      eprintln(message)
+      1
+    }
+  }
+}
+
+// ------------------------------------------------------------- features
+
+///|
+struct HooksWorld {
+  mut unset : Result[Unit, String]?
+}
+
+///|
+fn HooksWorld::new() -> HooksWorld {
+  { unset: None, }
+}
+
+///|
+fn HooksWorld::unset(self : HooksWorld) -> Result[Unit, String] raise {
+  guard self.unset is Some(result) else {
+    fail("the scenario did not remove the override")
+  }
+  result
+}
+
+///|
+impl @moonspec.World for HooksWorld with fn configure(self, setup) {
+  setup.then1("the install commands are:", fn(doc : @moonspec.DocString) raise {
+    let lines = install_commands().map(command => command.to_string())
+    @expect.expect(lines.join("\n")).to_equal(doc.content)
+  })
+  setup.when1("git exits with {int} while removing the override", fn(
+    code : Int,
+  ) {
+    self.unset = Some(unset_result(code))
+  })
+  setup.then0("the override step succeeds", fn() raise {
+    @expect.expect(self.unset()).to_equal(Ok(()))
+  })
+  setup.then1("the override step fails with {string}", fn(
+    message : String,
+  ) raise {
+    @expect.expect(self.unset()).to_equal(Err(message))
+  })
+}
+
+///|
+async test "hooks feature" {
+  @moonspec.run_or_fail(
+    HooksWorld::new,
+    @moonspec.RunOptions::new([
+      @moonspec.FeatureSource::File("features/hooks.feature"),
+    ]),
+  )
+}
+
+///|
+async fn main {
+  let code = match @env.args()[1:] {
+    ["install"] => install()
+    _ => {
+      eprintln(usage)
+      2
+    }
+  }
+  @sys.exit(code)
+}

@@ -276,6 +276,8 @@ ion's scripts:
 | `scripts/ci.mbtx` | `test`, `conformance`, `bench` | `ci:test`, `ci:conformance-summary`, `bench` |
 | `scripts/coverage.mbtx` | `run`, `summary` | `test:coverage`, `ci:coverage-summary` |
 | `scripts/release.mbtx` | `version`, `plan`, `notes`, `tag`, `credentials`, `assets` | `release:*` |
+| `scripts/cli.mbtx` | `smoke` | `test:cli` |
+| `scripts/hooks.mbtx` | `install` | `hooks:install` |
 
 `ci.mbtx` holds both reports that compare against the latest successful main
 run (conformance and bench), because a script cannot import another script.
