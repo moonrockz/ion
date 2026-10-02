@@ -1,0 +1,341 @@
+///|
+import {
+  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.4/process",
+  "moonbitlang/async@0.22.4/fs",
+  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonrockz/moonspec@0.10.0",
+  "moonrockz/expect@0.6.0",
+}
+
+///|
+/// CLI smoke test.
+///
+/// Usage:
+///
+/// - `cli.mbtx smoke` runs the `ion` tool from the checkout
+///   (`moon run -q pkgs -- <command>`) on the fixtures in tests/fixtures.
+///   Each check prints its title and the output of the tool. The run stops
+///   at the first failed check and exits with 1.
+
+///|
+let usage : String = "usage: cli.mbtx smoke"
+
+///|
+struct Command {
+  program : String
+  args : Array[String]
+} derive(Debug, Eq)
+
+///|
+fn Command::to_string(self : Command) -> String {
+  [self.program, ..self.args].join(" ")
+}
+
+///|
+/// What a check expects of the exit code of the tool.
+enum Expect {
+  Succeeds
+  Fails
+} derive(Debug, Eq)
+
+///|
+fn Expect::name(self : Expect) -> String {
+  match self {
+    Succeeds => "succeeds"
+    Fails => "fails"
+  }
+}
+
+///|
+fn Expect::parse(text : String) -> Expect? {
+  match text {
+    "succeeds" => Some(Succeeds)
+    "fails" => Some(Fails)
+    _ => None
+  }
+}
+
+///|
+/// One check of the smoke test.
+enum Check {
+  /// Run the tool with the arguments, optionally with a file as stdin.
+  Run(
+    title~ : String,
+    args~ : Array[String],
+    stdin~ : String?,
+    expect~ : Expect
+  )
+  /// Print the fixture as Ion binary, print that binary as text, and compare
+  /// it with the text print of the fixture.
+  RoundTrip(title~ : String, fixture~ : String)
+} derive(Debug, Eq)
+
+///|
+fn Check::title(self : Check) -> String {
+  match self {
+    Run(title~, ..) | RoundTrip(title~, ..) => title
+  }
+}
+
+///|
+let sample_ion : String = "tests/fixtures/sample.ion"
+
+///|
+/// The checks of the smoke test, in order.
+fn smoke_checks() -> Array[Check] {
+  [
+    Run(
+      title="Print an Ion fixture",
+      args=["print", sample_ion],
+      stdin=None,
+      expect=Succeeds,
+    ),
+    Run(
+      title="Convert an Ion fixture to JSON",
+      args=["json", sample_ion],
+      stdin=None,
+      expect=Succeeds,
+    ),
+    Run(
+      title="Stream Ion from stdin",
+      args=["hash", "-"],
+      stdin=Some(sample_ion),
+      expect=Succeeds,
+    ),
+    RoundTrip(
+      title="Round-trip a fixture through Ion binary",
+      fixture=sample_ion,
+    ),
+    Run(
+      title="Convert a JSON fixture to Ion",
+      args=["fromjson", "tests/fixtures/sample.json"],
+      stdin=None,
+      expect=Succeeds,
+    ),
+    // person.ion holds a value that violates the person type.
+    Run(
+      title="Validate fixtures (a violation must exit non-zero)",
+      args=[
+        "validate", "tests/fixtures/person.isl", "person", "tests/fixtures/person.ion",
+      ],
+      stdin=None,
+      expect=Fails,
+    ),
+  ]
+}
+
+///|
+/// The command that runs the tool from the checkout.
+fn ion_command(args : Array[String]) -> Command {
+  { program: "moon", args: ["run", "-q", "pkgs", "--", ..args], }
+}
+
+///|
+/// Whether a run of `ion <args>` met its expectation.
+fn judge(
+  args : Array[String],
+  expect : Expect,
+  code : Int,
+) -> Result[Unit, String] {
+  let command = ["ion", ..args].join(" ")
+  match (expect, code) {
+    (Succeeds, 0) => Ok(())
+    (Succeeds, _) => Err("\{command} failed with exit code \{code}")
+    (Fails, 0) => Err("\{command} unexpectedly succeeded")
+    (Fails, _) => Ok(())
+  }
+}
+
+///|
+/// Whether the print of the binary copy equals the text print.
+fn judge_round_trip(
+  fixture : String,
+  text : String,
+  binary : String,
+) -> Result[Unit, String] {
+  if text == binary {
+    Ok(())
+  } else {
+    Err("the binary round trip of \{fixture} changed the printed text")
+  }
+}
+
+///|
+/// Run a command with the console as stdout, and a file as stdin if given.
+async fn run_inherited(command : Command, stdin : String?) -> Int {
+  match stdin {
+    Some(path) =>
+      @process.run(
+        command.program,
+        command.args,
+        stdin=@process.redirect_from_file(path),
+      )
+    None => @process.run(command.program, command.args)
+  }
+}
+
+///|
+/// The stdout of a command that must succeed.
+async fn output_of(args : Array[String]) -> Bytes {
+  let command = ion_command(args)
+  let (code, stdout, stderr) = @process.collect_output(
+    command.program,
+    command.args,
+  )
+  if judge(args, Succeeds, code) is Err(message) {
+    fail(message + "\n" + @utf8.decode_lossy(stderr.binary()))
+  }
+  stdout.binary()
+}
+
+///|
+async fn round_trip(fixture : String) -> Result[Unit, String] {
+  let dir = @fs.tmpdir(prefix="ion-cli-smoke-")
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  let copy = dir + "/sample.10n"
+  try {
+    @fs.write_file(copy, output_of(["print", "--binary", fixture]))
+    let binary = @utf8.decode_lossy(output_of(["print", copy]))
+    let text = @utf8.decode_lossy(output_of(["print", fixture]))
+    judge_round_trip(fixture, text, binary)
+  } catch {
+    error => Err(error.to_string())
+  }
+}
+
+///|
+async fn run_check(check : Check) -> Result[Unit, String] {
+  match check {
+    Run(args~, stdin~, expect~, ..) => {
+      let code = run_inherited(ion_command(args), stdin) catch {
+        error => return Err("moon: \{error}")
+      }
+      judge(args, expect, code)
+    }
+    RoundTrip(fixture~, ..) => round_trip(fixture)
+  }
+}
+
+///|
+async fn smoke() -> Int {
+  for check in smoke_checks() {
+    println("==> \{check.title()}")
+    if run_check(check) is Err(message) {
+      eprintln("Error: \{message}")
+      return 1
+    }
+  }
+  0
+}
+
+// ------------------------------------------------------------- features
+
+///|
+struct CliWorld {
+  mut judged : Result[Unit, String]?
+  mut text : String
+  mut binary : String
+}
+
+///|
+fn CliWorld::new() -> CliWorld {
+  { judged: None, text: "", binary: "", }
+}
+
+///|
+fn CliWorld::judged(self : CliWorld) -> Result[Unit, String] raise {
+  guard self.judged is Some(result) else { fail("no check was judged") }
+  result
+}
+
+///|
+/// A check as a table row: title, command, stdin and expectation.
+fn Check::row(self : Check) -> Array[String] {
+  match self {
+    Run(title~, args~, stdin~, expect~) =>
+      [title, args.join(" "), stdin.unwrap_or(""), expect.name()]
+    RoundTrip(title~, fixture~) => [title, "round trip \{fixture}", "", "same"]
+  }
+}
+
+///|
+fn words(text : String) -> Array[String] {
+  text.split(" ").map(word => word.to_owned()).collect()
+}
+
+///|
+impl @moonspec.World for CliWorld with fn configure(self, setup) {
+  setup.then1("the smoke checks are:", fn(table : @moonspec.DataTable) raise {
+    let expected = table
+      .as_maps()
+      .map(row => [row["title"], row["command"], row["stdin"], row["expect"]])
+    @expect.expect(smoke_checks().map(check => check.row())).to_equal(expected)
+  })
+  setup.then2("the command for {string} is {string}", fn(
+    args : String,
+    command : String,
+  ) raise {
+    @expect.expect(ion_command(words(args)).to_string()).to_equal(command)
+  })
+  setup.when3("the check {string} that {word} exits with {int}", fn(
+    args : String,
+    expect : String,
+    code : Int,
+  ) raise {
+    guard Expect::parse(expect) is Some(expect) else {
+      fail("unknown expectation \{expect}")
+    }
+    self.judged = Some(judge(words(args), expect, code))
+  })
+  setup.then0("the check passes", fn() raise {
+    @expect.expect(self.judged()).to_equal(Ok(()))
+  })
+  setup.then1("the check fails with {string}", fn(message : String) raise {
+    @expect.expect(self.judged()).to_equal(Err(message))
+  })
+  setup.when2(
+    "the text print is {string} and the print of the binary copy is {string}",
+    fn(text : String, binary : String) {
+      self.text = text
+      self.binary = binary
+    },
+  )
+  setup.then1("the round trip of {string} passes", fn(fixture : String) raise {
+    @expect.expect(judge_round_trip(fixture, self.text, self.binary)).to_equal(
+      Ok(()),
+    )
+  })
+  setup.then2("the round trip of {string} fails with {string}", fn(
+    fixture : String,
+    message : String,
+  ) raise {
+    @expect.expect(judge_round_trip(fixture, self.text, self.binary)).to_equal(
+      Err(message),
+    )
+  })
+}
+
+///|
+async test "cli feature" {
+  @moonspec.run_or_fail(
+    CliWorld::new,
+    @moonspec.RunOptions::new([
+      @moonspec.FeatureSource::File("features/cli.feature"),
+    ]),
+  )
+}
+
+///|
+async fn main {
+  let code = match @env.args()[1:] {
+    ["smoke"] => smoke()
+    _ => {
+      eprintln(usage)
+      2
+    }
+  }
+  @sys.exit(code)
+}
