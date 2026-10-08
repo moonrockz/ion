@@ -1,11 +1,11 @@
 // Golden inputs for the walkers. Every port of a walker must keep the
 // snapshot in pkgs/testkit/__snapshot__/walkers.txt byte for byte.
+// `nan` is left out: its binary bits differ by platform (bd ion-6lt).
 null
 null.struct
 true
 -170141183460469231731687303715884105728
 -0e0
-nan
 +inf
 -0.00
 2026-10-08T12:34:56.789-07:00
