@@ -66,6 +66,7 @@ fn describe(error : Error) -> String {
     @ion.IonError::Syntax(message) => "syntax: " + message
     @ion.IonError::DataModel(message) => "data model: " + message
     @ion.IonError::Unsupported(message) => "unsupported: " + message
+    @ion.IonError::LimitExceeded(message) => "limit exceeded: " + message
     Failure(message) =>
       match message.find("FAILED: ") {
         Some(index) => message.view(start_offset=index + 8).to_owned()

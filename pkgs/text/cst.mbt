@@ -101,11 +101,13 @@ pub fn CstValue::elements(self : CstValue) -> Array[CstValue]? {
 priv struct CstParser {
   tokens : Array[IonToken]
   mut index : Int
+  /// Depth of nested containers, which the nesting limit caps.
+  mut depth : @ion.NestingDepth
 }
 
 ///|
 fn CstParser::new(tokens : Array[IonToken]) -> CstParser {
-  { tokens, index: 0, }
+  { tokens, index: 0, depth: @ion.NestingDepth::top(), }
 }
 
 ///|
@@ -237,14 +239,34 @@ fn CstParser::parse_content(
     None => raise @ion.IonError::Syntax("expected a value, found end of input")
   }
   match token.kind() {
-    ListStart => self.parse_sequence(ListEnd, SequenceKind::List)
-    SexpStart => self.parse_sequence(SexpEnd, SequenceKind::Sexp)
-    StructStart => self.parse_struct()
+    ListStart =>
+      self.parse_container(parser => {
+        parser.parse_sequence(ListEnd, SequenceKind::List)
+      })
+    SexpStart =>
+      self.parse_container(parser => {
+        parser.parse_sequence(SexpEnd, SequenceKind::Sexp)
+      })
+    StructStart => self.parse_container(CstParser::parse_struct)
     _ => {
       ignore(self.advance())
       (Scalar(token), token.end())
     }
   }
+}
+
+///|
+/// Parse a container with `parse`, one level deeper than the cursor is now.
+/// Raises before parsing it when that passes the nesting limit.
+fn CstParser::parse_container(
+  self : CstParser,
+  parse : (CstParser) -> (CstContent, Int) raise @ion.IonError,
+) -> (CstContent, Int) raise @ion.IonError {
+  let outer = self.depth
+  self.depth = outer.enter()
+  let content = parse(self)
+  self.depth = outer
+  content
 }
 
 ///|

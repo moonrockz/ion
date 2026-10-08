@@ -10,6 +10,9 @@ pub(all) suberror IonError {
   DataModel(String)
   /// A construct this implementation does not (yet) support.
   Unsupported(String)
+  /// Valid input that passes a limit this implementation sets to protect the
+  /// host, such as containers nested deeper than [`MAX_NESTING_DEPTH`].
+  LimitExceeded(String)
 } derive(Debug)
 
 ///|
@@ -19,5 +22,6 @@ pub fn IonError::message(self : IonError) -> String {
     Syntax(message) => message
     DataModel(message) => message
     Unsupported(message) => message
+    LimitExceeded(message) => message
   }
 }

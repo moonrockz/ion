@@ -95,6 +95,25 @@ test "a syntax error" {
 }
 ```
 
+Containers nest at most `@ion.MAX_NESTING_DEPTH` (128) levels deep. Deeper
+input raises `@ion.IonError::LimitExceeded` instead of overflowing the stack:
+
+```mbt check
+///|
+test "nesting past the limit" {
+  let deep = "[".repeat(@ion.MAX_NESTING_DEPTH + 1)
+  let message = try @text.read_ion(deep) catch {
+    error => error.message()
+  } noraise {
+    _ => "read"
+  }
+  inspect(
+    message,
+    content="containers nest deeper than the limit of 128 levels",
+  )
+}
+```
+
 ## Symbol tables
 
 A local symbol table gives text to symbol IDs such as `$10`; it is applied,

@@ -308,6 +308,11 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   Equality uses that location, independently of stream IDs and table versions.
   Writers preserve shared imports and reserve local unknown IDs as null slots.
   A shared table's `imports` field is informational metadata and is ignored.
+- **Bounded nesting.** The text, binary and JSON readers accept containers
+  nested at most `@ion.MAX_NESTING_DEPTH` (128) levels deep and raise
+  `IonError::LimitExceeded` past it. Readers and the code that walks values
+  recurse once per level, so the limit keeps hostile input from overflowing
+  the call stack on any target.
 - **Unsupported is an error.** The schema loader raises
   `IonError::Unsupported` for what it does not implement (imports when no
   resolver is given), rather than silently ignoring it.

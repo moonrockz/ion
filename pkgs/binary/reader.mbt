@@ -116,7 +116,12 @@ pub fn decode_value(
           start += total
         } else {
           let cursor = Cursor::new(bytes, start, start + total)
-          result = Some((decode_element(cursor, table), start + total - offset))
+          result = Some(
+            (
+              decode_element(cursor, table, @ion.NestingDepth::top()),
+              start + total - offset,
+            ),
+          )
         }
       }
     }
@@ -127,10 +132,12 @@ pub fn decode_value(
 ///|
 /// Decode one value at the cursor: a scalar, a container, or an annotation
 /// wrapper. NOP padding is rejected, because a caller that allows it skips it
-/// before decoding.
+/// before decoding. `depth` is the nesting depth of the value; a container
+/// that would pass the nesting limit raises.
 fn decode_element(
   cursor : Cursor,
   table : @ion.SymbolTable,
+  depth : @ion.NestingDepth,
 ) -> @ion.IonValue raise @ion.IonError {
   let descriptor = cursor.octet()
   let type_code = descriptor >> 4
@@ -139,9 +146,9 @@ fn decode_element(
     raise @ion.IonError::Syntax("NOP padding is not allowed here")
   }
   if type_code == 14 {
-    decode_annotated(cursor, nibble, table)
+    decode_annotated(cursor, nibble, table, depth)
   } else {
-    decode_typed(cursor, type_code, nibble, table)
+    decode_typed(cursor, type_code, nibble, table, depth)
   }
 }
 
@@ -152,6 +159,7 @@ fn decode_typed(
   type_code : Int,
   nibble : Int,
   table : @ion.SymbolTable,
+  depth : @ion.NestingDepth,
 ) -> @ion.IonValue raise @ion.IonError {
   if nibble == 0x0F {
     return @ion.IonValue::typed_null(null_type(type_code))
@@ -191,8 +199,9 @@ fn decode_typed(
     8 => decode_string(cursor, length)
     9 => @ion.IonValue::clob(cursor.take(length).to_owned())
     10 => @ion.IonValue::blob(cursor.take(length).to_owned())
-    11 | 12 => decode_sequence(cursor, end, table, type_code == 11)
-    13 => decode_struct(cursor, end, table)
+    11 | 12 =>
+      decode_sequence(cursor, end, table, type_code == 11, depth.enter())
+    13 => decode_struct(cursor, end, table, depth.enter())
     _ => raise @ion.IonError::Syntax("reserved Ion binary type code")
   }
   if cursor.pos != end {
@@ -395,12 +404,14 @@ fn decode_string(
 }
 
 ///|
-/// Decode a list or S-expression: its elements, in order.
+/// Decode a list or S-expression: its elements, in order. `depth` is the
+/// nesting depth inside it.
 fn decode_sequence(
   cursor : Cursor,
   end : Int,
   table : @ion.SymbolTable,
   is_list : Bool,
+  depth : @ion.NestingDepth,
 ) -> @ion.IonValue raise @ion.IonError {
   let inner = cursor.scoped(end)
   let items : Array[@ion.IonValue] = []
@@ -408,7 +419,7 @@ fn decode_sequence(
     if inner.skip_padding() {
       continue
     }
-    items.push(decode_element(inner, table))
+    items.push(decode_element(inner, table, depth))
   }
   cursor.seek(end)
   if is_list {
@@ -420,11 +431,13 @@ fn decode_sequence(
 
 ///|
 /// Decode a struct: a `VarUInt` field-name symbol ID followed by its value, for
-/// each field. NOP padding is not allowed inside a struct.
+/// each field. NOP padding is not allowed inside a struct. `depth` is the
+/// nesting depth inside it.
 fn decode_struct(
   cursor : Cursor,
   end : Int,
   table : @ion.SymbolTable,
+  depth : @ion.NestingDepth,
 ) -> @ion.IonValue raise @ion.IonError {
   let inner = cursor.scoped(end)
   let fields : Array[@ion.Field] = []
@@ -435,7 +448,7 @@ fn decode_struct(
       continue
     }
     let name = table.lookup(sid)
-    let value = decode_element(inner, table)
+    let value = decode_element(inner, table, depth)
     fields.push(@ion.Field::from_token(name, value))
   }
   cursor.seek(end)
@@ -444,11 +457,12 @@ fn decode_struct(
 
 ///|
 /// Decode an annotation wrapper: a length-prefixed list of annotation symbol
-/// IDs followed by the annotated value.
+/// IDs followed by the annotated value. Annotations do not add `depth`.
 fn decode_annotated(
   cursor : Cursor,
   nibble : Int,
   table : @ion.SymbolTable,
+  depth : @ion.NestingDepth,
 ) -> @ion.IonValue raise @ion.IonError {
   let length = if nibble == 0x0E { cursor.var_uint() } else { nibble }
   let end = cursor.pos + length
@@ -479,7 +493,7 @@ fn decode_annotated(
       "NOP padding is not allowed in an annotation wrapper",
     )
   }
-  let value = decode_element(cursor, table)
+  let value = decode_element(cursor, table, depth)
   if cursor.pos != end {
     raise @ion.IonError::Syntax("an annotated value has trailing octets")
   }

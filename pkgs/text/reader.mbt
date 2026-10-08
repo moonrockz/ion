@@ -122,7 +122,10 @@ pub fn read_ion_datagram(
 /// it closes with `]`, `)`, `}`, or `"`, or the text that follows it shows
 /// where it ends. A value that fails to parse is taken to be cut short, so
 /// `None` asks for more text. Once `end_of_input` is true, `None` means only
-/// whitespace and comments remain, and a malformed value raises.
+/// whitespace and comments remain, and a malformed value raises. A value that
+/// nests deeper than `@ion.MAX_NESTING_DEPTH` raises
+/// `IonError::LimitExceeded` at once, because more text cannot make it
+/// shallower.
 pub fn read_ion_prefix(
   text : StringView,
   symbols~ : @ion.SymbolTable,
@@ -132,6 +135,8 @@ pub fn read_ion_prefix(
     read_prefix(text, end_of_input=true)
   } else {
     read_prefix(text, end_of_input=false) catch {
+      // More text cannot make a value shallower.
+      @ion.IonError::LimitExceeded(_) as error => raise error
       _ => None
     }
   }
@@ -232,6 +237,8 @@ priv struct Parser {
   mut pos : Int
   /// Depth of nested S-expressions; operators are only recognized inside one.
   mut sexp_depth : Int
+  /// Depth of nested containers of every kind, which the nesting limit caps.
+  mut depth : @ion.NestingDepth
   /// Whether the parser has read a symbol-ID literal that a symbol table must
   /// resolve, since the flag was last cleared.
   mut symbol_ids : Bool
@@ -240,7 +247,13 @@ priv struct Parser {
 ///|
 /// A parser positioned at the start of `input`.
 fn Parser::new(input : StringView) -> Parser {
-  { input, pos: 0, sexp_depth: 0, symbol_ids: false, }
+  {
+    input,
+    pos: 0,
+    sexp_depth: 0,
+    depth: @ion.NestingDepth::top(),
+    symbol_ids: false,
+  }
 }
 
 ///|
@@ -428,8 +441,8 @@ fn Parser::parse_bare_value(self : Parser) -> @ion.IonValue raise @ion.IonError 
   }
   let c = self.input[self.pos]
   match c {
-    '[' => self.parse_list()
-    '(' => self.parse_sexp()
+    '[' => self.parse_container(Parser::parse_list)
+    '(' => self.parse_container(Parser::parse_sexp)
     '{' => self.parse_braced()
     '"' => @ion.IonValue::string(self.parse_double_quoted_string())
     '\'' =>
@@ -440,6 +453,20 @@ fn Parser::parse_bare_value(self : Parser) -> @ion.IonValue raise @ion.IonError 
       }
     _ => self.parse_unquoted()
   }
+}
+
+///|
+/// Read a container with `parse`, one level deeper than the cursor is now.
+/// Raises before reading it when that passes the nesting limit.
+fn Parser::parse_container(
+  self : Parser,
+  parse : (Parser) -> @ion.IonValue raise @ion.IonError,
+) -> @ion.IonValue raise @ion.IonError {
+  let outer = self.depth
+  self.depth = outer.enter()
+  let value = parse(self)
+  self.depth = outer
+  value
 }
 
 ///|
@@ -1043,7 +1070,7 @@ fn Parser::parse_braced(self : Parser) -> @ion.IonValue raise @ion.IonError {
   if self.peek_at(1) == Some('{') {
     self.parse_lob()
   } else {
-    self.parse_struct()
+    self.parse_container(Parser::parse_struct)
   }
 }
 
