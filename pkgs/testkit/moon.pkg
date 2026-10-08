@@ -5,6 +5,7 @@
 import {
   "moonrockz/ion/ion",
   "moonbitlang/core/debug",
+  "moonbitlang/core/quickcheck",
 }
 
 import {

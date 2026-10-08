@@ -3,17 +3,26 @@ package "moonrockz/ion/testkit"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/quickcheck",
   "moonrockz/ion/ion",
 }
 
 // Values
+pub fn change_one_leaf(@ion.IonValue, Int) -> @ion.IonValue
+
 pub fn count_values(@ion.IonValue) -> Int
 
 pub fn deep_value(DeepShape, Int, leaf? : @ion.IonValue) -> @ion.IonValue
 
+pub fn gen_json(max_depth~ : Int, max_width~ : Int) -> @quickcheck.Generator[Json]
+
+pub fn gen_value(max_depth~ : Int, max_width~ : Int, unknown_symbols? : Bool) -> @quickcheck.Generator[@ion.IonValue]
+
 pub fn innermost(@ion.IonValue) -> (@ion.IonValue, Int)
 
 pub fn reference_equals(@ion.IonValue, @ion.IonValue) -> Bool
+
+pub fn reverse_fields(@ion.IonValue) -> @ion.IonValue
 
 // Errors
 
