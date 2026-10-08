@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub const MAX_NESTING_DEPTH : Int = 128
+
 pub fn accept_values(Array[IonValue], &IonVisitor) -> Unit
 
 pub fn check_container_kind(IonType) -> Unit raise IonError
@@ -31,6 +33,7 @@ pub(all) suberror IonError {
   Syntax(String)
   DataModel(String)
   Unsupported(String)
+  LimitExceeded(String)
 } derive(@debug.Debug)
 pub fn IonError::message(Self) -> String
 pub fn IonError::to_repr(Self) -> @debug.Repr
@@ -185,6 +188,12 @@ pub(all) enum IonValueKind {
   Struct(Array[Field])
 } derive(@debug.Debug)
 pub fn IonValueKind::to_repr(Self) -> @debug.Repr
+
+pub struct NestingDepth {
+  // private fields
+}
+pub fn NestingDepth::enter(Self) -> Self raise IonError
+pub fn NestingDepth::top() -> Self
 
 type SharedSymbolTable
 pub fn SharedSymbolTable::from_value(IonValue) -> Self? raise IonError

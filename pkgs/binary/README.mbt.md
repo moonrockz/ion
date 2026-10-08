@@ -126,6 +126,9 @@ test "a truncated value" {
 }
 ```
 
+Like the text reader, the binary reader raises `@ion.IonError::LimitExceeded`
+for containers nested deeper than `@ion.MAX_NESTING_DEPTH` (128) levels.
+
 ## One value at a time
 
 A streaming writer builds one symbol table for all its values, writes it

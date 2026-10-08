@@ -14,7 +14,10 @@ codecs, Ion Hash, JSON conversion, and Ion Schema all build on it.
 - `SymbolToken` has optional text and an optional symbol ID, and
   `SymbolTable` maps IDs to text as a stream's symbol tables declare them.
 - `IonVisitor` and `IonFold` traverse a value depth-first.
-- Every failure is an `IonError`: `Syntax`, `DataModel`, or `Unsupported`.
+- Every failure is an `IonError`: `Syntax`, `DataModel`, `Unsupported`, or
+  `LimitExceeded`.
+- The readers accept containers nested at most `MAX_NESTING_DEPTH` (128)
+  levels deep, and raise `LimitExceeded` past it.
 
 ## Building values
 
