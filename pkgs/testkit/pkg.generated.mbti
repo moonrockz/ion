@@ -1,0 +1,35 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonrockz/ion/testkit"
+
+import {
+  "moonbitlang/core/debug",
+  "moonrockz/ion/ion",
+}
+
+// Values
+pub fn count_values(@ion.IonValue) -> Int
+
+pub fn deep_value(DeepShape, Int, leaf? : @ion.IonValue) -> @ion.IonValue
+
+pub fn innermost(@ion.IonValue) -> (@ion.IonValue, Int)
+
+pub fn reference_equals(@ion.IonValue, @ion.IonValue) -> Bool
+
+// Errors
+
+// Types and methods
+pub(all) enum DeepShape {
+  List
+  Sexp
+  Struct
+  AnnotatedList
+  Mixed
+} derive(Eq, @debug.Debug)
+pub fn DeepShape::at(Self, Int) -> Self
+pub fn DeepShape::equal(Self, Self) -> Bool
+pub fn DeepShape::not_equal(Self, Self) -> Bool
+pub fn DeepShape::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
