@@ -2675,6 +2675,8 @@ struct BenchConfig {
 enum Shape {
   Many
   Large
+  Deep
+  Mixed
 } derive(Debug, Eq)
 
 ///|
@@ -2761,7 +2763,8 @@ struct BenchChanges {
 let bench_modes : Array[String] = [
   "read-text-sync", "read-text-stream", "read-binary-sync", "read-binary-stream",
   "write-text-sync", "write-text-stream", "write-binary-sync", "write-binary-stream",
-  "hash",
+  "hash", "equals", "fold", "visitor", "events", "dispatch", "write-text-pretty",
+  "to-json", "to-ion", "resolve", "localize",
 ]
 
 ///|
@@ -2879,6 +2882,8 @@ fn Shape::name(self : Shape) -> String {
   match self {
     Many => "many"
     Large => "large"
+    Deep => "deep"
+    Mixed => "mixed"
   }
 }
 
@@ -2886,10 +2891,10 @@ fn Shape::name(self : Shape) -> String {
 /// The workloads in the order that they run.
 fn bench_workloads() -> Array[Workload] {
   let workloads = []
-  for shape in [Many, Large] {
+  for shape in [Many, Large, Deep, Mixed] {
     let modes = match shape {
-      Many => bench_modes
       Large => [..bench_modes, ..large_only_modes]
+      _ => bench_modes
     }
     for mode in modes {
       workloads.push({ shape, mode, })
