@@ -11,4 +11,9 @@ import {
 import {
   "moonrockz/ion/ion",
   "moonrockz/ion/text",
+  "moonrockz/ion/binary",
+  "moonrockz/ion/hash",
+  "moonrockz/ion/json",
+  "moonbitlang/x/fs",
+  "moonbitlang/core/test",
 } for "test"
