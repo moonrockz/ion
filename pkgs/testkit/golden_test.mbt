@@ -25,6 +25,24 @@ fn outcome(render : () -> String raise @ion.IonError) -> String {
 }
 
 ///|
+/// The events of `value`, with the text of every scalar, annotation and
+/// field name.
+fn event_trace(value : @ion.IonValue) -> String raise @ion.IonError {
+  let parts : Array[String] = []
+  for event in @text.IonReader::from_value(value).remaining() {
+    parts.push(
+      match event {
+        Scalar(scalar) => "Scalar(" + @text.write_fragment(scalar) + ")"
+        Annotation(token) => "Annotation(" + @text.symbol_to_text(token) + ")"
+        FieldName(token) => "FieldName(" + @text.symbol_to_text(token) + ")"
+        other => other.to_text()
+      },
+    )
+  }
+  parts.join(" ")
+}
+
+///|
 test "walker goldens" (t : @test.Test) {
   let values = @text.read_ion_datagram(
     @fs.read_file_to_string("tests/fixtures/walkers/values.ion"),
@@ -38,10 +56,7 @@ test "walker goldens" (t : @test.Test) {
     )
     t.writeln("hash: " + outcome(() => @hash.ion_hash_hex(value)))
     t.writeln("json: " + outcome(() => @json.write_json(value)))
-    let events = @text.IonReader::from_value(value)
-      .remaining()
-      .map(event => event.to_text())
-    t.writeln("events: " + events.join(" "))
+    t.writeln("events: " + outcome(() => event_trace(value)))
   }
   t.snapshot(filename="walkers.txt")
 }

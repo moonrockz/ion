@@ -189,3 +189,35 @@ test "gen_json produces arrays, objects and every scalar" {
   }
   assert_eq(kinds.length(), 6)
 }
+
+///|
+test "near_misses change structure, not only leaves" {
+  let value = @text.read_ion("a::[1, 2, {f: x::3, g: (4 5)}]")
+  let misses = @testkit.near_misses(value)
+  let texts = misses.map(miss => @text.write_ion(miss))
+  assert_true(texts.contains("a::[2, 1, {f: x::3, g: (4 5)}]"), msg="swap")
+  assert_true(texts.contains("a::(1 2 {f: x::3, g: (4 5)})"), msg="kind")
+  assert_true(texts.contains("[1, 2, {f: x::3, g: (4 5)}]"), msg="annotation")
+  assert_true(texts.contains("a::[1, 2, {f_: x::3, g: (4 5)}]"), msg="field")
+  for miss in misses {
+    assert_true(
+      !@testkit.reference_equals(value, miss),
+      msg=@text.write_ion(miss),
+    )
+  }
+}
+
+///|
+test "gen_value with imported symbols makes symbols from a shared table" {
+  let mut imported = 0
+  for
+    value in @testkit.gen_value(max_depth=3, max_width=3, imported_symbols=true).samples(
+      count=300,
+      size=8,
+    ) {
+    if value.has_imported_symbols() {
+      imported += 1
+    }
+  }
+  assert_true(imported > 0)
+}

@@ -16,9 +16,11 @@ pub fn deep_value(DeepShape, Int, leaf? : @ion.IonValue) -> @ion.IonValue
 
 pub fn gen_json(max_depth~ : Int, max_width~ : Int) -> @quickcheck.Generator[Json]
 
-pub fn gen_value(max_depth~ : Int, max_width~ : Int, unknown_symbols? : Bool) -> @quickcheck.Generator[@ion.IonValue]
+pub fn gen_value(max_depth~ : Int, max_width~ : Int, unknown_symbols? : Bool, imported_symbols? : Bool) -> @quickcheck.Generator[@ion.IonValue]
 
 pub fn innermost(@ion.IonValue) -> (@ion.IonValue, Int)
+
+pub fn near_misses(@ion.IonValue) -> Array[@ion.IonValue]
 
 pub fn reference_equals(@ion.IonValue, @ion.IonValue) -> Bool
 

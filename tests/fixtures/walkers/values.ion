@@ -22,3 +22,4 @@ $ion_symbol_table::{symbols: ["local", null]}
 [local, $11, $0]
 {$0: $0}
 deep::[{a: (b {c: [d]})}]
+{f: g::h::i, s: (x::[1] y::{z: w::2})}

@@ -84,3 +84,116 @@ pub fn reverse_fields(value : @ion.IonValue) -> @ion.IonValue {
   }
   rebuilt.with_annotations(value.annotations())
 }
+
+///|
+/// Structural near misses of `value`, none of them equal to it: the first
+/// list or S-expression whose first two children differ, with those two
+/// swapped; the first list or S-expression changed to the other kind; the
+/// first annotated value without its first annotation; and the first struct
+/// with its first field renamed. A mutation with no place to apply is left
+/// out.
+pub fn near_misses(value : @ion.IonValue) -> Array[@ion.IonValue] {
+  let misses : Array[@ion.IonValue] = []
+  for
+    mutation in [
+      swap_first_items, flip_sequence_kind, drop_annotation, rename_field,
+    ] {
+    if rewrite_first(value, mutation) is Some(miss) {
+      misses.push(miss)
+    }
+  }
+  misses
+}
+
+///|
+/// `value` with `mutation` applied to the first value, in document order,
+/// where it applies; `None` when it applies nowhere.
+fn rewrite_first(
+  value : @ion.IonValue,
+  mutation : (@ion.IonValue) -> @ion.IonValue?,
+) -> @ion.IonValue? {
+  if mutation(value) is Some(changed) {
+    return Some(changed)
+  }
+  let annotations = value.annotations()
+  match value.kind() {
+    List(items) | Sexp(items) =>
+      for index, item in items {
+        if rewrite_first(item, mutation) is Some(changed) {
+          let copy = items.copy()
+          copy[index] = changed
+          let rebuilt = if value.kind() is List(_) {
+            @ion.IonValue::list(copy)
+          } else {
+            @ion.IonValue::sexp(copy)
+          }
+          return Some(rebuilt.with_annotations(annotations))
+        }
+      }
+    Struct(fields) =>
+      for index, field in fields {
+        if rewrite_first(field.value(), mutation) is Some(changed) {
+          let copy = fields.copy()
+          copy[index] = @ion.Field::from_token(field.name(), changed)
+          return Some(
+            @ion.IonValue::from_fields(copy).with_annotations(annotations),
+          )
+        }
+      }
+    _ => ()
+  }
+  None
+}
+
+///|
+fn swap_first_items(value : @ion.IonValue) -> @ion.IonValue? {
+  match value.kind() {
+    List([first, second, .. rest]) if !reference_equals(first, second) =>
+      Some(
+        @ion.IonValue::list([second, first, ..rest]).with_annotations(
+          value.annotations(),
+        ),
+      )
+    Sexp([first, second, .. rest]) if !reference_equals(first, second) =>
+      Some(
+        @ion.IonValue::sexp([second, first, ..rest]).with_annotations(
+          value.annotations(),
+        ),
+      )
+    _ => None
+  }
+}
+
+///|
+fn flip_sequence_kind(value : @ion.IonValue) -> @ion.IonValue? {
+  match value.kind() {
+    List(items) =>
+      Some(@ion.IonValue::sexp(items).with_annotations(value.annotations()))
+    Sexp(items) =>
+      Some(@ion.IonValue::list(items).with_annotations(value.annotations()))
+    _ => None
+  }
+}
+
+///|
+fn drop_annotation(value : @ion.IonValue) -> @ion.IonValue? {
+  match value.annotations() {
+    [_, .. rest] => Some(value.with_annotations(rest.to_owned()))
+    [] => None
+  }
+}
+
+///|
+fn rename_field(value : @ion.IonValue) -> @ion.IonValue? {
+  match value.kind() {
+    Struct([first, .. rest]) => {
+      let name = first.name().text().unwrap_or("") + "_"
+      Some(
+        @ion.IonValue::from_fields(
+          [@ion.Field::new(name, first.value()), ..rest],
+        ).with_annotations(value.annotations()),
+      )
+    }
+    _ => None
+  }
+}

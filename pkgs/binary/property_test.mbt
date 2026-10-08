@@ -36,3 +36,17 @@ test "text through binary gives the same text" {
     assert_eq(@text.write_ion(back), text)
   }
 }
+
+///|
+test "values with symbols from a shared import survive binary" {
+  for
+    value in @testkit.gen_value(max_depth=6, max_width=4, imported_symbols=true).samples(
+      count=300,
+      size=8,
+    ) {
+    let back = @binary.read_binary_value(@binary.write_binary_value(value))
+    if !back.equals(value) {
+      fail("imported symbols: \{@text.write_ion(value)}")
+    }
+  }
+}

@@ -121,7 +121,10 @@ fn EventBuilder::add(
 }
 
 ///|
-fn EventBuilder::feed(self : EventBuilder, event : @text.IonEvent) -> Unit {
+fn EventBuilder::feed(
+  self : EventBuilder,
+  event : @text.IonEvent,
+) -> Unit raise Failure {
   match event {
     DocumentStart | DocumentEnd => ()
     Annotation(token) => self.pending.push(token)
@@ -142,7 +145,9 @@ fn EventBuilder::feed(self : EventBuilder, event : @text.IonEvent) -> Unit {
       self.field = None
     }
     ListEnd | SexpEnd | StructEnd => {
-      guard self.open.pop() is Some(building) else { return }
+      guard self.open.pop() is Some(building) else {
+        fail("an end event with no open container")
+      }
       let value = match building.kind {
         List => @ion.IonValue::list(building.items)
         Sexp => @ion.IonValue::sexp(building.items)
@@ -159,10 +164,17 @@ fn EventBuilder::feed(self : EventBuilder, event : @text.IonEvent) -> Unit {
 }
 
 ///|
-fn values_from_events(events : Array[@text.IonEvent]) -> Array[@ion.IonValue] {
+fn values_from_events(
+  events : Array[@text.IonEvent],
+) -> Array[@ion.IonValue] raise Failure {
   let builder : EventBuilder = { top: [], open: [], pending: [], field: None, }
   for event in events {
     builder.feed(event)
+  }
+  if !builder.open.is_empty() ||
+    !builder.pending.is_empty() ||
+    builder.field is Some(_) {
+    fail("the events end inside a value")
   }
   builder.top
 }
@@ -265,5 +277,36 @@ test "dispatch pushes the same events that the reader pulls" {
       expected.push(render_event(event))
     }
     assert_eq(pushed, expected)
+  }
+}
+
+///|
+test "values with symbols from a shared import survive text" {
+  for
+    value in @testkit.gen_value(max_depth=6, max_width=4, imported_symbols=true).samples(
+      count=300,
+      size=8,
+    ) {
+    let text = @text.write_ion(value)
+    if !@text.read_ion(text).equals(value) {
+      fail("imported symbols: \{text}")
+    }
+  }
+}
+
+///|
+test "the event rebuilder rejects unbalanced or unfinished events" {
+  let unbalanced : Array[@text.IonEvent] = [ListEnd]
+  let unclosed : Array[@text.IonEvent] = [ListStart]
+  let dangling : Array[@text.IonEvent] = [
+    Annotation(@ion.SymbolToken::new("a")),
+  ]
+  for events in [unbalanced, unclosed, dangling] {
+    let rejected = try values_from_events(events) catch {
+      _ => true
+    } noraise {
+      _ => false
+    }
+    assert_true(rejected)
   }
 }

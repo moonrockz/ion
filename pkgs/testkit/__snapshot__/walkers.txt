@@ -13,7 +13,7 @@ null.struct
 binary: e00100eadf
 hash: 87451a2e7d09b504b2d83223928095d8fc15dbf053f16bfaf30fa0579c374155
 json: null
-events: DocumentStart Scalar(struct) DocumentEnd
+events: DocumentStart Scalar(null.struct) DocumentEnd
 == value 2
 text: true
 pretty:
@@ -21,7 +21,7 @@ true
 binary: e00100ea11
 hash: cee54499d5f362b272fbd8ee6480ff547a6dc4e2d9e12733459f820e70305017
 json: true
-events: DocumentStart Scalar(bool) DocumentEnd
+events: DocumentStart Scalar(true) DocumentEnd
 == value 3
 text: -170141183460469231731687303715884105728
 pretty:
@@ -29,7 +29,7 @@ pretty:
 binary: e00100ea3e9080000000000000000000000000000000
 hash: e7af6239820e76d795b8ae6dbdaa68fc69d03c001c40d60cf26c6cd03c91a12d
 json: -170141183460469231731687303715884105728
-events: DocumentStart Scalar(int) DocumentEnd
+events: DocumentStart Scalar(-170141183460469231731687303715884105728) DocumentEnd
 == value 4
 text: -0e0
 pretty:
@@ -37,7 +37,7 @@ pretty:
 binary: e00100ea488000000000000000
 hash: 56325d7bb2990767480cc452993058d2b40ce5537fea1a54f932ae0b4a04f503
 json: 0
-events: DocumentStart Scalar(float) DocumentEnd
+events: DocumentStart Scalar(-0e0) DocumentEnd
 == value 5
 text: nan
 pretty:
@@ -45,7 +45,7 @@ nan
 binary: e00100ea487ff8000000000000
 hash: ed865017dd3f6d06e57babc02ee8c2d01538adb6316cd47163f4d813da2b989d
 json: null
-events: DocumentStart Scalar(float) DocumentEnd
+events: DocumentStart Scalar(nan) DocumentEnd
 == value 6
 text: +inf
 pretty:
@@ -53,7 +53,7 @@ pretty:
 binary: e00100ea487ff0000000000000
 hash: 9985ead983f1939d381b22e30678e09c74369b7707dc3f17c2fd5e6ce424d463
 json: null
-events: DocumentStart Scalar(float) DocumentEnd
+events: DocumentStart Scalar(+inf) DocumentEnd
 == value 7
 text: -0.00
 pretty:
@@ -61,7 +61,7 @@ pretty:
 binary: e00100ea52c280
 hash: e597d6cccdbff558947613b2dda053dd84e0051f36affda3222945d5b814a547
 json: -0.00
-events: DocumentStart Scalar(decimal) DocumentEnd
+events: DocumentStart Scalar(-0.00) DocumentEnd
 == value 8
 text: 2026-10-08T12:34:56.789-07:00
 pretty:
@@ -69,7 +69,7 @@ pretty:
 binary: e00100ea6c43a40fea8a8893a2b8c30315
 hash: 9208ef1606599bf396fd9b6bfda4905e3228f2f78ab6c9f67c378ea33244ec83
 json: "2026-10-08T12:34:56.789-07:00"
-events: DocumentStart Scalar(timestamp) DocumentEnd
+events: DocumentStart Scalar(2026-10-08T12:34:56.789-07:00) DocumentEnd
 == value 9
 text: 2026T
 pretty:
@@ -77,7 +77,7 @@ pretty:
 binary: e00100ea63c00fea
 hash: d54bfc8662b7d82aafe185c64ae33f147f474539a5d250b97b272cd87658edb6
 json: "2026T"
-events: DocumentStart Scalar(timestamp) DocumentEnd
+events: DocumentStart Scalar(2026T) DocumentEnd
 == value 10
 text: 'a b'
 pretty:
@@ -85,7 +85,7 @@ pretty:
 binary: e00100eae98183d687b483612062710a
 hash: a1b5f23d68c854196e4b18b66654f30dd2c33a7c380fff76ee2d45ede2c44494
 json: "a b"
-events: DocumentStart Scalar(symbol) DocumentEnd
+events: DocumentStart Scalar('a b') DocumentEnd
 == value 11
 text: "tab\tquote\" é 😀"
 pretty:
@@ -93,7 +93,7 @@ pretty:
 binary: e00100ea8e927461620971756f74652220c3a920f09f9880
 hash: 4bf8ec252fffccbd146cf6710d21057196f563deb9dfe1ec9cd03fb9c708774c
 json: "tab\tquote\" é 😀"
-events: DocumentStart Scalar(string) DocumentEnd
+events: DocumentStart Scalar("tab\tquote\" é 😀") DocumentEnd
 == value 12
 text: {{ "clob\x00" }}
 pretty:
@@ -101,7 +101,7 @@ pretty:
 binary: e00100ea95636c6f6200
 hash: ca5ddabe70161bbb6e795b77f10df2f2d00c9719b125832bb23aa19f4ffef471
 json: "clob\u0000"
-events: DocumentStart Scalar(clob) DocumentEnd
+events: DocumentStart Scalar({{ "clob\x00" }}) DocumentEnd
 == value 13
 text: {{ aGVsbG8= }}
 pretty:
@@ -109,7 +109,7 @@ pretty:
 binary: e00100eaa568656c6c6f
 hash: da20f4be16236f28f09fb736dac5ef9b1c5bb403f2bcb6850d191a46926d0729
 json: "aGVsbG8="
-events: DocumentStart Scalar(blob) DocumentEnd
+events: DocumentStart Scalar({{ aGVsbG8= }}) DocumentEnd
 == value 14
 text: [1, [2, [3, []]], ()]
 pretty:
@@ -127,7 +127,7 @@ pretty:
 binary: e00100eaba2101b62102b32103b0c0
 hash: c4432a13efac629bdbfedfdff762393f349fc5521035a70e10859e1018fc53c7
 json: [1,[2,[3,[]]],[]]
-events: DocumentStart ListStart Scalar(int) ListStart Scalar(int) ListStart Scalar(int) ListStart ListEnd ListEnd ListEnd SexpStart SexpEnd ListEnd DocumentEnd
+events: DocumentStart ListStart Scalar(1) ListStart Scalar(2) ListStart Scalar(3) ListStart ListEnd ListEnd ListEnd SexpStart SexpEnd ListEnd DocumentEnd
 == value 15
 text: (+ 1 (* a b) '//' "s")
 pretty:
@@ -145,7 +145,7 @@ pretty:
 binary: e00100eaee908183dd87bb812b812a81618162822f2fce8f710a2101c6710b710c710d710e8173
 hash: 19593212085dc99390a95e1df4a1bd4f48ae8ee8e911c57bb92059345a236a4a
 json: ["+",1,["*","a","b"],"//","s"]
-events: DocumentStart SexpStart Scalar(symbol) Scalar(int) SexpStart Scalar(symbol) Scalar(symbol) Scalar(symbol) SexpEnd Scalar(symbol) Scalar(string) SexpEnd DocumentEnd
+events: DocumentStart SexpStart Scalar('+') Scalar(1) SexpStart Scalar('*') Scalar(a) Scalar(b) SexpEnd Scalar('//') Scalar("s") SexpEnd DocumentEnd
 == value 16
 text: {a: 1, a: 2, 'b c': {d: [x::y::1]}, e: null.list}
 pretty:
@@ -162,7 +162,7 @@ pretty:
 binary: e00100eaee958183de9187be8e8161836220638164817881798165de928a21018a21028bd88cb6e5828d8e21018fbf
 hash: b7044f574b5b0022dd10e5c1b8d06be9031a7b2f4f5ee220c937a08e93a4be46
 json: {"a":2,"b c":{"d":[1]},"e":null}
-events: DocumentStart StructStart FieldName(a) Scalar(int) FieldName(a) Scalar(int) FieldName(b c) StructStart FieldName(d) ListStart Annotation(x) Annotation(y) Scalar(int) ListEnd StructEnd FieldName(e) Scalar(list) StructEnd DocumentEnd
+events: DocumentStart StructStart FieldName(a) Scalar(1) FieldName(a) Scalar(2) FieldName('b c') StructStart FieldName(d) ListStart Annotation(x) Annotation(y) Scalar(1) ListEnd StructEnd FieldName(e) Scalar(null.list) StructEnd DocumentEnd
 == value 17
 text: ann::'two words'::{}
 pretty:
@@ -170,7 +170,7 @@ ann::'two words'::{}
 binary: e00100eaee958183de9187be8e83616e6e8974776f20776f726473e4828a8bd0
 hash: d2f8a42814a40ad124095d56c6ec58c8f779e06dd3d9d06446deb26193702d84
 json: {}
-events: DocumentStart Annotation(ann) Annotation(two words) StructStart StructEnd DocumentEnd
+events: DocumentStart Annotation(ann) Annotation('two words') StructStart StructEnd DocumentEnd
 == value 18
 text: $ion_symbol_table::{symbols: [null, null]}
 [local, $11, $0]
@@ -189,7 +189,7 @@ $ion_symbol_table::{
 binary: e00100eaed8183da87b80f0f856c6f63616cb5710c710b70
 hash: error: cannot hash a symbol whose text is unknown
 json: error: a symbol known only by symbol ID 11 has no text to convert to JSON
-events: DocumentStart ListStart Scalar(symbol) Scalar(symbol) Scalar(symbol) ListEnd DocumentEnd
+events: DocumentStart ListStart Scalar(local) Scalar($11) Scalar($0) ListEnd DocumentEnd
 == value 19
 text: {$0: $0}
 pretty:
@@ -199,7 +199,7 @@ pretty:
 binary: e00100ead28070
 hash: 7ba39acba8e4918db3370e3f384b1da89c7d174bb140521e79e7ba3b71347d84
 json: error: a symbol known only by symbol ID 0 has no text to convert to JSON
-events: DocumentStart StructStart FieldName($<unknown>) Scalar(symbol) StructEnd DocumentEnd
+events: DocumentStart StructStart FieldName($0) Scalar($0) StructEnd DocumentEnd
 == value 20
 text: deep::[{a: (b {c: [d]})}]
 pretty:
@@ -218,4 +218,22 @@ deep::[
 binary: e00100eaee938183de8f87bd84646565708161816281638164ed818abad98bc7710cd48db2710e
 hash: ed05e72c5ba3a0682a2719efe7af370dfbb2808680751b380529020c239565e2
 json: [{"a":["b",{"c":["d"]}]}]
-events: DocumentStart Annotation(deep) ListStart StructStart FieldName(a) SexpStart Scalar(symbol) StructStart FieldName(c) ListStart Scalar(symbol) ListEnd StructEnd SexpEnd StructEnd ListEnd DocumentEnd
+events: DocumentStart Annotation(deep) ListStart StructStart FieldName(a) SexpStart Scalar(b) StructStart FieldName(c) ListStart Scalar(d) ListEnd StructEnd SexpEnd StructEnd ListEnd DocumentEnd
+== value 21
+text: {f: g::h::i, s: (x::[1] y::{z: w::2})}
+pretty:
+{
+  f: g::h::i,
+  s: (
+    x::[
+      1
+    ]
+    y::{
+      z: w::2
+    }
+  )
+}
+binary: e00100eaee998183de9587be928166816781688169817381788179817a8177de9a8ae5828b8c710d8ece90e5818fb22101e98190d691e481922102
+hash: d1965f3a90c083df96c52070706b5ffe2003eb1fb8410b07a14af8dc6610daa3
+json: {"f":"i","s":[[1],{"z":2}]}
+events: DocumentStart StructStart FieldName(f) Annotation(g) Annotation(h) Scalar(i) FieldName(s) SexpStart Annotation(x) ListStart Scalar(1) ListEnd Annotation(y) StructStart FieldName(z) Annotation(w) Scalar(2) StructEnd SexpEnd StructEnd DocumentEnd

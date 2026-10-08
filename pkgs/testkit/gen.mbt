@@ -28,6 +28,14 @@ let unknown_tokens : Array[@ion.SymbolToken] = [
 ]
 
 ///|
+/// Symbols with no text from slots 1 and 2 of version 1 of the shared table
+/// `shared`, each with the stream-local ID a reader would give it.
+let imported_tokens : Array[@ion.SymbolToken] = [
+  @ion.SymbolToken::from_import(10, "shared", 1, 1),
+  @ion.SymbolToken::from_import(11, "shared", 1, 2),
+]
+
+///|
 let big_ints : Array[BigInt] = [
   BigInt::from_int64(9_223_372_036_854_775_807L) * BigInt::from_int(1000),
   BigInt::from_int64(-9_223_372_036_854_775_807L) * BigInt::from_int(1000),
@@ -53,21 +61,24 @@ let float_samples : Array[Double] = [
 /// decimals with negative zero and exponents, timestamps at every precision,
 /// and NaN, infinite and negative-zero floats. With `unknown_symbols` (the
 /// default) some symbols, field names and annotations have no text: `$0` or a
-/// reserved local ID.
+/// reserved local ID. With `imported_symbols` some also come from a shared
+/// table whose text is unknown.
 pub fn gen_value(
   max_depth~ : Int,
   max_width~ : Int,
   unknown_symbols? : Bool = true,
+  imported_symbols? : Bool = false,
 ) -> @quickcheck.Generator[@ion.IonValue] {
-  let texts = @quickcheck.elements(symbol_texts).map(@ion.SymbolToken::new)
-  let tokens = if unknown_symbols {
-    @quickcheck.frequency([
-      (4U, texts),
-      (1U, @quickcheck.elements(unknown_tokens)),
-    ])
-  } else {
-    texts
+  let choices = [
+    (8U, @quickcheck.elements(symbol_texts).map(@ion.SymbolToken::new)),
+  ]
+  if unknown_symbols {
+    choices.push((2U, @quickcheck.elements(unknown_tokens)))
   }
+  if imported_symbols {
+    choices.push((2U, @quickcheck.elements(imported_tokens)))
+  }
+  let tokens = @quickcheck.frequency(choices)
   value_gen(tokens, max_depth, max_width)
 }
 

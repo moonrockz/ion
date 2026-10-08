@@ -72,9 +72,11 @@ test "equals agrees with the reference on generated pairs and near misses" {
       @testkit.change_one_leaf(a, index),
       @testkit.reverse_fields(a),
       @text.read_ion(@text.write_ion(a)),
+      ..@testkit.near_misses(a),
     ]
     for b in candidates {
-      if a.equals(b) != @testkit.reference_equals(a, b) {
+      let expected = @testkit.reference_equals(a, b)
+      if a.equals(b) != expected || b.equals(a) != expected {
         fail("disagree on \{@text.write_ion(a)} and \{@text.write_ion(b)}")
       }
     }
