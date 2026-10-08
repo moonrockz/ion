@@ -38,3 +38,22 @@ test "struct hashing ignores field order" {
     @hash.ion_hash_hex(@ion.IonValue::from_fields(fields.rev()))
   })
 }
+
+///|
+test "a value has one hash, read from text or from binary" {
+  for
+    value in @testkit.gen_value(max_depth=6, max_width=4, unknown_symbols=false).samples(
+      count=300,
+      size=8,
+    ) {
+    let from_text = @text.read_ion(@text.write_ion(value))
+    let from_binary = @binary.read_binary_value(
+      @binary.write_binary_value(value),
+    )
+    let expected = @hash.ion_hash(value)
+    if @hash.ion_hash(from_text) != expected ||
+      @hash.ion_hash(from_binary) != expected {
+      fail("hash differs for \{@text.write_ion(value)}")
+    }
+  }
+}
