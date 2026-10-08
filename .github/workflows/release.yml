@@ -87,10 +87,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # release:tag runs a MoonBit script.
+      - uses: hustcer/setup-moonbit@v1
+
       - uses: jdx/mise-action@v2
         with:
           install: true
           cache: true
+
+      - name: Install dependencies
+        run: mise run setup:deps
 
       - name: Create and push the tag
         env:
@@ -180,10 +186,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # release:prepare-assets and release:notes run a MoonBit script.
+      - uses: hustcer/setup-moonbit@v1
+
       - uses: jdx/mise-action@v2
         with:
           install: true
           cache: true
+
+      - name: Install dependencies
+        run: mise run setup:deps
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
