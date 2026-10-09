@@ -106,19 +106,8 @@ pub fn SymbolTable::for_values(
 /// Match encoder traversal: annotations, then value; struct names precede
 /// their values. This gives batch and incremental writers the same IDs.
 fn collect_writer_tokens(value : IonValue, tokens : Array[SymbolToken]) -> Unit {
-  tokens.append(value.annotations())
-  match value.kind() {
-    Symbol(token) => tokens.push(token)
-    List(items) | Sexp(items) =>
-      for item in items {
-        collect_writer_tokens(item, tokens)
-      }
-    Struct(fields) =>
-      for field in fields {
-        tokens.push(field.name())
-        collect_writer_tokens(field.value(), tokens)
-      }
-    _ => ()
+  for token in value.tokens() {
+    tokens.push(token)
   }
 }
 

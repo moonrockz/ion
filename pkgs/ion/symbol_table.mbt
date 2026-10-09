@@ -215,21 +215,8 @@ pub fn highest_symbol_id(values : Array[IonValue]) -> Int32 {
 /// `highest_symbol_id` for one value.
 fn value_highest_symbol_id(value : IonValue) -> Int32 {
   let mut highest = 0
-  for annotation in value.annotations() {
-    highest = @cmp.maximum(highest, token_symbol_id(annotation))
-  }
-  match value.kind() {
-    Symbol(token) => highest = @cmp.maximum(highest, token_symbol_id(token))
-    List(items) | Sexp(items) =>
-      for item in items {
-        highest = @cmp.maximum(highest, value_highest_symbol_id(item))
-      }
-    Struct(fields) =>
-      for field in fields {
-        highest = @cmp.maximum(highest, token_symbol_id(field.name()))
-        highest = @cmp.maximum(highest, value_highest_symbol_id(field.value()))
-      }
-    _ => ()
+  for token in value.tokens() {
+    highest = @cmp.maximum(highest, token_symbol_id(token))
   }
   highest
 }
@@ -488,31 +475,12 @@ fn SymbolTable::resolve_token(
 /// Whether a value holds a symbol known only by a nonzero ID, in an
 /// annotation, a field name, or a symbol value at any depth.
 fn has_symbol_ids(value : IonValue) -> Bool {
-  for annotation in value.annotations() {
-    if is_symbol_id(annotation) {
+  for token in value.tokens() {
+    if is_symbol_id(token) {
       return true
     }
   }
-  match value.kind() {
-    Symbol(token) => is_symbol_id(token)
-    List(items) | Sexp(items) => {
-      for item in items {
-        if has_symbol_ids(item) {
-          return true
-        }
-      }
-      false
-    }
-    Struct(fields) => {
-      for field in fields {
-        if is_symbol_id(field.name()) || has_symbol_ids(field.value()) {
-          return true
-        }
-      }
-      false
-    }
-    _ => false
-  }
+  false
 }
 
 ///|
