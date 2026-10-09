@@ -429,7 +429,8 @@ fn is_local_symbol_table_annotation(value : IonValue) -> Bool {
 /// `value` with text for every symbol ID the table defines, in its
 /// annotations, field names, and symbol values at any depth. A symbol ID the
 /// table leaves without text retains its import location when applicable,
-/// and an ID beyond the table raises, as `lookup` does.
+/// and an ID beyond the table raises, as `lookup` does: for the first such ID
+/// in document order.
 pub fn SymbolTable::resolve(
   self : SymbolTable,
   value : IonValue,
@@ -437,23 +438,7 @@ pub fn SymbolTable::resolve(
   if !has_symbol_ids(value) {
     return value
   }
-  let annotations = value.annotations().map(token => self.resolve_token(token))
-  let resolved = match value.kind() {
-    Symbol(token) => IonValue::symbol_token(self.resolve_token(token))
-    List(items) => IonValue::list(items.map(item => self.resolve(item)))
-    Sexp(items) => IonValue::sexp(items.map(item => self.resolve(item)))
-    Struct(fields) =>
-      IonValue::from_fields(
-        fields.map(field => {
-          Field::from_token(
-            self.resolve_token(field.name()),
-            self.resolve(field.value()),
-          )
-        }),
-      )
-    _ => value
-  }
-  resolved.with_annotations(annotations)
+  value.map_tokens(token => self.resolve_token(token))
 }
 
 ///|

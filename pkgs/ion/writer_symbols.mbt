@@ -179,30 +179,11 @@ pub fn SymbolTable::localize_for_text(
   self : SymbolTable,
   value : IonValue,
 ) -> IonValue raise IonError {
-  let rewrite = fn(token : SymbolToken) -> SymbolToken raise IonError {
+  value.map_tokens(token => {
     if token.text is Some(_) {
       token
     } else {
       SymbolToken::from_sid(self.writer_token_id(token))
     }
-  }
-  let annotations = value.annotations().map(rewrite)
-  let mapped = match value.kind() {
-    Symbol(token) => IonValue::symbol_token(rewrite(token))
-    List(items) =>
-      IonValue::list(items.map(item => self.localize_for_text(item)))
-    Sexp(items) =>
-      IonValue::sexp(items.map(item => self.localize_for_text(item)))
-    Struct(fields) =>
-      IonValue::from_fields(
-        fields.map(field => {
-          Field::from_token(
-            rewrite(field.name()),
-            self.localize_for_text(field.value()),
-          )
-        }),
-      )
-    _ => value
-  }
-  mapped.with_annotations(annotations)
+  })
 }
