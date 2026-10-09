@@ -59,11 +59,15 @@ impl IonVisitor with fn visit_struct(_self, _fields) {
 /// (struct field names precede their values). The walk uses no recursion, so
 /// it works at any nesting depth.
 pub fn IonValue::accept(self : IonValue, visitor : &IonVisitor) -> Unit {
-  for event in self.walk() {
-    let (value, field) = match event {
-      Scalar(value, field~) | Enter(value, field~) => (value, field)
-      Exit(_, ..) => continue
+  let walker = self.walker()
+  while true {
+    match walker.step() {
+      AtScalar | AtEnter => ()
+      AtExit => continue
+      Done => break
     }
+    let value = walker.current
+    let field = walker.current_field
     if field is Some(name) {
       visitor.visit_field_name(name)
     }

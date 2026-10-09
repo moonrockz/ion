@@ -100,11 +100,14 @@ fn[A] fold_value(
 ) -> FoldAction[A] {
   let walker = value.walker()
   let mut acc = acc
-  while walker.next() is Some(event) {
-    let (current, field) = match event {
-      Scalar(current, field~) | Enter(current, field~) => (current, field)
-      Exit(_, ..) => continue
+  while true {
+    match walker.step() {
+      AtScalar | AtEnter => ()
+      AtExit => continue
+      Done => break
     }
+    let current = walker.current
+    let field = walker.current_field
     if field is Some(name) {
       match (folder.visit_field_name)(acc, name) {
         Stop(a) => return Stop(a)

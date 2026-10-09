@@ -23,18 +23,13 @@ pub(all) enum WalkEvent {
 pub extend WalkEvent with @debug.Debug::{to_repr}
 
 ///|
-/// The children of a container that the walker is inside.
-priv enum WalkChildren {
-  Items(Array[IonValue])
-  Fields(Array[Field])
-}
-
-///|
-fn WalkChildren::length(self : WalkChildren) -> Int {
-  match self {
-    Items(items) => items.length()
-    Fields(fields) => fields.length()
-  }
+/// Where the last step of a walk arrived. The walker's `current` and
+/// `current_field` hold the value it arrived at, so a step allocates nothing.
+priv enum WalkStep {
+  AtScalar
+  AtEnter
+  AtExit
+  Done
 }
 
 ///|
@@ -42,7 +37,6 @@ fn WalkChildren::length(self : WalkChildren) -> Int {
 priv struct WalkFrame {
   value : IonValue
   field : SymbolToken?
-  children : WalkChildren
   mut next : Int
 }
 
@@ -52,58 +46,83 @@ priv struct WalkFrame {
 /// it returns `None`.
 pub struct ValueWalker {
   priv frames : Array[WalkFrame]
-  priv mut root : IonValue?
+  priv mut started : Bool
   priv mut entered : Bool
+  priv mut current : IonValue
+  priv mut current_field : SymbolToken?
 }
 
 ///|
 /// A walker positioned before `self`.
 pub fn IonValue::walker(self : IonValue) -> ValueWalker {
-  { frames: [], root: Some(self), entered: false, }
+  {
+    frames: [],
+    started: false,
+    entered: false,
+    current: self,
+    current_field: None,
+  }
 }
 
 ///|
 /// The next event of the walk, or `None` when the walk is complete.
 pub fn ValueWalker::next(self : ValueWalker) -> WalkEvent? {
-  self.entered = false
-  if self.root is Some(value) {
-    self.root = None
-    return Some(self.visit(value, None))
+  match self.step() {
+    AtScalar => Some(Scalar(self.current, field=self.current_field))
+    AtEnter => Some(Enter(self.current, field=self.current_field))
+    AtExit => Some(Exit(self.current, field=self.current_field))
+    Done => None
   }
-  guard self.frames.last() is Some(frame) else { return None }
-  match frame.children {
-    Items(items) if frame.next < items.length() => {
-      let item = items[frame.next]
-      frame.next += 1
-      Some(self.visit(item, None))
+}
+
+///|
+/// Advance the walk by one event and record where it arrived. The library's
+/// own walkers call this in place of [`ValueWalker::next`], so they build no
+/// `WalkEvent` per value.
+fn ValueWalker::step(self : ValueWalker) -> WalkStep {
+  self.entered = false
+  if !self.started {
+    self.started = true
+    return self.arrive(self.current, None)
+  }
+  guard self.frames.last() is Some(frame) else { return Done }
+  let index = frame.next
+  match frame.value.kind {
+    List(items) | Sexp(items) if index < items.length() => {
+      frame.next = index + 1
+      self.arrive(items[index], None)
     }
-    Fields(fields) if frame.next < fields.length() => {
-      let field = fields[frame.next]
-      frame.next += 1
-      Some(self.visit(field.value, Some(field.name)))
+    Struct(fields) if index < fields.length() => {
+      frame.next = index + 1
+      let field = fields[index]
+      self.arrive(field.value, Some(field.name))
     }
     _ => {
       ignore(self.frames.pop())
-      Some(Exit(frame.value, field=frame.field))
+      self.current = frame.value
+      self.current_field = frame.field
+      AtExit
     }
   }
 }
 
 ///|
-/// The event for `value`. A container also opens a frame for its children.
-fn ValueWalker::visit(
+/// Arrive at `value`. A container also opens a frame for its children.
+fn ValueWalker::arrive(
   self : ValueWalker,
   value : IonValue,
   field : SymbolToken?,
-) -> WalkEvent {
-  let children = match value.kind {
-    List(items) | Sexp(items) => WalkChildren::Items(items)
-    Struct(fields) => WalkChildren::Fields(fields)
-    _ => return Scalar(value, field~)
+) -> WalkStep {
+  self.current = value
+  self.current_field = field
+  match value.kind {
+    List(_) | Sexp(_) | Struct(_) => {
+      self.frames.push({ value, field, next: 0, })
+      self.entered = true
+      AtEnter
+    }
+    _ => AtScalar
   }
-  self.frames.push({ value, field, children, next: 0, })
-  self.entered = true
-  Enter(value, field~)
 }
 
 ///|
@@ -112,7 +131,11 @@ fn ValueWalker::visit(
 /// it does nothing.
 pub fn ValueWalker::skip_children(self : ValueWalker) -> Unit {
   if self.entered && self.frames.last() is Some(frame) {
-    frame.next = frame.children.length()
+    frame.next = match frame.value.kind {
+      List(items) | Sexp(items) => items.length()
+      Struct(fields) => fields.length()
+      _ => frame.next
+    }
   }
 }
 
