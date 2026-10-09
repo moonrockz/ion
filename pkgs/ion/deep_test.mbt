@@ -16,7 +16,6 @@ let shapes : Array[@testkit.DeepShape] = [
 ]
 
 ///|
-#skip("ion-dql.3: IonValue::equals recurses once per level")
 test "equals compares values 100,000 levels deep" {
   for shape in shapes {
     let a = @testkit.deep_value(shape, deep)
