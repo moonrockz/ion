@@ -78,3 +78,30 @@ test "null.list differs from an empty list, and a list from a sexp" {
   assert_true(!same("[]", "()"))
   assert_true(!same("{a: []}", "{a: ()}"))
 }
+
+///|
+test "repeated field names match as a multiset when the first pairing differs" {
+  assert_true(same("{a: {x: 1}, a: {x: 2}}", "{a: {x: 2}, a: {x: 1}}"))
+  assert_true(same("{b: 0, a: [1], a: [2]}", "{a: [2], b: 0, a: [1]}"))
+  assert_true(!same("{a: {x: 1}, a: {x: 2}}", "{a: {x: 2}, a: {x: 2}}"))
+}
+
+///|
+test "repeated field names match as a multiset 100,000 levels deep" {
+  let deep = @testkit.deep_value(Mixed, 100_000)
+  let one = @ion.IonValue::int(1)
+  let a = @ion.IonValue::from_fields([
+    @ion.Field::new("a", deep),
+    @ion.Field::new("a", one),
+  ])
+  let b = @ion.IonValue::from_fields([
+    @ion.Field::new("a", one),
+    @ion.Field::new("a", deep),
+  ])
+  assert_true(a.equals(b))
+  let other = @ion.IonValue::from_fields([
+    @ion.Field::new("a", one),
+    @ion.Field::new("a", @testkit.deep_value(Mixed, 99_999)),
+  ])
+  assert_true(!a.equals(other))
+}

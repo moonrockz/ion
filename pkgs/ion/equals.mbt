@@ -1,10 +1,16 @@
 // Structural equality of Ion values, with no recursion.
 //
-// Two values are compared in lockstep with a stack of value pairs, and the
-// walk returns at the first difference. Struct fields are an unordered
-// multiset, so for each pair of structs every field value gets an integer
-// class ID, bottom-up with `fold_up`: equal values get equal IDs. The two
-// structs are then equal when their sorted (field name, class ID) keys are.
+// Two values are compared in lockstep on a stack of frames, one frame for
+// each pair of containers being compared. Each frame compares its children
+// as pairs: list and S-expression items by position, struct fields by name.
+// Struct fields are an unordered multiset. When the names line up by
+// position, the fields pair by position; otherwise both field arrays are
+// sorted by name and pair in that order. When the names are all different,
+// that pairing is the only one possible, so its result is final. When names
+// repeat and the pairing finds a difference, another pairing could still
+// match, so the struct falls back to class IDs: every field value gets an
+// integer class ID, bottom-up with `fold_up`, and the two structs are equal
+// when their sorted (field name, class ID) keys are.
 
 ///|
 /// Structural equality following the Ion data model: annotations must match in
@@ -12,26 +18,159 @@
 /// and sexp elements are compared pairwise, and struct fields are compared as
 /// an unordered multiset. It works at any nesting depth.
 pub fn IonValue::equals(self : IonValue, other : IonValue) -> Bool {
-  let pairs : Array[(IonValue, IonValue)] = [(self, other)]
+  let frames : Array[PairFrame] = []
   let classes = ValueClasses::new()
-  while pairs.pop() is Some((a, b)) {
-    if !annotations_equal(a.annotations, b.annotations) {
-      return false
-    }
-    match (a.kind, b.kind) {
-      (List(x), List(y)) | (Sexp(x), Sexp(y)) => {
-        if x.length() != y.length() {
-          return false
-        }
-        for index = x.length() - 1; index >= 0; index = index - 1 {
-          pairs.push((x[index], y[index]))
-        }
+  let mut result = begin_pair(self, other, frames)
+  while frames.last() is Some(frame) {
+    result = frame.advance(result, frames, classes)
+  }
+  result is Some(true)
+}
+
+///|
+/// The children that a frame compares in pairs.
+priv enum PairChildren {
+  Items(Array[IonValue], Array[IonValue])
+  Fields(Array[Field], Array[Field])
+}
+
+///|
+/// A pair of containers being compared, and the index of the next pair of
+/// children to compare.
+priv struct PairFrame {
+  children : PairChildren
+  mut next : Int
+}
+
+///|
+/// Start comparing `a` and `b`. Returns the result when it is known at once,
+/// or `None` after pushing a frame for a pair of containers.
+fn begin_pair(a : IonValue, b : IonValue, frames : Array[PairFrame]) -> Bool? {
+  if !annotations_equal(a.annotations, b.annotations) {
+    return Some(false)
+  }
+  match (a.kind, b.kind) {
+    (List(x), List(y)) | (Sexp(x), Sexp(y)) => {
+      if x.length() != y.length() {
+        return Some(false)
       }
-      (Struct(x), Struct(y)) => if !classes.fields_equal(x, y) { return false }
-      (x, y) => if !scalars_equal(x, y) { return false }
+      frames.push({ children: Items(x, y), next: 0, })
+      None
+    }
+    (Struct(x), Struct(y)) => {
+      guard pair_fields(x, y) is Some((left, right)) else { return Some(false) }
+      frames.push({ children: Fields(left, right), next: 0, })
+      None
+    }
+    (x, y) => Some(scalars_equal(x, y))
+  }
+}
+
+///|
+/// Continue the comparison of this frame, the top of `frames`. `result` is
+/// the result of its last pair of children, or `None` when the frame is new.
+/// Returns `None` after pushing a frame for a pair of child containers, or
+/// the frame's result after popping it.
+fn PairFrame::advance(
+  self : PairFrame,
+  result : Bool?,
+  frames : Array[PairFrame],
+  classes : ValueClasses,
+) -> Bool? {
+  if result is Some(false) {
+    return self.finish_unequal(frames, classes)
+  }
+  let length = match self.children {
+    Items(left, _) => left.length()
+    Fields(left, _) => left.length()
+  }
+  while self.next < length {
+    let index = self.next
+    self.next = index + 1
+    let child = match self.children {
+      Items(left, right) => begin_pair(left[index], right[index], frames)
+      Fields(left, right) =>
+        begin_pair(left[index].value, right[index].value, frames)
+    }
+    match child {
+      None => return None
+      Some(true) => ()
+      Some(false) => return self.finish_unequal(frames, classes)
     }
   }
-  true
+  ignore(frames.pop())
+  Some(true)
+}
+
+///|
+/// Pop this frame after a pair of its children differed. Items are then
+/// unequal. Fields are unequal too, unless a name repeats: then another
+/// pairing of the fields could match, and class IDs decide.
+fn PairFrame::finish_unequal(
+  self : PairFrame,
+  frames : Array[PairFrame],
+  classes : ValueClasses,
+) -> Bool? {
+  ignore(frames.pop())
+  match self.children {
+    Items(_, _) => Some(false)
+    Fields(left, right) =>
+      Some(has_repeated_names(left) && classes.fields_equal(left, right))
+  }
+}
+
+///|
+/// The two field arrays in an order that pairs equivalent names: as they are
+/// when the names line up by position, else both sorted by name. `None` when
+/// the names differ, so the structs are unequal.
+fn pair_fields(
+  a : Array[Field],
+  b : Array[Field],
+) -> (Array[Field], Array[Field])? {
+  if a.length() != b.length() {
+    return None
+  }
+  let mut aligned = true
+  for index in 0..<a.length() {
+    if !a[index].name.equivalent(b[index].name) {
+      aligned = false
+      break
+    }
+  }
+  if aligned {
+    return Some((a, b))
+  }
+  let left = a.map(field => (symbol_key(field.name), field))
+  let right = b.map(field => (symbol_key(field.name), field))
+  left.sort_by_key(entry => entry.0)
+  right.sort_by_key(entry => entry.0)
+  for index in 0..<left.length() {
+    if left[index].0 != right[index].0 {
+      return None
+    }
+  }
+  Some((left.map(entry => entry.1), right.map(entry => entry.1)))
+}
+
+///|
+/// Whether two fields in `fields` have equivalent names.
+fn has_repeated_names(fields : Array[Field]) -> Bool {
+  let keys = fields.map(field => symbol_key(field.name))
+  keys.sort()
+  for index in 1..<keys.length() {
+    if keys[index] == keys[index - 1] {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// A key that is equal for two tokens exactly when `equivalent` holds.
+fn symbol_key(token : SymbolToken) -> String {
+  let buffer = StringBuilder()
+  write_symbol_key(buffer, token)
+  buffer.to_string()
 }
 
 ///|
