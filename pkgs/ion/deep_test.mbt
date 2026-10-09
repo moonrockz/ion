@@ -28,7 +28,6 @@ test "equals compares values 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.2: fold_value recurses once per level")
 test "fold visits every value 100,000 levels deep" {
   for shape in shapes {
     let count = @testkit.deep_value(shape, deep).fold(0, {
@@ -40,7 +39,6 @@ test "fold visits every value 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.2: IonValue::accept recurses once per level")
 test "the visitor visits every value 100,000 levels deep" {
   for shape in shapes {
     let counter : ValueCounter = { count: 0, }
@@ -50,7 +48,6 @@ test "the visitor visits every value 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.2: has_imported_symbols runs on fold_value, which recurses")
 test "has_imported_symbols finds a symbol 100,000 levels deep" {
   let leaf = @ion.IonValue::symbol_token(
     @ion.SymbolToken::from_import(10, "shared", 1, 1),

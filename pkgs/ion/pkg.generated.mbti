@@ -151,6 +151,7 @@ pub fn IonValue::decimal(Decimal) -> Self
 pub fn IonValue::equals(Self, Self) -> Bool
 pub fn IonValue::float(Double) -> Self
 pub fn[A] IonValue::fold(Self, A, IonFold[A]) -> A
+pub fn[R] IonValue::fold_up(Self, scalar~ : (Self) -> R raise?, container~ : (Self, Array[(SymbolToken?, R)]) -> R raise?) -> R raise?
 pub fn IonValue::from_fields(Array[Field]) -> Self
 pub fn IonValue::has_annotations(Self) -> Bool
 pub fn IonValue::has_imported_symbols(Self) -> Bool
@@ -169,6 +170,8 @@ pub fn IonValue::timestamp(Timestamp) -> Self
 pub fn IonValue::to_repr(Self) -> @debug.Repr
 pub fn IonValue::typed_null(IonType) -> Self
 pub fn IonValue::untyped_null() -> Self
+pub fn IonValue::walk(Self) -> Iter[WalkEvent]
+pub fn IonValue::walker(Self) -> ValueWalker
 pub fn IonValue::with_annotation(Self, SymbolToken) -> Self
 pub fn IonValue::with_annotations(Self, Array[SymbolToken]) -> Self
 
@@ -294,6 +297,20 @@ pub fn TimestampPrecision::hash(Self) -> Int
 pub fn TimestampPrecision::hash_combine(Self, Hasher) -> Unit
 pub fn TimestampPrecision::not_equal(Self, Self) -> Bool
 pub fn TimestampPrecision::to_repr(Self) -> @debug.Repr
+
+pub struct ValueWalker {
+  // private fields
+}
+pub fn ValueWalker::depth(Self) -> Int
+pub fn ValueWalker::next(Self) -> WalkEvent?
+pub fn ValueWalker::skip_children(Self) -> Unit
+
+pub(all) enum WalkEvent {
+  Scalar(IonValue, field~ : SymbolToken?)
+  Enter(IonValue, field~ : SymbolToken?)
+  Exit(IonValue, field~ : SymbolToken?)
+} derive(@debug.Debug)
+pub fn WalkEvent::to_repr(Self) -> @debug.Repr
 
 pub struct WritePosition {
   depth : Int
