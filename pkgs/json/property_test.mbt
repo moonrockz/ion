@@ -126,3 +126,17 @@ test "a decimal renders as a valid JSON number" {
     true
   })
 }
+
+///|
+test "generated JSON survives a trip through Ion" {
+  for
+    json in @testkit.gen_json(max_depth=6, max_width=4).samples(
+      count=300,
+      size=8,
+    ) {
+    let back = @json.to_json(@json.to_ion(json))
+    if !json_equal(back, json) {
+      fail("JSON \{json.stringify()} came back as \{back.stringify()}")
+    }
+  }
+}

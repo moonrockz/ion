@@ -43,6 +43,16 @@ Feature: Native performance benchmarks
       many/write-binary-sync
       many/write-binary-stream
       many/hash
+      many/equals
+      many/fold
+      many/visitor
+      many/events
+      many/dispatch
+      many/write-text-pretty
+      many/to-json
+      many/to-ion
+      many/resolve
+      many/localize
       large/read-text-sync
       large/read-text-stream
       large/read-binary-sync
@@ -52,8 +62,56 @@ Feature: Native performance benchmarks
       large/write-binary-sync
       large/write-binary-stream
       large/hash
+      large/equals
+      large/fold
+      large/visitor
+      large/events
+      large/dispatch
+      large/write-text-pretty
+      large/to-json
+      large/to-ion
+      large/resolve
+      large/localize
       large/write-text-incremental
       large/write-binary-incremental
+      deep/read-text-sync
+      deep/read-text-stream
+      deep/read-binary-sync
+      deep/read-binary-stream
+      deep/write-text-sync
+      deep/write-text-stream
+      deep/write-binary-sync
+      deep/write-binary-stream
+      deep/hash
+      deep/equals
+      deep/fold
+      deep/visitor
+      deep/events
+      deep/dispatch
+      deep/write-text-pretty
+      deep/to-json
+      deep/to-ion
+      deep/resolve
+      deep/localize
+      mixed/read-text-sync
+      mixed/read-text-stream
+      mixed/read-binary-sync
+      mixed/read-binary-stream
+      mixed/write-text-sync
+      mixed/write-text-stream
+      mixed/write-binary-sync
+      mixed/write-binary-stream
+      mixed/hash
+      mixed/equals
+      mixed/fold
+      mixed/visitor
+      mixed/events
+      mixed/dispatch
+      mixed/write-text-pretty
+      mixed/to-json
+      mixed/to-ion
+      mixed/resolve
+      mixed/localize
       """
     And the driver command of "large/hash" is "_build/native/release/build/benchmarks/benchmarks.exe hash large 500 20"
 

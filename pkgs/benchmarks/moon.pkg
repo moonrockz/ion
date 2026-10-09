@@ -6,6 +6,7 @@ import {
   "moonrockz/ion/text/stream" @text_stream,
   "moonrockz/ion/binary/stream" @binary_stream,
   "moonrockz/ion/hash",
+  "moonrockz/ion/json",
   "moonbitlang/async",
   "moonbitlang/async/io",
   "moonbitlang/core/env",

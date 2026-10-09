@@ -9,4 +9,5 @@ import {
 import {
   "moonrockz/ion/text",
   "moonbitlang/core/quickcheck",
+  "moonrockz/ion/testkit",
 } for "test"

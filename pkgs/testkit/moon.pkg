@@ -1,0 +1,19 @@
+// Test helpers for moonrockz/ion: deep values, value and JSON generators,
+// near-miss mutations and recursive reference oracles. Other packages import
+// it only for their tests.
+
+import {
+  "moonrockz/ion/ion",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/quickcheck",
+}
+
+import {
+  "moonrockz/ion/ion",
+  "moonrockz/ion/text",
+  "moonrockz/ion/binary",
+  "moonrockz/ion/hash",
+  "moonrockz/ion/json",
+  "moonbitlang/x/fs",
+  "moonbitlang/core/test",
+} for "test"
