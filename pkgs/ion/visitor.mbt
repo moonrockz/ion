@@ -56,33 +56,27 @@ impl IonVisitor with fn visit_struct(_self, _fields) {
 ///|
 /// Accept `visitor` on this value, traversing depth-first in document order:
 /// the value, then its annotations, then — for containers — the child values
-/// (struct field names precede their values).
+/// (struct field names precede their values). The walk uses no recursion, so
+/// it works at any nesting depth.
 pub fn IonValue::accept(self : IonValue, visitor : &IonVisitor) -> Unit {
-  visitor.visit_value(self)
-  for annotation in self.annotations() {
-    visitor.visit_annotation(annotation)
-  }
-  match self.kind() {
-    IonValueKind::List(items) => {
-      visitor.visit_list(items)
-      for item in items {
-        item.accept(visitor)
-      }
+  for event in self.walk() {
+    let (value, field) = match event {
+      Scalar(value, field~) | Enter(value, field~) => (value, field)
+      Exit(_, ..) => continue
     }
-    IonValueKind::Sexp(items) => {
-      visitor.visit_sexp(items)
-      for item in items {
-        item.accept(visitor)
-      }
+    if field is Some(name) {
+      visitor.visit_field_name(name)
     }
-    IonValueKind::Struct(fields) => {
-      visitor.visit_struct(fields)
-      for field in fields {
-        visitor.visit_field_name(field.name())
-        field.value().accept(visitor)
-      }
+    visitor.visit_value(value)
+    for annotation in value.annotations() {
+      visitor.visit_annotation(annotation)
     }
-    _ => ()
+    match value.kind() {
+      List(items) => visitor.visit_list(items)
+      Sexp(items) => visitor.visit_sexp(items)
+      Struct(fields) => visitor.visit_struct(fields)
+      _ => ()
+    }
   }
 }
 

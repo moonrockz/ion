@@ -300,3 +300,78 @@ test "sum the integers outside annotated values" {
   inspect(sum, content="10")
 }
 ```
+
+`IonValue::walk` gives the same depth-first order as events: `Enter` and
+`Exit` around each list, S-expression and struct, and `Scalar` for every
+other value, each with its struct field name. `IonValue::walker` gives the
+walk as a pull-based `ValueWalker`, which can also skip a container's
+children. `IonValue::fold_up` folds bottom-up: each container gets its
+children's results. None of them recurse, so they work at any depth.
+
+```mbt check
+///|
+test "walk a value as events" {
+  let value = @text.read_ion("{ a: [1, 2], b: null.list }")
+  let events = value
+    .walk()
+    .map(event => {
+      match event {
+        Enter(v, ..) => "enter " + v.ion_type().to_text()
+        Exit(v, ..) => "exit " + v.ion_type().to_text()
+        Scalar(v, ..) => "scalar " + v.ion_type().to_text()
+      }
+    })
+    .collect()
+  debug_inspect(
+    events,
+    content=(
+      #|[
+      #|  "enter struct",
+      #|  "enter list",
+      #|  "scalar int",
+      #|  "scalar int",
+      #|  "exit list",
+      #|  "scalar list",
+      #|  "exit struct",
+      #|]
+    ),
+  )
+}
+
+///|
+test "skip the children of annotated containers" {
+  let walker = @text.read_ion("[1, skip::[2, 3], 4]").walker()
+  let ints : Array[String] = []
+  while walker.next() is Some(event) {
+    match event {
+      Enter(value, ..) => if value.has_annotations() { walker.skip_children() }
+      Scalar(value, ..) =>
+        if value.kind() is Int(n) {
+          ints.push(n.to_string())
+        }
+      Exit(_, ..) => ()
+    }
+  }
+  debug_inspect(
+    ints,
+    content=(
+      #|["1", "4"]
+    ),
+  )
+}
+
+///|
+test "measure the depth with fold_up" {
+  let value = @text.read_ion("[1, [2, [3]], {a: (4)}]")
+  let depth = value.fold_up(scalar=_ => 0, container=(_, children) => {
+    let mut deepest = 0
+    for child in children {
+      if child.1 > deepest {
+        deepest = child.1
+      }
+    }
+    deepest + 1
+  })
+  inspect(depth, content="3")
+}
+```

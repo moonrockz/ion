@@ -1,7 +1,8 @@
 // A functional fold over an Ion value tree, with flow control.
 //
 // The analogue of gherkin's `GherkinFold`: callbacks thread an accumulator
-// through the tree and may direct traversal with a `FoldAction`.
+// through the tree and may direct traversal with a `FoldAction`. The fold runs
+// on `ValueWalker`, so it works at any nesting depth.
 
 ///|
 /// Control flow returned by a fold callback.
@@ -88,50 +89,41 @@ pub fn[A] fold_values(
 }
 
 ///|
-/// The recursive core of [`IonValue::fold`]; returns `Stop` to abort the whole
-/// traversal.
+/// The core of [`IonValue::fold`]: a walk with no recursion. Returns `Stop`
+/// to abort the whole traversal. For each value it calls `visit_field_name`
+/// (inside a struct), then `visit_value`, then `visit_annotation` for each
+/// annotation, then folds the children unless `visit_value` skipped them.
 fn[A] fold_value(
   value : IonValue,
   acc : A,
   folder : IonFold[A],
 ) -> FoldAction[A] {
+  let walker = value.walker()
   let mut acc = acc
-  let mut descend = true
-  match (folder.visit_value)(acc, value) {
-    Stop(a) => return Stop(a)
-    SkipChildren(a) => {
-      acc = a
-      descend = false
+  while walker.next() is Some(event) {
+    let (current, field) = match event {
+      Scalar(current, field~) | Enter(current, field~) => (current, field)
+      Exit(_, ..) => continue
     }
-    Continue(a) => acc = a
-  }
-  for annotation in value.annotations() {
-    match (folder.visit_annotation)(acc, annotation) {
+    if field is Some(name) {
+      match (folder.visit_field_name)(acc, name) {
+        Stop(a) => return Stop(a)
+        Continue(a) | SkipChildren(a) => acc = a
+      }
+    }
+    match (folder.visit_value)(acc, current) {
       Stop(a) => return Stop(a)
-      Continue(a) | SkipChildren(a) => acc = a
+      SkipChildren(a) => {
+        acc = a
+        walker.skip_children()
+      }
+      Continue(a) => acc = a
     }
-  }
-  if descend {
-    match value.kind() {
-      IonValueKind::List(items) | IonValueKind::Sexp(items) =>
-        for item in items {
-          match fold_value(item, acc, folder) {
-            Stop(a) => return Stop(a)
-            Continue(a) | SkipChildren(a) => acc = a
-          }
-        }
-      IonValueKind::Struct(fields) =>
-        for field in fields {
-          match (folder.visit_field_name)(acc, field.name()) {
-            Stop(a) => return Stop(a)
-            Continue(a) | SkipChildren(a) => acc = a
-          }
-          match fold_value(field.value(), acc, folder) {
-            Stop(a) => return Stop(a)
-            Continue(a) | SkipChildren(a) => acc = a
-          }
-        }
-      _ => ()
+    for annotation in current.annotations() {
+      match (folder.visit_annotation)(acc, annotation) {
+        Stop(a) => return Stop(a)
+        Continue(a) | SkipChildren(a) => acc = a
+      }
     }
   }
   Continue(acc)
