@@ -6,11 +6,12 @@
 // Struct fields are an unordered multiset. When the names line up by
 // position, the fields pair by position; otherwise both field arrays are
 // sorted by name and pair in that order. When the names are all different,
-// that pairing is the only one possible, so its result is final. When names
+// that pairing is the only one possible, so a difference is final. When names
 // repeat and the pairing finds a difference, another pairing could still
-// match, so the struct falls back to class IDs: every field value gets an
-// integer class ID, bottom-up with `fold_up`, and the two structs are equal
-// when their sorted (field name, class ID) keys are.
+// match. The comparison then stops and decides with class IDs for the two
+// whole values: every value gets an integer class ID, bottom-up with
+// `fold_up`, so that equal values get equal IDs. Each subtree is classified
+// once, however many structs with repeated names it is inside.
 
 ///|
 /// Structural equality following the Ion data model: annotations must match in
@@ -19,12 +20,34 @@
 /// an unordered multiset. It works at any nesting depth.
 pub fn IonValue::equals(self : IonValue, other : IonValue) -> Bool {
   let frames : Array[PairFrame] = []
-  let classes = ValueClasses::new()
-  let mut result = begin_pair(self, other, frames)
+  let mut outcome = begin_pair(self, other, frames)
   while frames.last() is Some(frame) {
-    result = frame.advance(result, frames, classes)
+    outcome = frame.advance(outcome, frames)
+    if outcome is Ambiguous {
+      break
+    }
   }
-  result is Some(true)
+  match outcome {
+    Equal => true
+    // The loop runs until no frame is left, so the outcome is not `Pending`.
+    Unequal | Pending => false
+    Ambiguous => {
+      let classes = ValueClasses::new()
+      classes.class_of(self) == classes.class_of(other)
+    }
+  }
+}
+
+///|
+/// Where the comparison of a pair of values stands.
+priv enum PairOutcome {
+  /// A frame was pushed for a pair of containers; its result comes later.
+  Pending
+  Equal
+  Unequal
+  /// A pair of structs with repeated field names did not match in the first
+  /// pairing of their fields, so another pairing could match.
+  Ambiguous
 }
 
 ///|
@@ -43,42 +66,47 @@ priv struct PairFrame {
 }
 
 ///|
-/// Start comparing `a` and `b`. Returns the result when it is known at once,
-/// or `None` after pushing a frame for a pair of containers.
-fn begin_pair(a : IonValue, b : IonValue, frames : Array[PairFrame]) -> Bool? {
+/// Start comparing `a` and `b`: the outcome when it is known at once, or
+/// `Pending` after pushing a frame for a pair of containers.
+fn begin_pair(
+  a : IonValue,
+  b : IonValue,
+  frames : Array[PairFrame],
+) -> PairOutcome {
   if !annotations_equal(a.annotations, b.annotations) {
-    return Some(false)
+    return Unequal
   }
   match (a.kind, b.kind) {
     (List(x), List(y)) | (Sexp(x), Sexp(y)) => {
       if x.length() != y.length() {
-        return Some(false)
+        return Unequal
       }
       frames.push({ children: Items(x, y), next: 0, })
-      None
+      Pending
     }
     (Struct(x), Struct(y)) => {
-      guard pair_fields(x, y) is Some((left, right)) else { return Some(false) }
+      guard pair_fields(x, y) is Some((left, right)) else { return Unequal }
       frames.push({ children: Fields(left, right), next: 0, })
-      None
+      Pending
     }
-    (x, y) => Some(scalars_equal(x, y))
+    (x, y) => if scalars_equal(x, y) { Equal } else { Unequal }
   }
 }
 
 ///|
-/// Continue the comparison of this frame, the top of `frames`. `result` is
-/// the result of its last pair of children, or `None` when the frame is new.
-/// Returns `None` after pushing a frame for a pair of child containers, or
-/// the frame's result after popping it.
+/// Continue the comparison of this frame, the top of `frames`. `outcome` is
+/// the outcome of its last pair of children, or `Pending` when the frame is
+/// new. Returns `Pending` after pushing a frame for a pair of child
+/// containers, or the frame's outcome after popping it.
 fn PairFrame::advance(
   self : PairFrame,
-  result : Bool?,
+  outcome : PairOutcome,
   frames : Array[PairFrame],
-  classes : ValueClasses,
-) -> Bool? {
-  if result is Some(false) {
-    return self.finish_unequal(frames, classes)
+) -> PairOutcome {
+  match outcome {
+    Unequal => return self.finish_unequal(frames)
+    Ambiguous => return Ambiguous
+    Equal | Pending => ()
   }
   let length = match self.children {
     Items(left, _) => left.length()
@@ -93,29 +121,33 @@ fn PairFrame::advance(
         begin_pair(left[index].value, right[index].value, frames)
     }
     match child {
-      None => return None
-      Some(true) => ()
-      Some(false) => return self.finish_unequal(frames, classes)
+      Pending => return Pending
+      Equal => ()
+      Unequal => return self.finish_unequal(frames)
+      Ambiguous => return Ambiguous
     }
   }
   ignore(frames.pop())
-  Some(true)
+  Equal
 }
 
 ///|
 /// Pop this frame after a pair of its children differed. Items are then
 /// unequal. Fields are unequal too, unless a name repeats: then another
-/// pairing of the fields could match, and class IDs decide.
+/// pairing of the fields could match, and the outcome is `Ambiguous`.
 fn PairFrame::finish_unequal(
   self : PairFrame,
   frames : Array[PairFrame],
-  classes : ValueClasses,
-) -> Bool? {
+) -> PairOutcome {
   ignore(frames.pop())
   match self.children {
-    Items(_, _) => Some(false)
-    Fields(left, right) =>
-      Some(has_repeated_names(left) && classes.fields_equal(left, right))
+    Items(_, _) => Unequal
+    Fields(left, _) =>
+      if has_repeated_names(left) {
+        Ambiguous
+      } else {
+        Unequal
+      }
   }
 }
 
@@ -243,23 +275,6 @@ fn ValueClasses::class_of(self : ValueClasses, value : IonValue) -> Int {
     current,
     children,
   ) => self.intern(container_key(current, children)))
-}
-
-///|
-/// Whether two field arrays are equal as multisets of (name, value).
-fn ValueClasses::fields_equal(
-  self : ValueClasses,
-  a : Array[Field],
-  b : Array[Field],
-) -> Bool {
-  if a.length() != b.length() {
-    return false
-  }
-  let left = a.map(field => field_key(field.name, self.class_of(field.value)))
-  let right = b.map(field => field_key(field.name, self.class_of(field.value)))
-  left.sort()
-  right.sort()
-  left == right
 }
 
 ///|

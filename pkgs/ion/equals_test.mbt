@@ -1,6 +1,7 @@
-// Equality of Ion values. Struct fields compare as a multiset; the stack-safe
-// equals gives every struct field value a class ID, so these cases check that
-// the IDs keep the data model's rules at every level.
+// Equality of Ion values. Struct fields compare as a multiset. The stack-safe
+// equals pairs struct fields by name, and falls back to class IDs when names
+// repeat and the first pairing differs; these cases check that both paths
+// keep the data model's rules at every level.
 
 ///|
 fn same(a : String, b : String) -> Bool raise {
@@ -104,4 +105,101 @@ test "repeated field names match as a multiset 100,000 levels deep" {
     @ion.Field::new("a", @testkit.deep_value(Mixed, 99_999)),
   ])
   assert_true(!a.equals(other))
+}
+
+///|
+/// `{a: inner, a: 1, a: 2}` around `inner`, `levels` times, with the two
+/// numbers in the order `first`, `second`.
+fn repeated_name_chain(
+  levels : Int,
+  first : Int,
+  second : Int,
+) -> @ion.IonValue {
+  let mut value = @ion.IonValue::int(0)
+  for _ in 0..<levels {
+    value = @ion.IonValue::from_fields([
+      @ion.Field::new("a", value),
+      @ion.Field::new("a", @ion.IonValue::int(first)),
+      @ion.Field::new("a", @ion.IonValue::int(second)),
+    ])
+  }
+  value
+}
+
+///|
+test "repeated field names at every level of 100,000 compare in linear time" {
+  // Every level has repeated names and pairs wrongly at first, so a
+  // fallback per level would cost quadratic time.
+  let left = repeated_name_chain(100_000, 1, 2)
+  assert_true(left.equals(repeated_name_chain(100_000, 2, 1)))
+  assert_true(!left.equals(repeated_name_chain(100_000, 2, 2)))
+}
+
+///|
+/// `{a: x, a: 0}` against `{a: 0, a: y}`: the names repeat and the first
+/// pairing differs, so `x` and `y` compare through class IDs.
+fn same_by_class(x : String, y : String) -> Bool raise {
+  same("{a: \{x}, a: 0}", "{a: 0, a: \{y}}")
+}
+
+///|
+test "class IDs keep the rules of equals for scalars" {
+  assert_true(same_by_class("nan", "nan"))
+  assert_true(!same_by_class("0e0", "-0e0"))
+  assert_true(!same_by_class("0d0", "-0d0"))
+  assert_true(!same_by_class("1.0", "1.00"))
+  assert_true(!same_by_class("2026T", "2026-01T"))
+  assert_true(!same_by_class("null.list", "[]"))
+  assert_true(!same_by_class("\"a\"", "a"))
+  assert_true(!same_by_class("{{ \"a\" }}", "{{ YQ== }}"))
+  assert_true(same_by_class("2026-10-08T00:00Z", "2026-10-08T00:00Z"))
+}
+
+///|
+test "class IDs keep annotations, container kinds and field order rules" {
+  assert_true(!same_by_class("x::1", "y::1"))
+  assert_true(!same_by_class("x::y::1", "y::x::1"))
+  assert_true(!same_by_class("[1]", "(1)"))
+  assert_true(same_by_class("{b: 1, c: 2}", "{c: 2, b: 1}"))
+  assert_true(!same_by_class("{b: 1}", "{c: 1}"))
+}
+
+///|
+test "class IDs of container children do not run together" {
+  // Twelve integers take class IDs 0 to 11, so `[1, 2]` has children 1 and
+  // 2, and `[[1, 2]]` has one child whose ID is 12.
+  let numbers = "a: 0, a: 1, a: 2, a: 3, a: 4, a: 5, a: 6, a: 7, a: 8, a: 9, a: 10, a: 11"
+  assert_true(!same("{\{numbers}, b: [1, 2]}", "{\{numbers}, b: [[1, 2]]}"))
+}
+
+///|
+test "class IDs compare field names by symbol equivalence" {
+  let unknown = @ion.SymbolToken::from_sid(0)
+  let numbered = @ion.SymbolToken::from_sid(12)
+  let imported = @ion.SymbolToken::from_import(10, "shared", 1, 1)
+  let zero = @ion.IonValue::int(0)
+  let one = @ion.IonValue::int(1)
+  let left = @ion.IonValue::from_fields([
+    @ion.Field::new(
+      "a",
+      @ion.IonValue::from_fields([@ion.Field::from_token(unknown, one)]),
+    ),
+    @ion.Field::new("a", zero),
+  ])
+  let right_numbered = @ion.IonValue::from_fields([
+    @ion.Field::new("a", zero),
+    @ion.Field::new(
+      "a",
+      @ion.IonValue::from_fields([@ion.Field::from_token(numbered, one)]),
+    ),
+  ])
+  let right_imported = @ion.IonValue::from_fields([
+    @ion.Field::new("a", zero),
+    @ion.Field::new(
+      "a",
+      @ion.IonValue::from_fields([@ion.Field::from_token(imported, one)]),
+    ),
+  ])
+  assert_true(left.equals(right_numbered))
+  assert_true(!left.equals(right_imported))
 }
