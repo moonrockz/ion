@@ -151,6 +151,7 @@ pub fn IonValue::decimal(Decimal) -> Self
 pub fn IonValue::equals(Self, Self) -> Bool
 pub fn IonValue::float(Double) -> Self
 pub fn[A] IonValue::fold(Self, A, IonFold[A]) -> A
+pub fn[R] IonValue::fold_up(Self, scalar~ : (Self) -> R raise?, container~ : (Self, Array[(SymbolToken?, R)]) -> R raise?) -> R raise?
 pub fn IonValue::from_fields(Array[Field]) -> Self
 pub fn IonValue::has_annotations(Self) -> Bool
 pub fn IonValue::has_imported_symbols(Self) -> Bool

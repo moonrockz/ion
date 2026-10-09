@@ -129,3 +129,38 @@ pub fn IonValue::walk(self : IonValue) -> Iter[WalkEvent] {
   let walker = self.walker()
   Iter::new(() => walker.next())
 }
+
+///|
+/// Fold `self` bottom-up with no recursion. `scalar` gives a result for each
+/// value with no children; `container` gives a result for each list,
+/// S-expression or struct from its children's results, in order, each with
+/// its field name (`None` outside a struct).
+///
+/// `container` runs after all of that container's children. A walk that must
+/// act in document order (such as raising for the first bad symbol) uses
+/// [`IonValue::walk`] instead. The children's results are kept until their
+/// container finishes, so memory grows with the width of the open levels.
+pub fn[R] IonValue::fold_up(
+  self : IonValue,
+  scalar~ : (IonValue) -> R raise?,
+  container~ : (IonValue, Array[(SymbolToken?, R)]) -> R raise?,
+) -> R raise? {
+  let walker = self.walker()
+  // One array per open container for its children's results; the first
+  // array collects the result of `self`.
+  let results : Array[Array[(SymbolToken?, R)]] = [[]]
+  while walker.next() is Some(event) {
+    match event {
+      Scalar(value, field~) =>
+        results[results.length() - 1].push((field, scalar(value)))
+      Enter(_, ..) => results.push([])
+      Exit(value, field~) =>
+        if results.pop() is Some(children) {
+          results[results.length() - 1].push(
+            (field, container(value, children)),
+          )
+        }
+    }
+  }
+  results[0][0].1
+}

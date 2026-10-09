@@ -161,3 +161,99 @@ test "walk matches a recursive walk on generated values" {
     assert_eq(value.walk().map(label).collect(), expected)
   }
 }
+
+///|
+/// A description of a value, built bottom-up by `fold_up`.
+fn describe(value : @ion.IonValue) -> String raise {
+  value.fold_up(scalar=scalar => @text.write_ion(scalar), container=(
+    current,
+    children,
+  ) => {
+    let parts = children.map(child => {
+      match child.0 {
+        Some(name) => name.text().unwrap_or("$") + "=" + child.1
+        None => child.1
+      }
+    })
+    current.ion_type().to_text() + "(" + parts.join(",") + ")"
+  })
+}
+
+///|
+/// The same description by recursion: the oracle for `fold_up`.
+fn reference_describe(value : @ion.IonValue) -> String raise {
+  match value.kind() {
+    List(items) | Sexp(items) =>
+      value.ion_type().to_text() +
+      "(" +
+      items.map(reference_describe).join(",") +
+      ")"
+    Struct(fields) =>
+      "struct(" +
+      fields
+      .map(field => {
+        field.name().text().unwrap_or("$") +
+        "=" +
+        reference_describe(field.value())
+      })
+      .join(",") +
+      ")"
+    _ => @text.write_ion(value)
+  }
+}
+
+///|
+test "fold_up gives each container its children's results with their field names" {
+  inspect(
+    describe(@text.read_ion("{a: [1, 2], b: (x), c: null.list}")),
+    content="struct(a=list(1,2),b=sexp(x),c=null.list)",
+  )
+}
+
+///|
+test "fold_up passes a scalar root to scalar" {
+  inspect(describe(@ion.IonValue::int(5)), content="5")
+}
+
+///|
+test "a raising fold_up callback stops the walk and raises" {
+  let seen : Array[String] = []
+  let result = try
+    @text.read_ion("[1, 2, 3]").fold_up(
+      scalar=value => {
+        seen.push(@text.write_ion(value))
+        if value.kind() is Int(n) && n.to_int() == 2 {
+          raise @ion.IonError::DataModel("two")
+        }
+        0
+      },
+      container=(_, _) => 0,
+    )
+  catch {
+    error => error.message()
+  } noraise {
+    _ => "no error"
+  }
+  assert_eq(result, "two")
+  assert_eq(seen, ["1", "2"])
+}
+
+///|
+test "fold_up matches a recursive fold on generated values" {
+  for
+    value in @testkit.gen_value(max_depth=6, max_width=4).samples(
+      count=300,
+      size=8,
+    ) {
+    assert_eq(describe(value), reference_describe(value))
+  }
+}
+
+///|
+test "fold_up folds 100,000 levels" {
+  let depth = @testkit.deep_value(Mixed, 100_000).fold_up(scalar=_ => 0, container=(
+    _,
+    children,
+  ) => children[0].1 + 1)
+  assert_eq(depth, 100_000)
+}
