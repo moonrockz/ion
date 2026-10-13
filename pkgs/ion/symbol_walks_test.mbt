@@ -15,6 +15,17 @@ test "for_values interns symbols in document order" {
 }
 
 ///|
+test "for_values interns annotations in order, before the symbol value" {
+  let table = @ion.SymbolTable::for_values([@text.read_ion("x::y::a")])
+  debug_inspect(
+    ["x", "y", "a"].map(text => table.find(text)),
+    content=(
+      #|[Some(10), Some(11), Some(12)]
+    ),
+  )
+}
+
+///|
 test "highest_symbol_id finds IDs in field names, annotations and values" {
   let sid = @ion.SymbolToken::from_sid
   let value = @ion.IonValue::list([
@@ -57,6 +68,19 @@ test "resolve names the first out-of-range ID in document order" {
   inspect(
     resolve_error(annotation_first),
     content="symbol ID $60 is beyond the symbol table, whose largest ID is 9",
+  )
+}
+
+///|
+test "resolve names the first failing annotation, before the symbol value" {
+  let sid = @ion.SymbolToken::from_sid
+  let value = @ion.IonValue::symbol_token(sid(30)).with_annotations([
+    sid(40),
+    sid(50),
+  ])
+  inspect(
+    resolve_error(value),
+    content="symbol ID $40 is beyond the symbol table, whose largest ID is 9",
   )
 }
 
