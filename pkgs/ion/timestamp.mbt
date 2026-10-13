@@ -23,7 +23,7 @@ pub(all) enum TimestampPrecision {
 pub(all) enum TimestampOffset {
   /// A known offset from UTC, in minutes east of UTC. `Z` and `+00:00` are
   /// both `Known(0)`.
-  Known(Int)
+  Known(Int32)
   /// The "unknown local offset" written `-00:00`.
   Unknown
 } derive(Eq, Hash, Debug)
@@ -31,12 +31,12 @@ pub(all) enum TimestampOffset {
 ///|
 /// An Ion `timestamp` value.
 pub struct Timestamp {
-  year : Int
-  month : Int?
-  day : Int?
-  hour : Int?
-  minute : Int?
-  second : Int?
+  year : Int32
+  month : Int32?
+  day : Int32?
+  hour : Int32?
+  minute : Int32?
+  second : Int32?
   fraction : Decimal?
   offset : TimestampOffset?
 } derive(Debug)
@@ -46,14 +46,14 @@ pub struct Timestamp {
 /// precision; `fraction` requires `second`, and `offset` is required for any
 /// value that carries a time.
 pub fn Timestamp::new(
-  year~ : Int,
-  month? : Int? = None,
-  day? : Int? = None,
-  hour? : Int? = None,
-  minute? : Int? = None,
-  second? : Int? = None,
-  fraction? : Decimal? = None,
-  offset? : TimestampOffset? = None,
+  year~ : Int32,
+  month~ : Int32? = None,
+  day~ : Int32? = None,
+  hour~ : Int32? = None,
+  minute~ : Int32? = None,
+  second~ : Int32? = None,
+  fraction~ : Decimal? = None,
+  offset~ : TimestampOffset? = None,
 ) -> Timestamp {
   { year, month, day, hour, minute, second, fraction, offset, }
 }
@@ -116,37 +116,37 @@ fn is_proper_fraction(fraction : Decimal) -> Bool {
 
 ///|
 /// The year component.
-pub fn Timestamp::year(self : Timestamp) -> Int {
+pub fn Timestamp::year(self : Timestamp) -> Int32 {
   self.year
 }
 
 ///|
 /// The month component (`1`-`12`), when present.
-pub fn Timestamp::month(self : Timestamp) -> Int? {
+pub fn Timestamp::month(self : Timestamp) -> Int32? {
   self.month
 }
 
 ///|
 /// The day component (`1`-`31`), when present.
-pub fn Timestamp::day(self : Timestamp) -> Int? {
+pub fn Timestamp::day(self : Timestamp) -> Int32? {
   self.day
 }
 
 ///|
 /// The hour component (`0`-`23`), when present.
-pub fn Timestamp::hour(self : Timestamp) -> Int? {
+pub fn Timestamp::hour(self : Timestamp) -> Int32? {
   self.hour
 }
 
 ///|
 /// The minute component (`0`-`59`), when present.
-pub fn Timestamp::minute(self : Timestamp) -> Int? {
+pub fn Timestamp::minute(self : Timestamp) -> Int32? {
   self.minute
 }
 
 ///|
 /// The second component (`0`-`59`), when present.
-pub fn Timestamp::second(self : Timestamp) -> Int? {
+pub fn Timestamp::second(self : Timestamp) -> Int32? {
   self.second
 }
 
@@ -180,7 +180,7 @@ pub fn Timestamp::precision(self : Timestamp) -> TimestampPrecision {
 
 ///|
 /// Left-pad an integer with zeros to `width` digits.
-fn pad_int(value : Int, width : Int) -> String {
+fn pad_int(value : Int32, width : Int32) -> String {
   let text = value.to_string()
   if text.length() >= width {
     return text
@@ -276,9 +276,9 @@ pub fn Timestamp::to_ion_string(self : Timestamp) -> String {
 /// index just past them.
 fn read_fixed_uint(
   text : StringView,
-  start : Int,
-  count : Int,
-) -> (Int, Int) raise IonError {
+  start : Int32,
+  count : Int32,
+) -> (Int32, Int32) raise IonError {
   let n = text.length()
   if start + count > n {
     raise IonError::Syntax("truncated timestamp")
@@ -290,7 +290,7 @@ fn read_fixed_uint(
     }
     sb.write_view(char_view(text, index))
   }
-  let value : Int = @string.parse_int(sb.to_string()) catch {
+  let value : Int32 = @string.parse_int(sb.to_string()) catch {
     _ => raise IonError::Syntax("invalid number in timestamp")
   }
   (value, start + count)
@@ -300,8 +300,8 @@ fn read_fixed_uint(
 /// Read the fractional-seconds digits after a `.`.
 fn read_fraction(
   text : StringView,
-  start : Int,
-) -> (Decimal, Int) raise IonError {
+  start : Int32,
+) -> (Decimal, Int32) raise IonError {
   let n = text.length()
   let sb = StringBuilder()
   let mut i = start
@@ -324,8 +324,8 @@ fn read_fraction(
 /// `-00:00`.
 fn read_offset(
   text : StringView,
-  start : Int,
-) -> (TimestampOffset, Int) raise IonError {
+  start : Int32,
+) -> (TimestampOffset, Int32) raise IonError {
   let n = text.length()
   let mut i = start
   if i < n && text[i] == 'Z' {
@@ -436,7 +436,7 @@ pub fn Timestamp::parse(text : StringView) -> Timestamp raise IonError {
   if minute > 59 {
     raise IonError::DataModel("timestamp minute is out of range")
   }
-  let mut second : Int? = None
+  let mut second : Int32? = None
   let mut fraction : Decimal? = None
   if i < n && text[i] == ':' {
     i += 1

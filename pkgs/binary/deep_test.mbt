@@ -3,7 +3,7 @@
 // builds them with loops.
 
 ///|
-let deep : Int = 100_000
+let deep : Int32 = 100_000
 
 ///|
 #skip("ion-dql.6: encode recurses once per level")

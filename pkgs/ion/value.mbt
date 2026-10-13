@@ -139,7 +139,7 @@ pub fn IonValue::bool(value : Bool) -> IonValue {
 
 ///|
 /// An `int` value from an `Int`.
-pub fn IonValue::int(value : Int) -> IonValue {
+pub fn IonValue::int(value : Int32) -> IonValue {
   IonValue::new(IonValueKind::Int(BigInt::from_int(value)))
 }
 

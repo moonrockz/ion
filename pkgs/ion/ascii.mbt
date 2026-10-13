@@ -13,6 +13,6 @@ fn is_digit(c : UInt16) -> Bool {
 ///|
 /// The one-character string view at `index`, used to accumulate clean digit
 /// runs while skipping Ion's digit-separating underscores.
-fn char_view(text : StringView, index : Int) -> StringView {
+fn char_view(text : StringView, index : Int32) -> StringView {
   text[index:index + 1]
 }

@@ -36,7 +36,7 @@ test "decimal spelling is positional when exact and reasonably short" {
 
 ///|
 test "decimal text round-trips exact components and signed zero" {
-  @quickcheck.check((pair : (BigInt, Int)) => {
+  @quickcheck.check((pair : (BigInt, Int32)) => {
     let exponent = pair.1 % 50
     let decimal = @ion.Decimal::new(pair.0, exponent)
     let zero = @ion.Decimal::negative_zero_at(exponent)

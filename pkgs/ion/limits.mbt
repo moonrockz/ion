@@ -8,14 +8,14 @@
 /// The readers and the code that walks the values they return recurse once
 /// per nesting level. The limit keeps that recursion far from the call stack
 /// size of every target, including a cold JavaScript or wasm-gc engine.
-pub const MAX_NESTING_DEPTH : Int = 128
+pub const MAX_NESTING_DEPTH : Int32 = 128
 
 ///|
 /// How deep a reader is inside nested containers. A reader starts at
 /// [`NestingDepth::top`] and calls [`NestingDepth::enter`] for each container
 /// it opens, which raises once the depth would pass [`MAX_NESTING_DEPTH`].
 pub struct NestingDepth {
-  priv level : Int
+  priv level : Int32
 }
 
 ///|

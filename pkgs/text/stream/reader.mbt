@@ -20,7 +20,7 @@ struct TextReader {
   source : &@io.Reader
   /// Decoded text not yet parsed, from `start` on, and then `arrived`.
   mut text : String
-  mut start : Int
+  mut start : Int32
   /// Decoded text that came after `text` was last built. It joins `text`
   /// only when a parse is tried, so waiting on a large value copies nothing.
   arrived : StringBuilder
@@ -46,8 +46,8 @@ struct TextReader {
 /// import.
 pub fn TextReader::new(
   source : &@io.Reader,
-  prefix? : Bytes = b"",
-  catalog? : @ion.Catalog = @ion.Catalog::new(),
+  prefix~ : Bytes = b"",
+  catalog~ : @ion.Catalog = @ion.Catalog::new(),
 ) -> TextReader {
   {
     source,
@@ -168,4 +168,4 @@ async fn TextReader::fill(self : TextReader) -> Unit {
 ///|
 /// The most octets to ask the source for in one read. Without a limit, a read
 /// returns about one kilobyte, and the cost of each read dominates.
-let read_size : Int = 65536
+let read_size : Int32 = 65536

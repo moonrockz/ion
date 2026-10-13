@@ -57,7 +57,7 @@ priv enum Fragment {
   Text(Bytes)
   Binary(Bytes)
   /// A version marker, `$ion_<major>_<minor>`.
-  Ivm(Int, Int)
+  Ivm(Int32, Int32)
   /// Values given as data, to be encoded as the document requires.
   Toplevel(Array[@ion.IonValue])
 }
@@ -141,7 +141,7 @@ fn name_of(value : @ion.IonValue) -> String? {
 
 ///|
 /// An integer argument.
-fn int_of(value : @ion.IonValue) -> Int raise {
+fn int_of(value : @ion.IonValue) -> Int32 raise {
   match value.kind() {
     Int(n) => n.to_int()
     _ => fail("expected an integer: \{show([value])}")
@@ -348,7 +348,7 @@ fn build(document : Document) -> Input raise {
 
 ///|
 /// The symbol ID a `'#$<digits>'` symbol stands for in toplevel data.
-fn reserved_sid(text : String) -> Int? {
+fn reserved_sid(text : String) -> Int32? {
   if !text.has_prefix("#$") || text.length() == 2 {
     return None
   }
@@ -776,7 +776,7 @@ test "ion-tests conformance DSL" {
     }
   }
   let unexpected : Array[String] = []
-  let not_applicable : Map[String, Int] = Map([])
+  let not_applicable : Map[String, Int32] = Map([])
   let mut passed = 0
   let mut skipped = 0
   // Whether each skip-list key covered a failing case.

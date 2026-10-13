@@ -25,11 +25,11 @@ let reader_skipped : Map[String, String] = Map([])
 ///|
 /// The chunk sizes the stream readers are fed in. One octet splits every
 /// token and character; 4 KiB is the common case.
-let chunk_sizes : Array[Int] = [1, 4096]
+let chunk_sizes : Array[Int32] = [1, 4096]
 
 ///|
 /// An async reader over `bytes`, delivered in chunks of `chunk` octets.
-fn chunked(bytes : Bytes, chunk : Int) -> @io.MemoryReader {
+fn chunked(bytes : Bytes, chunk : Int32) -> @io.MemoryReader {
   @io.MemoryReader(async fn(writer) {
     let mut offset = 0
     while offset < bytes.length() {
@@ -45,7 +45,7 @@ fn chunked(bytes : Bytes, chunk : Int) -> @io.MemoryReader {
 async fn stream_values(
   bytes : Bytes,
   binary : Bool,
-  chunk : Int,
+  chunk : Int32,
 ) -> Array[@ion.IonValue] {
   let source = chunked(bytes, chunk)
   // Closing the source stops its writer when the reader stops early.

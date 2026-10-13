@@ -76,7 +76,7 @@ fn nests_too_deep(text : StringView) -> Bool {
 /// prints a single line.
 pub fn write_json(
   value : @core.IonValue,
-  indent? : Int = 0,
+  indent~ : Int32 = 0,
 ) -> String raise @core.IonError {
   to_json(value).stringify(indent~)
 }

@@ -26,7 +26,7 @@ pub extend DeepShape with Eq::{not_equal, equal}
 /// The shape of nesting level `level`, where level 0 is the outermost
 /// container. `Mixed` resolves to list, struct or sexp; the other shapes are
 /// the same at every level.
-pub fn DeepShape::at(self : DeepShape, level : Int) -> DeepShape {
+pub fn DeepShape::at(self : DeepShape, level : Int32) -> DeepShape {
   match self {
     Mixed =>
       match level % 3 {
@@ -44,8 +44,8 @@ pub fn DeepShape::at(self : DeepShape, level : Int) -> DeepShape {
 /// encoding of the value needs no local symbol table.
 pub fn deep_value(
   shape : DeepShape,
-  depth : Int,
-  leaf? : @ion.IonValue = @ion.IonValue::int(1),
+  depth : Int32,
+  leaf~ : @ion.IonValue = @ion.IonValue::int(1),
 ) -> @ion.IonValue {
   let name = @ion.SymbolToken::new("name")
   let mut value = leaf
@@ -65,7 +65,7 @@ pub fn deep_value(
 ///|
 /// The innermost value of a chain of one-child containers, and how many
 /// containers lead to it. The walk is a loop, so it works at any depth.
-pub fn innermost(value : @ion.IonValue) -> (@ion.IonValue, Int) {
+pub fn innermost(value : @ion.IonValue) -> (@ion.IonValue, Int32) {
   let mut current = value
   let mut depth = 0
   while true {

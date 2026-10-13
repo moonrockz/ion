@@ -6,7 +6,7 @@
 /// scalar at position `index` in document order, wrapping around. A value
 /// with no scalar (such as `[]`) gets an extra annotation instead. The result
 /// never equals `value`.
-pub fn change_one_leaf(value : @ion.IonValue, index : Int) -> @ion.IonValue {
+pub fn change_one_leaf(value : @ion.IonValue, index : Int32) -> @ion.IonValue {
   let count = count_scalars(value)
   if count == 0 {
     return value.with_annotation(@ion.SymbolToken::new("changed"))
@@ -16,7 +16,7 @@ pub fn change_one_leaf(value : @ion.IonValue, index : Int) -> @ion.IonValue {
 }
 
 ///|
-fn count_scalars(value : @ion.IonValue) -> Int {
+fn count_scalars(value : @ion.IonValue) -> Int32 {
   match value.kind() {
     List(items) | Sexp(items) =>
       items.fold(init=0, (count, item) => count + count_scalars(item))
@@ -29,8 +29,8 @@ fn count_scalars(value : @ion.IonValue) -> Int {
 ///|
 fn rebuild(
   value : @ion.IonValue,
-  target : Int,
-  seen : Ref[Int],
+  target : Int32,
+  seen : Ref[Int32],
 ) -> @ion.IonValue {
   let rebuilt = match value.kind() {
     List(items) =>

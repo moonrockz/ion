@@ -476,7 +476,7 @@ fn Suite::run(self : Suite) -> Unit raise {
   }
   let unexpected : Array[String] = []
   let stale : Array[String] = []
-  let unsupported : Map[String, Int] = Map([])
+  let unsupported : Map[String, Int32] = Map([])
   let used : Set[String] = Set([])
   let mut passed = 0
   let mut total = 0

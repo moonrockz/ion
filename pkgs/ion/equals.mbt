@@ -62,7 +62,7 @@ priv enum PairChildren {
 /// children to compare.
 priv struct PairFrame {
   children : PairChildren
-  mut next : Int
+  mut next : Int32
 }
 
 ///|
@@ -248,7 +248,7 @@ fn scalars_equal(a : IonValueKind, b : IonValueKind) -> Bool {
 /// values get the same ID exactly when `equals` holds for them, because the
 /// key of a value is built from the same comparisons.
 priv struct ValueClasses {
-  ids : Map[String, Int]
+  ids : Map[String, Int32]
 }
 
 ///|
@@ -257,7 +257,7 @@ fn ValueClasses::new() -> ValueClasses {
 }
 
 ///|
-fn ValueClasses::intern(self : ValueClasses, key : String) -> Int {
+fn ValueClasses::intern(self : ValueClasses, key : String) -> Int32 {
   match self.ids.get(key) {
     Some(id) => id
     None => {
@@ -270,7 +270,7 @@ fn ValueClasses::intern(self : ValueClasses, key : String) -> Int {
 
 ///|
 /// The class ID of `value`, computed bottom-up with no recursion.
-fn ValueClasses::class_of(self : ValueClasses, value : IonValue) -> Int {
+fn ValueClasses::class_of(self : ValueClasses, value : IonValue) -> Int32 {
   value.fold_up(scalar=scalar => self.intern(scalar_key(scalar)), container=(
     current,
     children,
@@ -386,7 +386,7 @@ fn scalar_key(value : IonValue) -> String {
 /// in order for a list or S-expression, sorted by field key for a struct.
 fn container_key(
   value : IonValue,
-  children : Array[(SymbolToken?, Int)],
+  children : Array[(SymbolToken?, Int32)],
 ) -> String {
   let buffer = StringBuilder()
   write_annotations_key(buffer, value)
@@ -417,7 +417,7 @@ fn container_key(
 
 ///|
 /// The key of one struct field: its name's key and its value's class ID.
-fn field_key(name : SymbolToken, id : Int) -> String {
+fn field_key(name : SymbolToken, id : Int32) -> String {
   let buffer = StringBuilder()
   write_symbol_key(buffer, name)
   buffer.write_char('=')

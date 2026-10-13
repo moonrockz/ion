@@ -8,14 +8,14 @@ struct TextWriter {
   pretty : Bool
   mut first : Bool
   /// The highest symbol ID reserved with unknown text so far.
-  mut reserved : Int
+  mut reserved : Int32
 }
 
 ///|
 /// A writer to `sink`, writing compact text, or indented text when `pretty`.
 pub fn TextWriter::new(
   sink : &@io.Writer,
-  pretty? : Bool = false,
+  pretty~ : Bool = false,
 ) -> TextWriter {
   { sink, pretty, first: true, reserved: 9, }
 }
@@ -53,7 +53,7 @@ pub async fn TextWriter::write(
 pub async fn write_all(
   writer : &@io.Writer,
   values : Array[@ion.IonValue],
-  pretty? : Bool = false,
+  pretty~ : Bool = false,
 ) -> Unit {
   let text_writer = TextWriter::new(writer, pretty~)
   for value in values {

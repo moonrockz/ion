@@ -34,11 +34,11 @@ priv struct Framer {
   /// The previous code unit was a backslash inside a string or symbol.
   mut escaped : Bool
   /// The number of open containers and lobs.
-  mut depth : Int
+  mut depth : Int32
   /// Inside a `{{ ... }}` lob, where `/` does not start a comment.
   mut in_lob : Bool
   /// The code units read since the text was last at the top level.
-  mut since_top : Int
+  mut since_top : Int32
   /// Since the reader last cleared this flag, the text was at the top level
   /// between values, or a code unit arrived that may settle the value before.
   mut at_top : Bool
@@ -48,7 +48,7 @@ priv struct Framer {
 /// How many code units after the top level may settle the value before
 /// them: `@text.read_ion_prefix` settles a value that does not close with a
 /// delimiter once three code units follow it.
-let settle_lookahead : Int = 3
+let settle_lookahead : Int32 = 3
 
 ///|
 /// A framer at the start of a stream.
@@ -67,7 +67,7 @@ fn Framer::new() -> Framer {
 /// Read `text` from `from` on, and return where the framer stopped. It stops
 /// before the end only at a code unit whose meaning depends on text that has
 /// not arrived yet, such as a `/` that may start a comment.
-fn Framer::scan(self : Framer, text : StringView, from : Int) -> Int {
+fn Framer::scan(self : Framer, text : StringView, from : Int32) -> Int32 {
   let mut index = from
   while index < text.length() {
     self.note_top()
@@ -100,7 +100,7 @@ fn Framer::note_top(self : Framer) -> Unit {
 /// code units it needs after it, or `None` when those have not arrived yet. A
 /// width of zero ends a token without reading the code unit, which the next
 /// step reads again between tokens.
-fn Framer::step(self : Framer, text : StringView, index : Int) -> Int? {
+fn Framer::step(self : Framer, text : StringView, index : Int32) -> Int32? {
   let c = text[index]
   match self.mode {
     LineComment => {
@@ -158,7 +158,7 @@ fn Framer::step(self : Framer, text : StringView, index : Int) -> Int? {
 ///|
 /// Read a code unit inside a string or symbol that `close` ends. A backslash
 /// escapes the code unit after it.
-fn Framer::string_step(self : Framer, c : UInt16, close : UInt16) -> Int? {
+fn Framer::string_step(self : Framer, c : UInt16, close : UInt16) -> Int32? {
   if self.escaped {
     self.escaped = false
   } else if c == '\\' {
@@ -171,7 +171,11 @@ fn Framer::string_step(self : Framer, c : UInt16, close : UInt16) -> Int? {
 
 ///|
 /// Read a code unit between tokens, outside a lob.
-fn Framer::normal_step(self : Framer, text : StringView, index : Int) -> Int? {
+fn Framer::normal_step(
+  self : Framer,
+  text : StringView,
+  index : Int32,
+) -> Int32? {
   match text[index] {
     '[' | '(' => {
       self.depth += 1
@@ -226,7 +230,7 @@ fn Framer::normal_step(self : Framer, text : StringView, index : Int) -> Int? {
 ///|
 /// Read a code unit inside a lob, where only strings and the closing `}}`
 /// matter.
-fn Framer::lob_step(self : Framer, text : StringView, index : Int) -> Int? {
+fn Framer::lob_step(self : Framer, text : StringView, index : Int32) -> Int32? {
   match text[index] {
     '"' => {
       self.mode = ShortString
@@ -253,9 +257,9 @@ fn Framer::lob_step(self : Framer, text : StringView, index : Int) -> Int? {
 fn Framer::quote_step(
   self : Framer,
   text : StringView,
-  index : Int,
+  index : Int32,
   single : Mode,
-) -> Int? {
+) -> Int32? {
   match (unit_at(text, index + 1), unit_at(text, index + 2)) {
     (Some('\''), Some('\'')) => {
       self.mode = LongString
@@ -271,7 +275,7 @@ fn Framer::quote_step(
 
 ///|
 /// The code unit at `index`, or `None` when it has not arrived yet.
-fn unit_at(text : StringView, index : Int) -> UInt16? {
+fn unit_at(text : StringView, index : Int32) -> UInt16? {
   if index < text.length() {
     Some(text[index])
   } else {

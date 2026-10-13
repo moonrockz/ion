@@ -4,7 +4,7 @@
 // skipped until the port that fixes it lands (epic ion-dql).
 
 ///|
-let deep : Int = 100_000
+let deep : Int32 = 100_000
 
 ///|
 let shapes : Array[@testkit.DeepShape] = [

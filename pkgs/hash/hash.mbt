@@ -134,7 +134,7 @@ fn symbol_serialization(
 
 ///|
 /// The Ion binary type code `T` for an Ion type.
-fn type_code(t : @ion.IonType) -> Int {
+fn type_code(t : @ion.IonType) -> Int32 {
   match t {
     @ion.IonType::Null => 0
     @ion.IonType::Bool => 1
@@ -281,7 +281,7 @@ fn decimal_representation(d : @ion.Decimal) -> Array[Byte] {
 
 ///|
 /// The magnitude of an `Int`.
-fn magnitude_int(value : Int) -> Int {
+fn magnitude_int(value : Int32) -> Int32 {
   if value < 0 {
     -value
   } else {
@@ -355,7 +355,7 @@ fn struct_representation(
 
 ///|
 /// Lexicographic comparison of octets as unsigned integers.
-fn compare_bytes(a : Array[Byte], b : Array[Byte]) -> Int {
+fn compare_bytes(a : Array[Byte], b : Array[Byte]) -> Int32 {
   let shared = if a.length() < b.length() { a.length() } else { b.length() }
   for index in 0..<shared {
     let left = a[index].to_int()

@@ -8,19 +8,19 @@
 /// An Ion `decimal` value, kept as `coefficient * 10^exponent`.
 pub struct Decimal {
   coefficient : BigInt
-  exponent : Int
+  exponent : Int32
   negative_zero : Bool
 } derive(Debug)
 
 ///|
 /// Build a decimal from an explicit coefficient and base-10 exponent.
-pub fn Decimal::new(coefficient : BigInt, exponent : Int) -> Decimal {
+pub fn Decimal::new(coefficient : BigInt, exponent : Int32) -> Decimal {
   { coefficient, exponent, negative_zero: false, }
 }
 
 ///|
 /// Build a decimal from an `Int`, with exponent `0`.
-pub fn Decimal::from_int(value : Int) -> Decimal {
+pub fn Decimal::from_int(value : Int32) -> Decimal {
   Decimal::new(BigInt::from_int(value), 0)
 }
 
@@ -39,7 +39,7 @@ pub fn Decimal::negative_zero() -> Decimal {
 ///|
 /// The decimal `-0dN`: negative zero at a given exponent, which Ion keeps
 /// distinct from `0dN`.
-pub fn Decimal::negative_zero_at(exponent : Int) -> Decimal {
+pub fn Decimal::negative_zero_at(exponent : Int32) -> Decimal {
   { coefficient: BigInt::from_int(0), exponent, negative_zero: true, }
 }
 
@@ -51,7 +51,7 @@ pub fn Decimal::coefficient(self : Decimal) -> BigInt {
 
 ///|
 /// The base-10 exponent of this decimal.
-pub fn Decimal::exponent(self : Decimal) -> Int {
+pub fn Decimal::exponent(self : Decimal) -> Int32 {
   self.exponent
 }
 
@@ -89,8 +89,8 @@ fn Decimal::magnitude(self : Decimal) -> BigInt {
 /// run. Raises when the run is empty or an underscore is misplaced.
 fn read_uint_run(
   text : StringView,
-  start : Int,
-) -> (String, Int) raise IonError {
+  start : Int32,
+) -> (String, Int32) raise IonError {
   let n = text.length()
   let sb = StringBuilder()
   let mut i = start
@@ -120,7 +120,10 @@ fn read_uint_run(
 
 ///|
 /// Read a signed decimal exponent (`d`/`D` body), e.g. `-12` in `1.5d-12`.
-fn read_exponent(text : StringView, start : Int) -> (Int, Int) raise IonError {
+fn read_exponent(
+  text : StringView,
+  start : Int32,
+) -> (Int32, Int32) raise IonError {
   let n = text.length()
   let mut i = start
   let mut negative = false

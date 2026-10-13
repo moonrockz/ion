@@ -1,8 +1,8 @@
 ///|
 fn unknown(
   name : String,
-  slot : Int,
-  local_sid? : Int = 10,
+  slot : Int32,
+  local_sid~ : Int32 = 10,
 ) -> @ion.SymbolToken {
   @ion.SymbolToken::from_import(local_sid, name, 1, slot)
 }

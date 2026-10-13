@@ -45,7 +45,7 @@ fn json_equal(left : Json, right : Json) -> Bool {
 
 ///|
 /// A JSON value assembled from a small seed, covering every JSON kind.
-fn sample_json(seed : (Int, Int, String, Bool)) -> Json {
+fn sample_json(seed : (Int32, Int32, String, Bool)) -> Json {
   Json::array([
     Json::number(seed.0.to_double()),
     Json::number(seed.1.to_double() / 4.0),
@@ -68,7 +68,7 @@ test "every Ion integer converts to its exact JSON spelling" {
 
 ///|
 test "JSON survives a trip through Ion" {
-  @quickcheck.check((seed : (Int, Int, String, Bool)) => {
+  @quickcheck.check((seed : (Int32, Int32, String, Bool)) => {
     let original = sample_json(seed)
     let back = @json.to_json(@json.to_ion(original)) catch { _ => return false }
     json_equal(back, original)
@@ -111,7 +111,7 @@ test "a clob's bytes become the matching Latin-1 code points" {
 
 ///|
 test "a decimal renders as a valid JSON number" {
-  @quickcheck.check((pair : (BigInt, Int)) => {
+  @quickcheck.check((pair : (BigInt, Int32)) => {
     let decimal = @core.Decimal::new(pair.0, pair.1 % 50)
     let json = @json.to_json(@core.IonValue::decimal(decimal)) catch {
       _ => return false

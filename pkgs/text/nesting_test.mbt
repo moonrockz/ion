@@ -5,7 +5,7 @@
 ///|
 /// Text for `depth` containers nested inside each other around `1`, each one
 /// spelled `open` ... `close`.
-fn nested(open : String, close : String, depth : Int) -> String {
+fn nested(open : String, close : String, depth : Int32) -> String {
   open.repeat(depth) + "1" + close.repeat(depth)
 }
 

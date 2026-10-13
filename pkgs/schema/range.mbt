@@ -101,7 +101,7 @@ fn range_kind(range : ValueRange) -> RangeKind? {
 /// An exact number: a float's infinities, or `coefficient * 10^exponent`.
 priv enum Exact {
   NegativeInfinity
-  Finite(BigInt, Int)
+  Finite(BigInt, Int32)
   PositiveInfinity
 }
 
@@ -151,14 +151,14 @@ fn exact_double(f : Double) -> Exact {
 
 ///|
 /// `base` to the power `exponent`, which is not negative.
-fn power(base : Int, exponent : Int) -> BigInt {
+fn power(base : Int32, exponent : Int32) -> BigInt {
   @bigint.BigInt::from_int(base).pow(@bigint.BigInt::from_int(exponent))
 }
 
 ///|
 /// The sign of a number: -1, 0, or 1. (`compare` gives only a sign, which is
 /// not always -1 or 1: on wasm-gc it can be any number.)
-fn sign(n : BigInt) -> Int {
+fn sign(n : BigInt) -> Int32 {
   if n > 0N {
     1
   } else if n < 0N {
@@ -170,7 +170,7 @@ fn sign(n : BigInt) -> Int {
 
 ///|
 /// Compare two exact numbers: -1, 0, or 1.
-fn compare_exact(a : Exact, b : Exact) -> Int {
+fn compare_exact(a : Exact, b : Exact) -> Int32 {
   match (a, b) {
     (NegativeInfinity, NegativeInfinity)
     | (PositiveInfinity, PositiveInfinity) => 0
@@ -196,7 +196,7 @@ fn compare_exact(a : Exact, b : Exact) -> Int {
 
 ///|
 /// The number of decimal digits in a coefficient's magnitude.
-fn digits(n : BigInt) -> Int {
+fn digits(n : BigInt) -> Int32 {
   let text = n.to_string()
   if text.has_prefix("-") {
     text.length() - 1
@@ -208,7 +208,7 @@ fn digits(n : BigInt) -> Int {
 ///|
 /// Compare two values of the same range kind: numbers by value, timestamps by
 /// instant. `None` when they cannot be compared.
-fn compare_values(a : @ion.IonValue, b : @ion.IonValue) -> Int? {
+fn compare_values(a : @ion.IonValue, b : @ion.IonValue) -> Int32? {
   match (a.kind(), b.kind()) {
     (Timestamp(x), Timestamp(y)) => Some(x.compare_instant(y))
     _ =>

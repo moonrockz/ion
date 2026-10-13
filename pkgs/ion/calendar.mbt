@@ -9,13 +9,13 @@
 
 ///|
 /// Whether `year` is a leap year in the proleptic Gregorian calendar.
-pub fn is_leap_year(year : Int) -> Bool {
+pub fn is_leap_year(year : Int32) -> Bool {
   year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
 ///|
 /// The number of days in `month` of `year`.
-pub fn days_in_month(year : Int, month : Int) -> Int {
+pub fn days_in_month(year : Int32, month : Int32) -> Int32 {
   match month {
     1 | 3 | 5 | 7 | 8 | 10 | 12 => 31
     4 | 6 | 9 | 11 => 30
@@ -28,11 +28,11 @@ pub fn days_in_month(year : Int, month : Int) -> Int {
 /// The civil date `days` days after `year-month-day`, rolling over months and
 /// years. `days` may be negative.
 pub fn shift_date(
-  year : Int,
-  month : Int,
-  day : Int,
-  days : Int,
-) -> (Int, Int, Int) {
+  year : Int32,
+  month : Int32,
+  day : Int32,
+  days : Int32,
+) -> (Int32, Int32, Int32) {
   let mut y = year
   let mut m = month
   let mut d = day + days
@@ -58,7 +58,7 @@ pub fn shift_date(
 ///|
 /// Integer division that rounds toward negative infinity, so a minute count
 /// before midnight maps onto the previous day.
-fn floor_div(value : Int, divisor : Int) -> Int {
+fn floor_div(value : Int32, divisor : Int32) -> Int32 {
   let quotient = value / divisor
   if value % divisor != 0 && value < 0 {
     quotient - 1
@@ -72,7 +72,7 @@ fn floor_div(value : Int, divisor : Int) -> Int {
 /// timestamp with no time of day is returned unchanged.
 fn shift_minutes(
   timestamp : Timestamp,
-  minutes : Int,
+  minutes : Int32,
   offset : TimestampOffset,
 ) -> Timestamp {
   match
@@ -105,7 +105,7 @@ fn shift_minutes(
 ///|
 /// The minutes east of UTC that an offset shifts local time by. An unknown
 /// offset means the components are in UTC.
-fn offset_minutes(offset : TimestampOffset?) -> Int {
+fn offset_minutes(offset : TimestampOffset?) -> Int32 {
   match offset {
     Some(TimestampOffset::Known(minutes)) => minutes
     _ => 0
@@ -151,7 +151,7 @@ pub fn Timestamp::as_local(self : Timestamp) -> Timestamp {
 /// its lowest value, and a timestamp with no time, or an unknown offset, is
 /// read in UTC. `2007T`, `2007-01-01`, and `2007-01-01T01:00+01:00` name the
 /// same instant, though they are different Ion values.
-pub fn Timestamp::compare_instant(self : Timestamp, other : Timestamp) -> Int {
+pub fn Timestamp::compare_instant(self : Timestamp, other : Timestamp) -> Int32 {
   let a = self.as_utc()
   let b = other.as_utc()
   let fields = (timestamp : Timestamp) => {
@@ -175,7 +175,7 @@ pub fn Timestamp::compare_instant(self : Timestamp, other : Timestamp) -> Int {
 
 ///|
 /// Compare two fractional seconds exactly; a missing fraction is zero.
-fn compare_fractions(a : Decimal?, b : Decimal?) -> Int {
+fn compare_fractions(a : Decimal?, b : Decimal?) -> Int32 {
   let zero = Decimal::zero()
   let a = a.unwrap_or(zero)
   let b = b.unwrap_or(zero)

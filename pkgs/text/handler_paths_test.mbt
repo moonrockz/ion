@@ -86,7 +86,7 @@ test "tree dispatch and reader feed deliver every callback in the same order" {
 
 ///|
 struct ScalarCounter {
-  mut count : Int
+  mut count : Int32
 }
 
 ///|
@@ -96,7 +96,7 @@ impl @text.IonHandler for ScalarCounter with fn on_scalar(self, _value) {
 
 ///|
 struct DocumentCounter {
-  mut count : Int
+  mut count : Int32
 }
 
 ///|

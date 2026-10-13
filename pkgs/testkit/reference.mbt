@@ -79,7 +79,7 @@ fn fields_equal(a : Array[@ion.Field], b : Array[@ion.Field]) -> Bool {
 
 ///|
 /// The number of values in `value`, itself and every nested value included.
-pub fn count_values(value : @ion.IonValue) -> Int {
+pub fn count_values(value : @ion.IonValue) -> Int32 {
   match value.kind() {
     List(items) | Sexp(items) =>
       items.fold(init=1, (count, item) => count + count_values(item))

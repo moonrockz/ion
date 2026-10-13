@@ -113,7 +113,7 @@ pub fn Schema::is_valid(
 
 ///|
 /// Whether `n` is within `lower..=upper` (or `lower..` when `upper` is `None`).
-fn in_range(n : Int, lower : Int, upper : Int?) -> Bool {
+fn in_range(n : Int32, lower : Int32, upper : Int32?) -> Bool {
   if n < lower {
     return false
   }
@@ -573,7 +573,7 @@ fn check_fields(
 
 ///|
 /// The number of elements or fields in a container.
-fn container_length(value : @ion.IonValue) -> Int? {
+fn container_length(value : @ion.IonValue) -> Int32? {
   match value.kind() {
     @ion.IonValueKind::List(items) | @ion.IonValueKind::Sexp(items) =>
       Some(items.length())
@@ -584,7 +584,7 @@ fn container_length(value : @ion.IonValue) -> Int? {
 
 ///|
 /// The number of code points in a string or symbol.
-fn codepoint_length(value : @ion.IonValue) -> Int? {
+fn codepoint_length(value : @ion.IonValue) -> Int32? {
   match value.kind() {
     @ion.IonValueKind::String(text) => Some(text.char_length())
     @ion.IonValueKind::Symbol(token) =>
@@ -638,9 +638,9 @@ fn check_contains(
 /// Check a measure of a value against an inclusive range. `None` means the
 /// value is not `applies_to`, and does not satisfy the constraint.
 fn check_measure(
-  measured : Int?,
-  lower : Int,
-  upper : Int?,
+  measured : Int32?,
+  lower : Int32,
+  upper : Int32?,
   measure : String,
   applies_to : String,
   path : String,
@@ -661,7 +661,7 @@ fn check_measure(
 
 ///|
 /// The number of bytes in a non-null blob or clob.
-fn byte_length(value : @ion.IonValue) -> Int? {
+fn byte_length(value : @ion.IonValue) -> Int32? {
   match value.kind() {
     @ion.IonValueKind::Blob(bytes) | @ion.IonValueKind::Clob(bytes) =>
       Some(bytes.length())
@@ -671,7 +671,7 @@ fn byte_length(value : @ion.IonValue) -> Int? {
 
 ///|
 /// The number of bytes in the UTF-8 encoding of a string or symbol.
-fn utf8_byte_length(value : @ion.IonValue) -> Int? {
+fn utf8_byte_length(value : @ion.IonValue) -> Int32? {
   let text = match value.kind() {
     @ion.IonValueKind::String(text) => text
     @ion.IonValueKind::Symbol(token) =>
@@ -717,7 +717,7 @@ fn timestamp_of(value : @ion.IonValue) -> @ion.Timestamp? {
 
 ///|
 /// A timestamp's precision, as `TimestampPrecision` counts it.
-fn timestamp_precision(timestamp : @ion.Timestamp) -> Int {
+fn timestamp_precision(timestamp : @ion.Timestamp) -> Int32 {
   match timestamp.precision() {
     Year => -4
     Month => -3

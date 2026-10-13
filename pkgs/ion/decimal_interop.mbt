@@ -71,7 +71,7 @@ pub fn Decimal::multiply(self : Decimal, other : Decimal) -> Decimal? {
 /// Numeric comparison, via `moonbitlang/x`'s decimal arithmetic: `-1`, `0`, or
 /// `1`. Unlike `IonValue::equals`, this ignores scale, so `1.5` and `1.50`
 /// compare equal. Returns `None` when an operand is out of range.
-pub fn Decimal::compare(self : Decimal, other : Decimal) -> Int? {
+pub fn Decimal::compare(self : Decimal, other : Decimal) -> Int32? {
   match (self.to_x(), other.to_x()) {
     (Some(a), Some(b)) => Some(if a < b { -1 } else if a > b { 1 } else { 0 })
     _ => None

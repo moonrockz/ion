@@ -23,9 +23,9 @@ struct SymbolTable {
   /// The imports, in ID order after the system symbols.
   mut imports : Array[Import]
   /// The number of IDs the imports take.
-  mut imported : Int
+  mut imported : Int32
   /// Local null slots reserved by a writer before its named local symbols.
-  mut reserved : Int
+  mut reserved : Int32
   /// The local symbols in ID order after the imported IDs. `None` is a slot
   /// with unknown text.
   mut locals : Array[String?]
@@ -36,15 +36,15 @@ struct SymbolTable {
 /// hold the shared table's texts (or gaps), and the rest have unknown text.
 priv struct Import {
   name : String
-  version : Int
-  count : Int
+  version : Int32
+  count : Int32
   known : Array[String?]
 }
 
 ///|
 /// A table with only the Ion 1.0 system symbols, resolving imports against
 /// `catalog` (empty by default).
-pub fn SymbolTable::system(catalog? : Catalog = Catalog::new()) -> SymbolTable {
+pub fn SymbolTable::system(catalog~ : Catalog = Catalog::new()) -> SymbolTable {
   { catalog, imports: [], imported: 0, reserved: 0, locals: [], }
 }
 
@@ -67,7 +67,7 @@ pub fn SymbolTable::is_empty(self : SymbolTable) -> Bool {
 
 ///|
 /// The highest symbol ID the table defines.
-pub fn SymbolTable::max_id(self : SymbolTable) -> Int {
+pub fn SymbolTable::max_id(self : SymbolTable) -> Int32 {
   9 + self.imported + self.reserved + self.locals.length()
 }
 
@@ -83,7 +83,7 @@ pub fn SymbolTable::reset(self : SymbolTable) -> Unit {
 ///|
 /// The text of a symbol ID: a system symbol, an imported or local symbol, or
 /// nothing for an ID with unknown text or beyond the table.
-pub fn SymbolTable::text(self : SymbolTable, sid : Int) -> String? {
+pub fn SymbolTable::text(self : SymbolTable, sid : Int32) -> String? {
   match system_symbol_text(sid) {
     Some(text) => return Some(text)
     None => ()
@@ -113,7 +113,7 @@ pub fn SymbolTable::text(self : SymbolTable, sid : Int) -> String? {
 ///|
 /// The token for a symbol ID: known text, or an unknown symbol retaining its
 /// imported table name and slot when applicable.
-pub fn SymbolTable::token(self : SymbolTable, sid : Int) -> SymbolToken {
+pub fn SymbolTable::token(self : SymbolTable, sid : Int32) -> SymbolToken {
   match self.text(sid) {
     Some(text) => SymbolToken::new(text)
     None => {
@@ -142,7 +142,7 @@ pub fn SymbolTable::token(self : SymbolTable, sid : Int) -> SymbolToken {
 /// reject it rather than keep a symbol no table defines.
 pub fn SymbolTable::lookup(
   self : SymbolTable,
-  sid : Int,
+  sid : Int32,
 ) -> SymbolToken raise IonError {
   if sid < 0 || sid > self.max_id() {
     raise Syntax(
@@ -157,7 +157,7 @@ pub fn SymbolTable::lookup(
 /// existing local symbols. These remain
 /// equivalent to symbol zero; declaring them through a shared import would
 /// give them a different identity. Known texts can be interned after them.
-pub fn SymbolTable::reserve(self : SymbolTable, count : Int) -> Unit {
+pub fn SymbolTable::reserve(self : SymbolTable, count : Int32) -> Unit {
   self.imports = []
   self.imported = 0
   self.reserved = count
@@ -203,7 +203,7 @@ pub fn SymbolTable::to_local_symbol_table(self : SymbolTable) -> IonValue? {
 ///|
 /// The highest ID of a symbol known only by its ID in `values`, in annotations,
 /// field names, and symbol values at any depth, or 0 when there is none.
-pub fn highest_symbol_id(values : Array[IonValue]) -> Int {
+pub fn highest_symbol_id(values : Array[IonValue]) -> Int32 {
   let mut highest = 0
   for value in values {
     highest = @cmp.maximum(highest, value_highest_symbol_id(value))
@@ -213,7 +213,7 @@ pub fn highest_symbol_id(values : Array[IonValue]) -> Int {
 
 ///|
 /// `highest_symbol_id` for one value.
-fn value_highest_symbol_id(value : IonValue) -> Int {
+fn value_highest_symbol_id(value : IonValue) -> Int32 {
   let mut highest = 0
   for annotation in value.annotations() {
     highest = @cmp.maximum(highest, token_symbol_id(annotation))
@@ -236,7 +236,7 @@ fn value_highest_symbol_id(value : IonValue) -> Int {
 
 ///|
 /// The ID of a token known only by its ID, or 0.
-fn token_symbol_id(token : SymbolToken) -> Int {
+fn token_symbol_id(token : SymbolToken) -> Int32 {
   match (token.text(), token.sid()) {
     (None, Some(sid)) => sid
     _ => 0
@@ -245,7 +245,7 @@ fn token_symbol_id(token : SymbolToken) -> Int {
 
 ///|
 /// The symbol ID this table already uses for `text`.
-pub fn SymbolTable::find(self : SymbolTable, text : String) -> Int? {
+pub fn SymbolTable::find(self : SymbolTable, text : String) -> Int32? {
   for sid in 1..<=9 {
     if system_symbol_text(sid) == Some(text) {
       return Some(sid)
@@ -271,7 +271,7 @@ pub fn SymbolTable::find(self : SymbolTable, text : String) -> Int? {
 ///|
 /// The symbol ID for `text`, adding it to the local symbols when the table
 /// does not already define it.
-pub fn SymbolTable::intern(self : SymbolTable, text : String) -> Int {
+pub fn SymbolTable::intern(self : SymbolTable, text : String) -> Int32 {
   match self.find(text) {
     Some(sid) => sid
     None => {
@@ -385,7 +385,7 @@ fn resolve_import(
   }
   let mut name : String? = None
   let mut version = 1
-  let mut max_id : Int? = None
+  let mut max_id : Int32? = None
   let seen : Array[String] = []
   for field in fields {
     match field.name().text() {

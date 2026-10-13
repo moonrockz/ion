@@ -8,6 +8,12 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonrockz/moonspec@0.10.0",
   "moonrockz/expect@0.6.0",
+  // moonspec 0.10.0 pulls older versions of these modules, whose moon.mod.json
+  // manifests the current toolchain rejects. Remove these pins after a moonspec
+  // release that depends on fixed versions.
+  "moonbitlang/regexp@0.3.6",
+  "moonbit-community/prettyprinter@0.4.11",
+  "moonrockz/gherkin@0.5.1",
 }
 
 ///|

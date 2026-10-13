@@ -111,9 +111,9 @@ test "repeated field names match as a multiset 100,000 levels deep" {
 /// `{a: inner, a: 1, a: 2}` around `inner`, `levels` times, with the two
 /// numbers in the order `first`, `second`.
 fn repeated_name_chain(
-  levels : Int,
-  first : Int,
-  second : Int,
+  levels : Int32,
+  first : Int32,
+  second : Int32,
 ) -> @ion.IonValue {
   let mut value = @ion.IonValue::int(0)
   for _ in 0..<levels {

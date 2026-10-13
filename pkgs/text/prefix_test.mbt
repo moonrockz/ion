@@ -6,7 +6,7 @@
 fn prefix(
   text : String,
   end_of_input~ : Bool,
-) -> (String, Int)? raise @ion.IonError {
+) -> (String, Int32)? raise @ion.IonError {
   let symbols = @ion.SymbolTable::system()
   match @text.read_ion_prefix(text, symbols~, end_of_input~) {
     Some((Some(value), consumed)) => Some((@text.write_ion(value), consumed))

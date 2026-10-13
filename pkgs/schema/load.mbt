@@ -57,7 +57,7 @@ fn field_value(fields : Array[@ion.Field], name : String) -> @ion.IonValue? {
 
 ///|
 /// The integer value of an Ion `int`.
-fn int_of(value : @ion.IonValue) -> Int raise @ion.IonError {
+fn int_of(value : @ion.IonValue) -> Int32 raise @ion.IonError {
   match value.kind() {
     @ion.IonValueKind::Int(n) => n.to_int()
     _ => raise @ion.IonError::DataModel("expected an integer")
@@ -85,9 +85,9 @@ fn load_type_definition(
 fn load_type_fields(
   fields : Array[@ion.Field],
   ctx : Context,
-  inline? : Bool = false,
-  variably_occurring? : Bool = false,
-  nullable? : Bool = false,
+  inline~ : Bool = false,
+  variably_occurring~ : Bool = false,
+  nullable~ : Bool = false,
 ) -> Array[Constraint] raise @ion.IonError {
   let constraints : Array[Constraint] = []
   let mut closed = false
@@ -524,7 +524,7 @@ fn load_isl10_annotations(
 ///|
 /// The integer for a named timestamp precision, as `TimestampPrecision`
 /// counts it.
-fn precision_of(value : @ion.IonValue) -> Int raise @ion.IonError {
+fn precision_of(value : @ion.IonValue) -> Int32 raise @ion.IonError {
   let name = match value.kind() {
     @ion.IonValueKind::Symbol(token) => token.text()
     _ => None
@@ -565,7 +565,7 @@ fn load_offsets(
       _ => raise invalid
     }
     let chars : Array[Char] = text.iter().collect()
-    let digit = (index : Int) => {
+    let digit = (index : Int32) => {
       let c = chars[index]
       if c >= '0' && c <= '9' {
         c.to_int() - '0'.to_int()
@@ -734,7 +734,7 @@ fn load_valid_values(
 fn load_inline_type(
   value : @ion.IonValue,
   ctx : Context,
-  variably_occurring? : Bool = false,
+  variably_occurring~ : Bool = false,
 ) -> Constraint raise @ion.IonError {
   reject_unknown_annotations(value, "inline type", ctx)
   let nullable = has_annotation(
@@ -818,7 +818,7 @@ fn load_occurs(value : @ion.IonValue) -> Occurs raise @ion.IonError {
 
 ///|
 /// Load a length or count: a non-negative integer, or a range of them.
-fn load_range(value : @ion.IonValue) -> (Int, Int?) raise @ion.IonError {
+fn load_range(value : @ion.IonValue) -> (Int32, Int32?) raise @ion.IonError {
   load_ordered_range(value, Some(0), int_of)
 }
 
@@ -829,9 +829,9 @@ fn load_range(value : @ion.IonValue) -> (Int, Int?) raise @ion.IonError {
 /// `None` for no upper bound. No value may be below `floor`.
 fn load_ordered_range(
   value : @ion.IonValue,
-  floor : Int?,
-  read : (@ion.IonValue) -> Int raise @ion.IonError,
-) -> (Int, Int?) raise @ion.IonError {
+  floor : Int32?,
+  read : (@ion.IonValue) -> Int32 raise @ion.IonError,
+) -> (Int32, Int32?) raise @ion.IonError {
   let too_low = () => {
     @ion.IonError::DataModel(
       "the value is below the lowest allowed, \{floor.unwrap_or(0)}",

@@ -56,8 +56,8 @@ pub(all) enum IonTokenKind {
 /// A token: its kind and its inclusive-start/exclusive-end span in the source.
 pub struct IonToken {
   kind : IonTokenKind
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
 } derive(Debug)
 
 ///|
@@ -68,13 +68,13 @@ pub fn IonToken::kind(self : IonToken) -> IonTokenKind {
 
 ///|
 /// The token's start offset in the source.
-pub fn IonToken::start(self : IonToken) -> Int {
+pub fn IonToken::start(self : IonToken) -> Int32 {
   self.start
 }
 
 ///|
 /// The token's end offset (exclusive) in the source.
-pub fn IonToken::end(self : IonToken) -> Int {
+pub fn IonToken::end(self : IonToken) -> Int32 {
   self.end
 }
 
@@ -133,9 +133,9 @@ pub fn tokenize(text : StringView) -> Array[IonToken] raise @ion.IonError {
 /// A cursor over Ion text that produces tokens.
 priv struct Lexer {
   input : StringView
-  mut pos : Int
+  mut pos : Int32
   /// Depth of S-expressions, where operators are symbols.
-  mut sexp_depth : Int
+  mut sexp_depth : Int32
 }
 
 ///|
@@ -149,7 +149,7 @@ fn Lexer::at_end(self : Lexer) -> Bool {
 }
 
 ///|
-fn Lexer::peek_at(self : Lexer, offset : Int) -> UInt16? {
+fn Lexer::peek_at(self : Lexer, offset : Int32) -> UInt16? {
   let index = self.pos + offset
   if index >= self.input.length() {
     None

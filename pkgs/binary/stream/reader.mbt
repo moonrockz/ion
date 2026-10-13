@@ -17,11 +17,11 @@ struct BinaryReader {
   table : @ion.SymbolTable
   /// Octets not yet decoded, from `start` on, and then `arrived`.
   mut buffer : Bytes
-  mut start : Int
+  mut start : Int32
   /// Octets read since `buffer` was last built.
   arrived : @buffer.Buffer
   /// The octets the next value needs before a decode is worth trying.
-  mut needed : Int
+  mut needed : Int32
   mut eof : Bool
 }
 
@@ -33,8 +33,8 @@ struct BinaryReader {
 /// import.
 pub fn BinaryReader::new(
   source : &@io.Reader,
-  prefix? : Bytes = b"",
-  catalog? : @ion.Catalog = @ion.Catalog::new(),
+  prefix~ : Bytes = b"",
+  catalog~ : @ion.Catalog = @ion.Catalog::new(),
 ) -> BinaryReader {
   let arrived = @buffer.Buffer()
   arrived.write_bytes(prefix)
@@ -108,7 +108,7 @@ pub async fn BinaryReader::next(self : BinaryReader) -> @ion.IonValue? {
 
 ///|
 /// The number of octets read and not yet decoded.
-fn BinaryReader::available(self : BinaryReader) -> Int {
+fn BinaryReader::available(self : BinaryReader) -> Int32 {
   self.buffer.length() - self.start + self.arrived.length()
 }
 
@@ -138,4 +138,4 @@ async fn BinaryReader::fill(self : BinaryReader) -> Unit {
 ///|
 /// The most octets to ask the source for in one read. Without a limit, a read
 /// returns about one kilobyte, and the cost of each read dominates.
-let read_size : Int = 65536
+let read_size : Int32 = 65536

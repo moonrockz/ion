@@ -5,7 +5,7 @@
 
 ///|
 test "decimal text round-trips through parsing" {
-  @quickcheck.check((pair : (BigInt, Int)) => {
+  @quickcheck.check((pair : (BigInt, Int32)) => {
     // Keep the exponent small: the value is arbitrary precision, but the
     // exponent travels as an Ion `int` and the parser reads it back as one.
     let original = @ion.Decimal::new(pair.0, pair.1 % 1000)
@@ -18,7 +18,7 @@ test "decimal text round-trips through parsing" {
 
 ///|
 test "timestamp text round-trips through parsing" {
-  @quickcheck.check((seed : (Int, Int, Int, Int, Int, Int)) => {
+  @quickcheck.check((seed : (Int32, Int32, Int32, Int32, Int32, Int32)) => {
     let original = @ion.Timestamp::new(
       year=2000 + (seed.0 & 0xFF),
       month=Some((seed.1 & 0x0F) % 12 + 1),
@@ -36,7 +36,7 @@ test "timestamp text round-trips through parsing" {
 ///|
 /// Counts the values it visits.
 struct ValueCounter {
-  mut count : Int
+  mut count : Int32
 }
 
 ///|

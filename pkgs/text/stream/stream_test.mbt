@@ -5,7 +5,7 @@
 
 ///|
 /// An in-memory async reader over `bytes`, delivered in chunks of `chunk`.
-fn reader_of(bytes : Bytes, chunk? : Int = 4096) -> @io.MemoryReader {
+fn reader_of(bytes : Bytes, chunk~ : Int32 = 4096) -> @io.MemoryReader {
   @io.MemoryReader(async fn(writer) {
     let mut offset = 0
     while offset < bytes.length() {
@@ -22,7 +22,7 @@ fn reader_of(bytes : Bytes, chunk? : Int = 4096) -> @io.MemoryReader {
 
 ///|
 /// A streaming value reader over `text`, encoded as UTF-8.
-fn text_reader(text : String, chunk? : Int = 4096) -> @stream.TextReader {
+fn text_reader(text : String, chunk~ : Int32 = 4096) -> @stream.TextReader {
   @stream.TextReader::new(reader_of(@utf8.encode(text), chunk~))
 }
 
@@ -43,7 +43,7 @@ async fn read_all(reader : @stream.TextReader) -> Array[@ion.IonValue] {
 ///|
 /// Whether streaming `text` in chunks of `chunk` octets yields the values the
 /// sync reader parses from the whole text.
-async fn assert_streams_like_sync(text : String, chunk : Int) -> Unit {
+async fn assert_streams_like_sync(text : String, chunk : Int32) -> Unit {
   let expected = @text.read_ion_datagram(text)
   let actual = read_all(text_reader(text, chunk~))
   assert_eq(actual.length(), expected.length())

@@ -2,14 +2,14 @@
 
 ///|
 /// A single-character view of `text` at `index`, used to accumulate runs.
-fn char_view(text : StringView, index : Int) -> StringView {
+fn char_view(text : StringView, index : Int32) -> StringView {
   text[index:index + 1]
 }
 
 ///|
 /// A `Char` for a valid Unicode scalar value. Every call site passes one, so
 /// the unchecked conversion is safe.
-fn char_from_code(code : Int) -> Char {
+fn char_from_code(code : Int32) -> Char {
   code.unsafe_to_char()
 }
 

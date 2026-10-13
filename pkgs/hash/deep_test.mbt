@@ -1,7 +1,7 @@
 // Ion Hash handles values nested far deeper than the readers accept.
 
 ///|
-let deep : Int = 100_000
+let deep : Int32 = 100_000
 
 ///|
 #skip("ion-dql.7: serialize_with recurses once per level")

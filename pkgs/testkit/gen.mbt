@@ -64,10 +64,10 @@ let float_samples : Array[Double] = [
 /// reserved local ID. With `imported_symbols` some also come from a shared
 /// table whose text is unknown.
 pub fn gen_value(
-  max_depth~ : Int,
-  max_width~ : Int,
-  unknown_symbols? : Bool = true,
-  imported_symbols? : Bool = false,
+  max_depth~ : Int32,
+  max_width~ : Int32,
+  unknown_symbols~ : Bool = true,
+  imported_symbols~ : Bool = false,
 ) -> @quickcheck.Generator[@ion.IonValue] {
   let choices = [
     (8U, @quickcheck.elements(symbol_texts).map(@ion.SymbolToken::new)),
@@ -85,8 +85,8 @@ pub fn gen_value(
 ///|
 fn value_gen(
   tokens : @quickcheck.Generator[@ion.SymbolToken],
-  depth : Int,
-  width : Int,
+  depth : Int32,
+  width : Int32,
 ) -> @quickcheck.Generator[@ion.IonValue] {
   let core = if depth <= 0 {
     scalar_gen(tokens)
@@ -169,7 +169,7 @@ fn decimal_gen() -> @quickcheck.Generator[@ion.IonValue] {
 ///|
 /// A timestamp at precision 0 (year) to 5 (fractional second). Offsets are
 /// zero, negative or unknown, so the UTC form never moves to an earlier year.
-fn timestamp_at(precision : Int, seed : Int) -> @ion.Timestamp {
+fn timestamp_at(precision : Int32, seed : Int32) -> @ion.Timestamp {
   let year = 1970 + seed % 100
   let month = Some(seed % 12 + 1)
   let day = Some(seed % 28 + 1)
@@ -209,8 +209,8 @@ fn timestamp_at(precision : Int, seed : Int) -> @ion.Timestamp {
 /// fractional numbers, strings, arrays, and objects (whose keys are unique,
 /// as in any JSON object).
 pub fn gen_json(
-  max_depth~ : Int,
-  max_width~ : Int,
+  max_depth~ : Int32,
+  max_width~ : Int32,
 ) -> @quickcheck.Generator[Json] {
   let scalar = @quickcheck.one_of([
     @quickcheck.pure(Json::null()),

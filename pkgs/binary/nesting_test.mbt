@@ -5,7 +5,7 @@
 ///|
 /// The `VarUInt` encoding of `n`: seven bits per octet, most significant
 /// first, with the high bit set on the last octet.
-fn var_uint(n : Int) -> Array[Byte] {
+fn var_uint(n : Int32) -> Array[Byte] {
   let groups = [(n & 0x7F) | 0x80]
   let mut rest = n >> 7
   while rest > 0 {
@@ -18,7 +18,7 @@ fn var_uint(n : Int) -> Array[Byte] {
 ///|
 /// The type descriptor and length of a value with type code `type_code`
 /// whose body is `length` octets.
-fn header(type_code : Int, length : Int) -> Array[Byte] {
+fn header(type_code : Int32, length : Int32) -> Array[Byte] {
   if length < 14 {
     [((type_code << 4) | length).to_byte()]
   } else {
@@ -30,7 +30,7 @@ fn header(type_code : Int, length : Int) -> Array[Byte] {
 /// One level of nesting in Ion binary: a container type code and the octets
 /// that come before the nested value inside it.
 struct Frame {
-  type_code : Int
+  type_code : Int32
   prefix : Array[Byte]
 }
 
@@ -51,7 +51,7 @@ let spellings : Array[Array[Frame]] = [
 /// Ion binary for `depth` levels of `frames` nested around the int `1`. The
 /// headers are built from the inside out and written from the outside in, so
 /// the cost stays linear in the depth.
-fn nested(frames : Array[Frame], depth : Int) -> Bytes {
+fn nested(frames : Array[Frame], depth : Int32) -> Bytes {
   let inner : Array[Byte] = [b'\x21', b'\x01']
   let headers : Array[Array[Byte]] = []
   let mut length = inner.length()

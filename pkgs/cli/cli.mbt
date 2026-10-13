@@ -63,7 +63,7 @@ priv struct Output {
 
 ///|
 /// The size at which buffered output goes to the sink.
-let flush_size : Int = 65536
+let flush_size : Int32 = 65536
 
 ///|
 impl @io.Writer for Output with fn write_once(self, data, offset~, len~) {
@@ -114,7 +114,7 @@ pub async fn run(
   stdin : &@io.Reader,
   stdout : &@io.Writer,
   stderr : &@io.Writer,
-) -> Int {
+) -> Int32 {
   let streams : Streams = {
     stdin,
     out: { sink: stdout, buffer: @buffer.Buffer(), },
@@ -286,7 +286,7 @@ fn value_of(matches : @argparse.Matches, name : String) -> String {
 
 ///|
 /// Run the command that `args` names, returning its exit status.
-async fn dispatch(args : Array[String], streams : Streams) -> Int {
+async fn dispatch(args : Array[String], streams : Streams) -> Int32 {
   let matches = command_line().parse(argv=args, env=Map([])) catch {
     error => {
       streams.err.line(error.to_string().trim_end(chars="\n").to_owned())
@@ -482,7 +482,7 @@ async fn each_value_of(
 ///|
 /// Write each value of the input as Ion text, one per line, or as indented
 /// text, or as Ion binary.
-async fn print(streams : Streams, path : String, format : Format) -> Int {
+async fn print(streams : Streams, path : String, format : Format) -> Int32 {
   let out = streams.out
   match format {
     Binary => {
@@ -512,7 +512,7 @@ async fn print(streams : Streams, path : String, format : Format) -> Int {
 
 ///|
 /// Write each value of the input as JSON, one per line.
-async fn json(streams : Streams, path : String) -> Int {
+async fn json(streams : Streams, path : String) -> Int32 {
   each_value(streams, path, async fn(value) {
     streams.out.line(@json.write_json(value))
     streams.out.flush_when_full()
@@ -522,7 +522,7 @@ async fn json(streams : Streams, path : String) -> Int {
 
 ///|
 /// Read a JSON document and write it as Ion text.
-async fn from_json(streams : Streams, path : String) -> Int {
+async fn from_json(streams : Streams, path : String) -> Int32 {
   let value = @json.read_json(read_text(streams, path))
   streams.out.line(@text.write_ion(value))
   0
@@ -530,7 +530,7 @@ async fn from_json(streams : Streams, path : String) -> Int {
 
 ///|
 /// Write the SHA-256 Ion Hash of each value of the input, one per line.
-async fn hash(streams : Streams, path : String) -> Int {
+async fn hash(streams : Streams, path : String) -> Int32 {
   each_value(streams, path, async fn(value) {
     streams.out.line(@hash.ion_hash_hex(value))
     streams.out.flush_when_full()
@@ -611,7 +611,7 @@ async fn validate(
   type_name : String,
   path : String,
   schema_root : String?,
-) -> Int {
+) -> Int32 {
   let schema = load_schema(streams, schema_path, schema_root)
   if schema.find(type_name) is None {
     raise CliError("\{describe_path(schema_path)}: no type named \{type_name}")

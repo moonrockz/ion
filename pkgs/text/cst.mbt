@@ -21,8 +21,8 @@ pub(all) enum CstContent {
 pub struct CstValue {
   annotations : Array[IonToken]
   field_name : IonToken?
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
   content : CstContent
 } derive(Debug)
 
@@ -71,13 +71,13 @@ pub fn CstValue::content(self : CstValue) -> CstContent {
 
 ///|
 /// The value's start offset in the source.
-pub fn CstValue::start(self : CstValue) -> Int {
+pub fn CstValue::start(self : CstValue) -> Int32 {
   self.start
 }
 
 ///|
 /// The value's end offset (exclusive) in the source.
-pub fn CstValue::end(self : CstValue) -> Int {
+pub fn CstValue::end(self : CstValue) -> Int32 {
   self.end
 }
 
@@ -100,7 +100,7 @@ pub fn CstValue::elements(self : CstValue) -> Array[CstValue]? {
 /// A token cursor over a tokenized source.
 priv struct CstParser {
   tokens : Array[IonToken]
-  mut index : Int
+  mut index : Int32
   /// Depth of nested containers, which the nesting limit caps.
   mut depth : @ion.NestingDepth
 }
@@ -232,7 +232,7 @@ fn CstParser::parse_value(self : CstParser) -> CstValue raise @ion.IonError {
 /// Parse a value's content (its scalar token or a container).
 fn CstParser::parse_content(
   self : CstParser,
-) -> (CstContent, Int) raise @ion.IonError {
+) -> (CstContent, Int32) raise @ion.IonError {
   self.skip_trivia()
   let token = match self.peek() {
     Some(token) => token
@@ -260,8 +260,8 @@ fn CstParser::parse_content(
 /// Raises before parsing it when that passes the nesting limit.
 fn CstParser::parse_container(
   self : CstParser,
-  parse : (CstParser) -> (CstContent, Int) raise @ion.IonError,
-) -> (CstContent, Int) raise @ion.IonError {
+  parse : (CstParser) -> (CstContent, Int32) raise @ion.IonError,
+) -> (CstContent, Int32) raise @ion.IonError {
   let outer = self.depth
   self.depth = outer.enter()
   let content = parse(self)
@@ -282,7 +282,7 @@ fn CstParser::parse_sequence(
   self : CstParser,
   close : IonTokenKind,
   kind : SequenceKind,
-) -> (CstContent, Int) raise @ion.IonError {
+) -> (CstContent, Int32) raise @ion.IonError {
   ignore(self.advance())
   let items : Array[CstValue] = []
   self.skip_trivia()
@@ -323,7 +323,7 @@ fn is_end_of(kind : IonTokenKind, close : IonTokenKind) -> Bool {
 /// Parse a struct's fields.
 fn CstParser::parse_struct(
   self : CstParser,
-) -> (CstContent, Int) raise @ion.IonError {
+) -> (CstContent, Int32) raise @ion.IonError {
   ignore(self.advance())
   let fields : Array[CstValue] = []
   self.skip_trivia()

@@ -10,7 +10,7 @@
 /// `None` is a slot with unknown text.
 struct SharedSymbolTable {
   name : String
-  version : Int
+  version : Int32
   symbols : Array[String?]
 }
 
@@ -18,7 +18,7 @@ struct SharedSymbolTable {
 /// A shared symbol table named `name`, at `version`, declaring `symbols`.
 pub fn SharedSymbolTable::new(
   name : String,
-  version : Int,
+  version : Int32,
   symbols : Array[String?],
 ) -> SharedSymbolTable {
   { name, version, symbols, }
@@ -32,7 +32,7 @@ pub fn SharedSymbolTable::name(self : SharedSymbolTable) -> String {
 
 ///|
 /// The table's version.
-pub fn SharedSymbolTable::version(self : SharedSymbolTable) -> Int {
+pub fn SharedSymbolTable::version(self : SharedSymbolTable) -> Int32 {
   self.version
 }
 
@@ -125,7 +125,7 @@ pub fn Catalog::add(self : Catalog, table : SharedSymbolTable) -> Unit {
 pub fn Catalog::find(
   self : Catalog,
   name : String,
-  version : Int,
+  version : Int32,
 ) -> SharedSymbolTable? {
   self.tables
   .get(name)
