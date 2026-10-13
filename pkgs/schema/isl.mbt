@@ -9,13 +9,13 @@
 /// An occurrence range: how many times a matching element or field must (or may)
 /// appear.
 pub struct Occurs {
-  lower : Int
-  upper : Int?
+  lower : Int32
+  upper : Int32?
 } derive(Debug)
 
 ///|
 /// An occurrence range with an optional upper bound (`None` is unbounded).
-pub fn Occurs::new(lower : Int, upper : Int?) -> Occurs {
+pub fn Occurs::new(lower : Int32, upper : Int32?) -> Occurs {
   { lower, upper, }
 }
 
@@ -33,7 +33,7 @@ pub fn Occurs::optional() -> Occurs {
 
 ///|
 /// Whether `count` is within the range.
-pub fn Occurs::allows(self : Occurs, count : Int) -> Bool {
+pub fn Occurs::allows(self : Occurs, count : Int32) -> Bool {
   if count < self.lower {
     return false
   }
@@ -71,9 +71,9 @@ pub(all) enum Constraint {
   /// A `range::[lower, upper]` of numbers or timestamps in `valid_values`.
   InRange(ValueRange)
   /// `container_length`: the number of elements or fields.
-  ContainerLength(Int, Int?)
+  ContainerLength(Int32, Int32?)
   /// `codepoint_length`: the number of code points in a string or symbol.
-  CodepointLength(Int, Int?)
+  CodepointLength(Int32, Int32?)
   /// All of the nested constraints hold.
   AllOf(Array[Constraint])
   /// At least one of the nested constraints holds.
@@ -89,18 +89,18 @@ pub(all) enum Constraint {
   /// `regex`: a string or symbol has a match for the regular expression.
   Matches(Regex)
   /// `byte_length`: the number of bytes in a blob or clob.
-  ByteLength(Int, Int?)
+  ByteLength(Int32, Int32?)
   /// `utf8_byte_length`: the number of bytes in the UTF-8 encoding of a
   /// string or symbol.
-  Utf8ByteLength(Int, Int?)
+  Utf8ByteLength(Int32, Int32?)
   /// `precision`: the number of digits in a decimal's coefficient.
-  Precision(Int, Int?)
+  Precision(Int32, Int32?)
   /// `exponent`: a decimal's exponent.
-  Exponent(Int, Int?)
+  Exponent(Int32, Int32?)
   /// `timestamp_precision`: a timestamp's precision, as an integer: `-4` for
   /// year, `-3` month, `-2` day, `-1` minute, `0` second, and the number of
   /// fractional digits beyond that (`3` is millisecond).
-  TimestampPrecision(Int, Int?)
+  TimestampPrecision(Int32, Int32?)
   /// `timestamp_offset`: a timestamp's offset is one of these. A timestamp
   /// with no time has the unknown offset.
   TimestampOffsets(Array[@ion.TimestampOffset])

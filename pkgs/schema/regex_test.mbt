@@ -3,8 +3,8 @@
 ///|
 fn regex(
   source : String,
-  ignore_case? : Bool = false,
-  multiline? : Bool = false,
+  ignore_case~ : Bool = false,
+  multiline~ : Bool = false,
 ) -> @schema.Regex {
   @schema.Regex::new(source, ignore_case~, multiline~) catch {
     error => abort("\{source}: \{error.message()}")

@@ -161,7 +161,7 @@ let operator_chars : Array[Char] = [
 
 ///|
 /// A run of operator characters built from `codes`.
-fn operator_run(codes : Array[Int]) -> String {
+fn operator_run(codes : Array[Int32]) -> String {
   let sb = StringBuilder()
   for code in codes {
     sb.write_char(operator_chars[(code % 19 + 19) % 19])
@@ -171,7 +171,7 @@ fn operator_run(codes : Array[Int]) -> String {
 
 ///|
 test "an operator symbol round-trips inside an S-expression" {
-  @quickcheck.check((codes : Array[Int]) => {
+  @quickcheck.check((codes : Array[Int32]) => {
     let value = @ion.IonValue::sexp([
       @ion.IonValue::symbol(operator_run(codes)),
       @ion.IonValue::int(1),
@@ -199,7 +199,7 @@ let sample_names : Array[String] = [
 
 ///|
 /// A generator of Scheme-like S-expressions, nested up to `depth`.
-fn sample_gen(depth : Int) -> @quickcheck.Generator[SampleExpr] {
+fn sample_gen(depth : Int32) -> @quickcheck.Generator[SampleExpr] {
   let atoms = @quickcheck.one_of([
     @quickcheck.int_range(-1000, 1000).map(n => {
       SampleExpr::Number(BigInt::from_int(n))

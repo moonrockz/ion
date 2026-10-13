@@ -31,15 +31,15 @@ pub(all) enum IonTypeCode {
 
 ///|
 /// The length nibble that means a VarUInt length follows the descriptor.
-pub let length_follows : Int = 14
+pub let length_follows : Int32 = 14
 
 ///|
 /// The length nibble that means the value is a typed null.
-pub let length_null : Int = 15
+pub let length_null : Int32 = 15
 
 ///|
 /// The numeric type code (`0`-`15`) of this code.
-pub fn IonTypeCode::to_int(self : IonTypeCode) -> Int {
+pub fn IonTypeCode::to_int(self : IonTypeCode) -> Int32 {
   match self {
     IonTypeCode::Null => 0
     IonTypeCode::Bool => 1
@@ -63,7 +63,7 @@ pub fn IonTypeCode::to_int(self : IonTypeCode) -> Int {
 ///|
 /// The type code for a numeric type code, defaulting to `Reserved` for an
 /// out-of-range value.
-pub fn IonTypeCode::from_int(code : Int) -> IonTypeCode {
+pub fn IonTypeCode::from_int(code : Int32) -> IonTypeCode {
   match code {
     0 => IonTypeCode::Null
     1 => IonTypeCode::Bool
@@ -142,25 +142,25 @@ pub fn has_binary_version_marker(bytes : BytesView) -> Bool {
 
 ///|
 /// Build a type-descriptor byte from a type code and a length nibble.
-pub fn type_descriptor(type_code : IonTypeCode, length_nibble : Int) -> Int {
+pub fn type_descriptor(type_code : IonTypeCode, length_nibble : Int32) -> Int32 {
   type_code.to_int() * 16 + (length_nibble & 0x0F)
 }
 
 ///|
 /// The type code of a type-descriptor byte.
-pub fn descriptor_type_code(descriptor : Int) -> IonTypeCode {
+pub fn descriptor_type_code(descriptor : Int32) -> IonTypeCode {
   IonTypeCode::from_int((descriptor >> 4) & 0x0F)
 }
 
 ///|
 /// The length nibble of a type-descriptor byte.
-pub fn descriptor_length_nibble(descriptor : Int) -> Int {
+pub fn descriptor_length_nibble(descriptor : Int32) -> Int32 {
   descriptor & 0x0F
 }
 
 ///|
 /// Whether a type-descriptor byte denotes a typed null.
-pub fn descriptor_is_null(descriptor : Int) -> Bool {
+pub fn descriptor_is_null(descriptor : Int32) -> Bool {
   descriptor_length_nibble(descriptor) == length_null
 }
 

@@ -17,7 +17,7 @@ impl @io.Writer for Collector with fn write_once(self, data, offset~, len~) {
 
 ///|
 /// An in-memory async reader over `bytes`, delivered in chunks of `chunk`.
-fn reader_of(bytes : Bytes, chunk? : Int = 4096) -> @io.MemoryReader {
+fn reader_of(bytes : Bytes, chunk~ : Int32 = 4096) -> @io.MemoryReader {
   @io.MemoryReader(async fn(writer) {
     let mut offset = 0
     while offset < bytes.length() {
@@ -184,7 +184,7 @@ async test "a binary writer declares only the symbols each value adds" {
 
 ///|
 async test "a binary writer keeps symbols with unknown text" {
-  let unknown = (sid : Int) => {
+  let unknown = (sid : Int32) => {
     @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(sid))
   }
   // The second value needs more reserved IDs than the first.

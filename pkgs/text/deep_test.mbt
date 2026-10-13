@@ -2,13 +2,13 @@
 // See pkgs/ion/deep_test.mbt for the approach.
 
 ///|
-let deep : Int = 100_000
+let deep : Int32 = 100_000
 
 ///|
 /// Pretty text has one indent per level on each line, so its size grows with
 /// the square of the depth. 3,000 levels is past the depth where a recursive
 /// writer overflows a cold js or wasm-gc engine (about 1,000).
-let pretty_deep : Int = 3_000
+let pretty_deep : Int32 = 3_000
 
 ///|
 let shapes : Array[@testkit.DeepShape] = [
@@ -32,7 +32,7 @@ fn level_text(shape : @testkit.DeepShape) -> (String, String) {
 
 ///|
 /// The compact text of `@testkit.deep_value(shape, depth)`, built with loops.
-fn deep_text(shape : @testkit.DeepShape, depth : Int) -> String {
+fn deep_text(shape : @testkit.DeepShape, depth : Int32) -> String {
   let out = StringBuilder()
   for level in 0..<depth {
     if level > 0 && shape.at(level - 1) == Struct {
@@ -52,7 +52,7 @@ fn deep_text(shape : @testkit.DeepShape, depth : Int) -> String {
 
 ///|
 /// The pretty text of `@testkit.deep_value(shape, depth)`, built with loops.
-fn deep_pretty_text(shape : @testkit.DeepShape, depth : Int) -> String {
+fn deep_pretty_text(shape : @testkit.DeepShape, depth : Int32) -> String {
   let out = StringBuilder()
   for level in 0..<depth {
     if level > 0 {
@@ -135,9 +135,9 @@ test "IonReader emits the events of values 100,000 levels deep" {
 ///|
 /// Tracks the container depth of the events it receives.
 struct DepthCounter {
-  mut depth : Int
-  mut deepest : Int
-  mut scalars : Int
+  mut depth : Int32
+  mut deepest : Int32
+  mut scalars : Int32
 }
 
 ///|

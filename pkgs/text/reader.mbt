@@ -65,7 +65,7 @@ fn is_base64_char(c : UInt16) -> Bool {
 /// they import.
 pub fn read_ion(
   text : StringView,
-  catalog? : @ion.Catalog = @ion.Catalog::new(),
+  catalog~ : @ion.Catalog = @ion.Catalog::new(),
 ) -> @ion.IonValue raise @ion.IonError {
   let parser = Parser::new(text)
   let symbols = @ion.SymbolTable::system(catalog~)
@@ -91,7 +91,7 @@ pub fn read_ion(
 /// `catalog` supplies the shared symbol tables they import.
 pub fn read_ion_datagram(
   text : StringView,
-  catalog? : @ion.Catalog = @ion.Catalog::new(),
+  catalog~ : @ion.Catalog = @ion.Catalog::new(),
 ) -> Array[@ion.IonValue] raise @ion.IonError {
   let parser = Parser::new(text)
   let symbols = @ion.SymbolTable::system(catalog~)
@@ -130,7 +130,7 @@ pub fn read_ion_prefix(
   text : StringView,
   symbols~ : @ion.SymbolTable,
   end_of_input~ : Bool,
-) -> (@ion.IonValue?, Int)? raise @ion.IonError {
+) -> (@ion.IonValue?, Int32)? raise @ion.IonError {
   let prefix = if end_of_input {
     read_prefix(text, end_of_input=true)
   } else {
@@ -195,7 +195,7 @@ fn is_version_marker_symbol(value : @ion.IonValue) -> Bool {
 /// token that begins right after it: `::` makes a symbol an annotation, and
 /// `'''` continues a long string. Three code units tell both apart from the
 /// start of the next value.
-let settle_lookahead : Int = 3
+let settle_lookahead : Int32 = 3
 
 ///|
 /// Whether a value that ends with the code unit `last` is settled whatever
@@ -215,7 +215,7 @@ fn is_closing_delimiter(last : UInt16) -> Bool {
 fn read_prefix(
   text : StringView,
   end_of_input~ : Bool,
-) -> (TopLevel, Int)? raise @ion.IonError {
+) -> (TopLevel, Int32)? raise @ion.IonError {
   let parser = Parser::new(text)
   parser.skip_ws()
   if parser.at_end() {
@@ -234,9 +234,9 @@ fn read_prefix(
 /// A cursor over an Ion text document.
 priv struct Parser {
   input : StringView
-  mut pos : Int
+  mut pos : Int32
   /// Depth of nested S-expressions; operators are only recognized inside one.
-  mut sexp_depth : Int
+  mut sexp_depth : Int32
   /// Depth of nested containers of every kind, which the nesting limit caps.
   mut depth : @ion.NestingDepth
   /// Whether the parser has read a symbol-ID literal that a symbol table must
@@ -264,7 +264,7 @@ fn Parser::at_end(self : Parser) -> Bool {
 
 ///|
 /// The code unit at `offset` from the cursor, when in range.
-fn Parser::peek_at(self : Parser, offset : Int) -> UInt16? {
+fn Parser::peek_at(self : Parser, offset : Int32) -> UInt16? {
   let index = self.pos + offset
   if index >= self.input.length() {
     None
@@ -676,7 +676,7 @@ fn classify_number(token : StringView) -> @ion.IonValue raise @ion.IonError {
 /// zero, such as `03.4` or `00e0`.
 fn check_leading_zero(
   token : StringView,
-  start : Int,
+  start : Int32,
 ) -> Unit raise @ion.IonError {
   if start + 1 < token.length() &&
     token[start] == '0' &&
@@ -807,8 +807,8 @@ fn parse_decimal_int(token : StringView) -> BigInt raise @ion.IonError {
 /// Parse a radix-prefixed integer (after its `0x`/`0b` marker).
 fn parse_radix_int(
   token : StringView,
-  start : Int,
-  radix : Int,
+  start : Int32,
+  radix : Int32,
   negative : Bool,
 ) -> BigInt raise @ion.IonError {
   let digits = clean_digits(token[start:])
@@ -978,7 +978,7 @@ fn Parser::parse_quoted_symbol(
 ///|
 /// Decode one escape sequence. Returns the code point, or `-1` for an escaped
 /// newline (which expands to nothing).
-fn Parser::parse_escape(self : Parser) -> Int raise @ion.IonError {
+fn Parser::parse_escape(self : Parser) -> Int32 raise @ion.IonError {
   self.pos += 1
   if self.at_end() {
     raise @ion.IonError::Syntax("unterminated escape sequence")
@@ -1042,7 +1042,7 @@ fn Parser::parse_escape(self : Parser) -> Int raise @ion.IonError {
 
 ///|
 /// Read `count` hexadecimal digits.
-fn Parser::read_hex(self : Parser, count : Int) -> Int raise @ion.IonError {
+fn Parser::read_hex(self : Parser, count : Int32) -> Int32 raise @ion.IonError {
   let mut value = 0
   for _ in 0..<count {
     if self.at_end() {
@@ -1135,7 +1135,7 @@ fn Parser::parse_blob_body(self : Parser) -> Bytes raise @ion.IonError {
 /// Decode one clob escape sequence into a byte value, or `None` for an escaped
 /// newline. Clobs are byte-oriented, so only `\xHH` and the single-character
 /// escapes are valid; `\u` and `\U` are not.
-fn Parser::parse_clob_escape(self : Parser) -> Int? raise @ion.IonError {
+fn Parser::parse_clob_escape(self : Parser) -> Int32? raise @ion.IonError {
   self.pos += 1
   if self.at_end() {
     raise @ion.IonError::Syntax("unterminated escape sequence")
@@ -1390,7 +1390,7 @@ fn resolve_symbol_id(word : String) -> @ion.SymbolToken? {
   if !is_symbol_id_literal(word) {
     return None
   }
-  let sid : Int = @string.from_str(word[1:]) catch { _ => return None }
+  let sid : Int32 = @string.from_str(word[1:]) catch { _ => return None }
   Some(system_symbol_token(sid))
 }
 
@@ -1398,7 +1398,7 @@ fn resolve_symbol_id(word : String) -> @ion.SymbolToken? {
 /// The token for a symbol ID: a system ID resolves to its text, ID 0 carries no
 /// text, and IDs beyond the system range stay text-less for a local symbol
 /// table to resolve later.
-fn system_symbol_token(sid : Int) -> @ion.SymbolToken {
+fn system_symbol_token(sid : Int32) -> @ion.SymbolToken {
   match @ion.system_symbol_text(sid) {
     Some(text) => @ion.SymbolToken::new(text)
     None => @ion.SymbolToken::from_sid(sid)

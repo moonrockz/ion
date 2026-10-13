@@ -8,13 +8,13 @@
 /// A read cursor over a byte view.
 priv struct Cursor {
   bytes : BytesView
-  mut pos : Int
-  limit : Int
+  mut pos : Int32
+  limit : Int32
 }
 
 ///|
 /// A cursor over `bytes[start..<limit]`.
-fn Cursor::new(bytes : BytesView, start : Int, limit : Int) -> Cursor {
+fn Cursor::new(bytes : BytesView, start : Int32, limit : Int32) -> Cursor {
   { bytes, pos: start, limit, }
 }
 
@@ -26,13 +26,13 @@ fn Cursor::at_end(self : Cursor) -> Bool {
 
 ///|
 /// The number of octets left before the limit.
-fn Cursor::remaining(self : Cursor) -> Int {
+fn Cursor::remaining(self : Cursor) -> Int32 {
   self.limit - self.pos
 }
 
 ///|
 /// Read one octet.
-fn Cursor::octet(self : Cursor) -> Int raise @ion.IonError {
+fn Cursor::octet(self : Cursor) -> Int32 raise @ion.IonError {
   if self.pos >= self.limit {
     raise @ion.IonError::Syntax("unexpected end of Ion binary input")
   }
@@ -43,7 +43,7 @@ fn Cursor::octet(self : Cursor) -> Int raise @ion.IonError {
 
 ///|
 /// Read `count` octets.
-fn Cursor::take(self : Cursor, count : Int) -> BytesView raise @ion.IonError {
+fn Cursor::take(self : Cursor, count : Int32) -> BytesView raise @ion.IonError {
   if count < 0 || self.pos + count > self.limit {
     raise @ion.IonError::Syntax("truncated Ion binary field")
   }
@@ -54,7 +54,7 @@ fn Cursor::take(self : Cursor, count : Int) -> BytesView raise @ion.IonError {
 
 ///|
 /// Read a `VarUInt`: seven-bit groups, the high bit set on the last octet.
-fn Cursor::var_uint(self : Cursor) -> Int raise @ion.IonError {
+fn Cursor::var_uint(self : Cursor) -> Int32 raise @ion.IonError {
   let mut value = 0
   let mut done = false
   while !done {
@@ -73,7 +73,7 @@ fn Cursor::var_uint(self : Cursor) -> Int raise @ion.IonError {
 ///|
 /// Read a `VarInt`: sign-and-magnitude, the sign in the second-high bit of the
 /// first octet and seven-bit groups after it.
-fn Cursor::var_int(self : Cursor) -> (Int, Bool) raise @ion.IonError {
+fn Cursor::var_int(self : Cursor) -> (Int32, Bool) raise @ion.IonError {
   let first = self.octet()
   let negative = (first & 0x40) != 0
   let mut value = first & 0x3F
@@ -93,7 +93,7 @@ fn Cursor::var_int(self : Cursor) -> (Int, Bool) raise @ion.IonError {
 
 ///|
 /// Read a fixed-width unsigned integer.
-fn Cursor::uint(self : Cursor, count : Int) -> BigInt raise @ion.IonError {
+fn Cursor::uint(self : Cursor, count : Int32) -> BigInt raise @ion.IonError {
   BigInt::from_octets(self.take(count))
 }
 
@@ -102,7 +102,7 @@ fn Cursor::uint(self : Cursor, count : Int) -> BigInt raise @ion.IonError {
 /// the first octet. The magnitude is returned with the sign bit cleared.
 fn Cursor::int(
   self : Cursor,
-  count : Int,
+  count : Int32,
 ) -> (BigInt, Bool) raise @ion.IonError {
   if count == 0 {
     return (BigInt::from_int(0), false)
@@ -119,7 +119,7 @@ fn Cursor::int(
 
 ///|
 /// The number of significant bits in a positive `Int`.
-fn bit_length(value : Int) -> Int {
+fn bit_length(value : Int32) -> Int32 {
   let mut count = 0
   let mut remaining = value
   while remaining > 0 {
@@ -131,7 +131,7 @@ fn bit_length(value : Int) -> Int {
 
 ///|
 /// The number of octets a `VarUInt` needs.
-fn var_uint_length(value : Int) -> Int {
+fn var_uint_length(value : Int32) -> Int32 {
   let mut length = 1
   let mut remaining = value >> 7
   while remaining > 0 {
@@ -143,7 +143,7 @@ fn var_uint_length(value : Int) -> Int {
 
 ///|
 /// The number of octets a `VarInt` needs to carry `magnitude`.
-fn var_int_length(magnitude : Int) -> Int {
+fn var_int_length(magnitude : Int32) -> Int32 {
   let bits = bit_length(magnitude)
   if bits <= 6 {
     1
@@ -178,7 +178,7 @@ fn push_uint(out : Array[Byte], magnitude : BigInt) -> Unit {
 
 ///|
 /// Append a minimal `VarUInt`.
-fn push_var_uint(out : Array[Byte], value : Int) -> Unit {
+fn push_var_uint(out : Array[Byte], value : Int32) -> Unit {
   let length = var_uint_length(value)
   for index in 0..<length {
     let shift = 7 * (length - 1 - index)
@@ -189,7 +189,7 @@ fn push_var_uint(out : Array[Byte], value : Int) -> Unit {
 
 ///|
 /// Append a minimal `VarInt` (a non-negative magnitude plus a sign).
-fn push_var_int(out : Array[Byte], magnitude : Int, negative : Bool) -> Unit {
+fn push_var_int(out : Array[Byte], magnitude : Int32, negative : Bool) -> Unit {
   let sign = if negative { 0x40 } else { 0 }
   if magnitude <= 0x3F {
     out.push((0x80 | sign | magnitude).to_byte())
@@ -235,7 +235,7 @@ fn push_int(out : Array[Byte], magnitude : BigInt, negative : Bool) -> Unit {
 /// Append `count` octets of a `VarUInt` length that is at least `14`, or the
 /// nibble itself when it fits. Ion binary uses the nibble `14` to signal a
 /// `VarUInt` length, so a length below that stays in the descriptor.
-fn push_length(out : Array[Byte], length : Int) -> Int {
+fn push_length(out : Array[Byte], length : Int32) -> Int32 {
   if length < 14 {
     length
   } else {
@@ -267,12 +267,12 @@ fn Cursor::skip_padding(self : Cursor) -> Bool raise @ion.IonError {
 /// A cursor over the same bytes, positioned where this one is and ending at
 /// `end`: how a container's contents are decoded, so the enclosing cursor's
 /// limit is untouched.
-fn Cursor::scoped(self : Cursor, end : Int) -> Cursor {
+fn Cursor::scoped(self : Cursor, end : Int32) -> Cursor {
   { bytes: self.bytes, pos: self.pos, limit: end, }
 }
 
 ///|
 /// Move the cursor to `pos`.
-fn Cursor::seek(self : Cursor, pos : Int) -> Unit {
+fn Cursor::seek(self : Cursor, pos : Int32) -> Unit {
   self.pos = pos
 }

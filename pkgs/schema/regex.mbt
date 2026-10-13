@@ -48,7 +48,7 @@ priv enum Node {
   Sequence(Array[Node])
   Alternation(Array[Node])
   /// A greedy repetition, from a minimum to an optional maximum count.
-  Repeat(Node, Int, Int?)
+  Repeat(Node, Int32, Int32?)
 } derive(Debug)
 
 ///|
@@ -65,8 +65,8 @@ pub struct Regex {
 /// does not allow raises `IonError::DataModel`.
 pub fn Regex::new(
   source : String,
-  ignore_case? : Bool = false,
-  multiline? : Bool = false,
+  ignore_case~ : Bool = false,
+  multiline~ : Bool = false,
 ) -> Regex raise @ion.IonError {
   let parser = { chars: source.iter().collect(), pos: 0, }
   let node = parser.alternation()
@@ -108,7 +108,7 @@ pub fn Regex::matches(self : Regex, text : String) -> Bool {
   // The threads waiting to read the character at `pos`, and for each
   // instruction, the last position a thread reached it at.
   let seen = Array::make(self.program.length(), -1)
-  let mut threads : Array[Int] = []
+  let mut threads : Array[Int32] = []
   for pos in 0..<=chars.length() {
     // A match may start at any position.
     if self.add_thread(threads, 0, chars, pos, seen) {
@@ -117,7 +117,7 @@ pub fn Regex::matches(self : Regex, text : String) -> Bool {
     if pos == chars.length() {
       break
     }
-    let next : Array[Int] = []
+    let next : Array[Int32] = []
     for pc in threads {
       if self.program[pc] is Read(node) &&
         self.reads(node, chars[pos]) &&
@@ -143,7 +143,7 @@ let escapable : String = ".^$|?*+\\[](){}"
 /// A regular expression being parsed.
 priv struct Parser {
   chars : Array[Char]
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|
@@ -310,8 +310,8 @@ fn Parser::quantified(self : Parser, atom : Node) -> Node raise @ion.IonError {
 
 ///|
 /// A decimal number, or `None` when there is no digit.
-fn Parser::number(self : Parser) -> Int? {
-  let mut value : Int? = None
+fn Parser::number(self : Parser) -> Int32? {
+  let mut value : Int32? = None
   while self.peek() is Some(c) && c >= '0' && c <= '9' {
     self.pos += 1
     value = Some(value.unwrap_or(0) * 10 + (c.to_int() - '0'.to_int()))
@@ -370,15 +370,15 @@ priv enum Instruction {
   /// Go on at a `LineStart` or `LineEnd` only.
   Check(Node)
   /// Go on at both targets.
-  Fork(Int, Int)
-  Jump(Int)
+  Fork(Int32, Int32)
+  Jump(Int32)
   Accept
 } derive(Debug)
 
 ///|
 /// The most instructions an expression may compile to. Counted repetition
 /// copies its body, so `(a{1000}){1000}` is too large.
-let max_program : Int = 100_000
+let max_program : Int32 = 100_000
 
 ///|
 /// Append the instructions for `node` to `program`.
@@ -397,7 +397,7 @@ fn compile(node : Node, program : Array[Instruction]) -> Unit {
     Alternation(branches) => {
       // Each branch but the last forks to itself or to the next branch, and
       // jumps to the end when it is done.
-      let jumps : Array[Int] = []
+      let jumps : Array[Int32] = []
       for index, branch in branches {
         if index < branches.length() - 1 {
           let fork = program.length()
@@ -431,7 +431,7 @@ fn compile(node : Node, program : Array[Instruction]) -> Unit {
         }
         Some(max) => {
           // Each optional copy may be skipped, to the end of them all.
-          let forks : Array[Int] = []
+          let forks : Array[Int32] = []
           for _ in min..<max {
             if program.length() > max_program {
               return
@@ -454,11 +454,11 @@ fn compile(node : Node, program : Array[Instruction]) -> Unit {
 /// for the character at `pos`. `true` when a thread reaches `Accept`.
 fn Regex::add_thread(
   self : Regex,
-  threads : Array[Int],
-  pc : Int,
+  threads : Array[Int32],
+  pc : Int32,
   chars : Array[Char],
-  pos : Int,
-  seen : Array[Int],
+  pos : Int32,
+  seen : Array[Int32],
 ) -> Bool {
   let stack = [pc]
   while stack.pop() is Some(pc) {
@@ -486,7 +486,7 @@ fn Regex::holds(
   self : Regex,
   anchor : Node,
   chars : Array[Char],
-  pos : Int,
+  pos : Int32,
 ) -> Bool {
   match anchor {
     LineStart =>

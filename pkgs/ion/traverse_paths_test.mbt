@@ -193,7 +193,7 @@ impl @ion.IonVisitor for FieldVisitor with fn visit_field_name(self, token) {
 
 ///|
 struct ValueVisitor {
-  mut count : Int
+  mut count : Int32
 }
 
 ///|

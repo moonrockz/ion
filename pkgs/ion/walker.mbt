@@ -37,7 +37,7 @@ priv enum WalkStep {
 priv struct WalkFrame {
   value : IonValue
   field : SymbolToken?
-  mut next : Int
+  mut next : Int32
 }
 
 ///|
@@ -142,7 +142,7 @@ pub fn ValueWalker::skip_children(self : ValueWalker) -> Unit {
 ///|
 /// The number of containers the walk is inside now: 1 after the `Enter` of a
 /// top-level container, 0 again after its `Exit`.
-pub fn ValueWalker::depth(self : ValueWalker) -> Int {
+pub fn ValueWalker::depth(self : ValueWalker) -> Int32 {
   self.frames.length()
 }
 

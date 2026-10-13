@@ -31,8 +31,8 @@ fn append_uint(out : Array[Byte], magnitude : BigInt) -> Unit {
 
 ///|
 /// Append a minimal `VarUInt` (a non-negative value).
-fn append_var_uint(out : Array[Byte], value : Int) -> Unit {
-  let groups : Array[Int] = []
+fn append_var_uint(out : Array[Byte], value : Int32) -> Unit {
+  let groups : Array[Int32] = []
   let mut remaining = value
   while true {
     groups.push(remaining & 0x7F)
@@ -76,7 +76,11 @@ fn append_int(out : Array[Byte], magnitude : BigInt, negative : Bool) -> Unit {
 
 ///|
 /// Append a minimal sign-and-magnitude `VarInt`.
-fn append_var_int(out : Array[Byte], magnitude : Int, negative : Bool) -> Unit {
+fn append_var_int(
+  out : Array[Byte],
+  magnitude : Int32,
+  negative : Bool,
+) -> Unit {
   if magnitude == 0 {
     out.push((if negative { 0xC0 } else { 0x80 }).to_byte())
     return
@@ -100,7 +104,7 @@ fn append_var_int(out : Array[Byte], magnitude : Int, negative : Bool) -> Unit {
 
 ///|
 /// The number of significant bits in a positive `Int`.
-fn bit_length(value : Int) -> Int {
+fn bit_length(value : Int32) -> Int32 {
   let mut count = 0
   let mut remaining = value
   while remaining > 0 {

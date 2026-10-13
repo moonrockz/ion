@@ -13,7 +13,7 @@ pub struct BinaryEventReader {
 /// Decode `bytes` into events, resolving shared-table imports with `catalog`.
 pub fn BinaryEventReader::new(
   bytes : BytesView,
-  catalog? : @ion.Catalog = @ion.Catalog::new(),
+  catalog~ : @ion.Catalog = @ion.Catalog::new(),
 ) -> BinaryEventReader raise @ion.IonError {
   { events: @text.IonReader::from_values(read_binary(bytes, catalog~)), }
 }

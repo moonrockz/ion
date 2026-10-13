@@ -17,7 +17,7 @@ fn texts(items : Array[String]) -> @ion.IonValue {
 
 ///|
 /// A symbol value known only by its ID.
-fn sid(id : Int) -> @ion.IonValue {
+fn sid(id : Int32) -> @ion.IonValue {
   @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(id))
 }
 
@@ -126,7 +126,7 @@ test "only a struct whose first annotation is $ion_symbol_table is a table" {
 
 ///|
 /// An import of the shared table `name`, with `max_id` when given.
-fn import_of(name : String, max_id? : Int) -> @ion.IonValue {
+fn import_of(name : String, max_id? : Int32) -> @ion.IonValue {
   let fields = [
     @ion.Field::new("name", @ion.IonValue::string(name)),
     @ion.Field::new("version", @ion.IonValue::int(1)),
@@ -328,7 +328,7 @@ test "a repeated field in an import is malformed" {
 /// A shared symbol table value, as a catalog file holds them.
 fn shared(
   name : String,
-  version : Int,
+  version : Int32,
   symbols : Array[@ion.IonValue],
 ) -> @ion.IonValue {
   @ion.IonValue::from_fields([
@@ -366,7 +366,11 @@ fn importing(imports : Array[@ion.IonValue]) -> @ion.SymbolTable raise {
 
 ///|
 /// An import of `name`, with a version and a max_id when given.
-fn import_entry(name : String, version? : Int, max_id? : Int) -> @ion.IonValue {
+fn import_entry(
+  name : String,
+  version? : Int32,
+  max_id? : Int32,
+) -> @ion.IonValue {
   let fields = [@ion.Field::new("name", @ion.IonValue::string(name))]
   if version is Some(version) {
     fields.push(@ion.Field::new("version", @ion.IonValue::int(version)))

@@ -102,7 +102,7 @@ test "skip_children after a Scalar or an Exit does nothing" {
 ///|
 test "depth counts the containers the walk is inside" {
   let walker = @text.read_ion("[[1]]").walker()
-  let depths : Array[Int] = []
+  let depths : Array[Int32] = []
   while walker.next() is Some(_) {
     depths.push(walker.depth())
   }

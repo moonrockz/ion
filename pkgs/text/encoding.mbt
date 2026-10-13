@@ -21,9 +21,9 @@ pub(all) enum TextEncoding {
 /// The encoding of Ion text that starts with `bytes`, and the length of its
 /// byte order mark (0 when there is none). Four octets decide; fewer are
 /// enough only for UTF-8 and UTF-16.
-pub fn detect_encoding(bytes : BytesView) -> (TextEncoding, Int) {
+pub fn detect_encoding(bytes : BytesView) -> (TextEncoding, Int32) {
   let n = bytes.length()
-  let at = (index : Int) => if index < n { bytes[index].to_int() } else { -1 }
+  let at = (index : Int32) => if index < n { bytes[index].to_int() } else { -1 }
   let (b0, b1, b2, b3) = (at(0), at(1), at(2), at(3))
   // The UTF-32LE mark starts like the UTF-16LE one, so it is tested first.
   if b0 == 0x00 && b1 == 0x00 && b2 == 0xFE && b3 == 0xFF {
@@ -93,7 +93,7 @@ pub fn decode_text(
       }
       let text = StringBuilder()
       for index = 0; index < bytes.length(); index = index + 4 {
-        let octet = (offset : Int) => bytes[index + offset].to_int()
+        let octet = (offset : Int32) => bytes[index + offset].to_int()
         let code = if encoding is UTF32BE {
           (octet(0) << 24) | (octet(1) << 16) | (octet(2) << 8) | octet(3)
         } else {
@@ -114,7 +114,7 @@ pub fn decode_text(
 /// character of `encoding`, for a reader that decodes text as it arrives.
 /// Only an incomplete character at the end is held back; any other
 /// malformation is left for `decode_text` to report.
-pub fn complete_length(encoding : TextEncoding, bytes : BytesView) -> Int {
+pub fn complete_length(encoding : TextEncoding, bytes : BytesView) -> Int32 {
   let n = bytes.length()
   match encoding {
     UTF8 => {

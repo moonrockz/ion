@@ -50,7 +50,7 @@ fn user_value_ready(pending : StringView) -> Bool {
 /// every value that a parse would settle must be taken, so the framer never
 /// holds back a value that is ready. At the end, the values must match the
 /// sync reader.
-fn check_framing(text : String, chunk : Int) -> Unit raise {
+fn check_framing(text : String, chunk : Int32) -> Unit raise {
   let reader = detached_reader()
   let values : Array[@ion.IonValue] = []
   let mut offset = 0

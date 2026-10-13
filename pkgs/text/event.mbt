@@ -82,7 +82,7 @@ fn emit_value(value : @ion.IonValue, events : Array[IonEvent]) -> Unit {
 /// A pull-based iterator over an Ion event stream.
 pub struct IonReader {
   events : Array[IonEvent]
-  mut index : Int
+  mut index : Int32
 }
 
 ///|

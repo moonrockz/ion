@@ -129,7 +129,7 @@ fn collect_writer_tokens(value : IonValue, tokens : Array[SymbolToken]) -> Unit 
 pub fn SymbolTable::intern_token(
   self : SymbolTable,
   token : SymbolToken,
-) -> Int raise IonError {
+) -> Int32 raise IonError {
   if token.text is Some(text) {
     if self.find(text) is None && self.max_id() == 0x7FFF_FFFF {
       raise DataModel("writer symbol table exceeds the symbol ID range")
@@ -172,7 +172,7 @@ pub fn SymbolTable::intern_token(
 pub fn SymbolTable::writer_token_id(
   self : SymbolTable,
   token : SymbolToken,
-) -> Int raise IonError {
+) -> Int32 raise IonError {
   let sid = self.intern_token(token)
   if token.text is None &&
     (sid > self.max_id() || !self.token(sid).equivalent(token)) {

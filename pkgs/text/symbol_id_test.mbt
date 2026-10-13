@@ -16,7 +16,7 @@ fn symbol_text(text : String) -> String? raise {
 
 ///|
 /// The symbol ID of the symbol a value written as `text` parses to.
-fn symbol_sid(text : String) -> Int? raise {
+fn symbol_sid(text : String) -> Int32? raise {
   match @text.read_ion(text).kind() {
     @ion.IonValueKind::Symbol(token) => token.sid()
     _ => fail("expected a symbol: \{text}")

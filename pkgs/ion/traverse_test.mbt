@@ -2,7 +2,7 @@
 
 ///|
 struct Collector {
-  mut values : Int
+  mut values : Int32
   field_names : Array[String]
 }
 

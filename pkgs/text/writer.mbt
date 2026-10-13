@@ -71,9 +71,9 @@ fn write_values(
 /// and reset the returned reservation to 9 for later local unknown symbols.
 pub fn write_stream_value(
   value : @ion.IonValue,
-  reserved~ : Int,
-  pretty? : Bool = false,
-) -> (String, Int) raise @ion.IonError {
+  reserved~ : Int32,
+  pretty~ : Bool = false,
+) -> (String, Int32) raise @ion.IonError {
   let buffer = StringBuilder()
   if value.has_imported_symbols() {
     let table = @ion.SymbolTable::for_values([value])
@@ -117,9 +117,9 @@ let indent_unit : String = "  "
 /// directives. Incremental writers supply the depth and sexp position.
 pub fn write_fragment(
   value : @ion.IonValue,
-  depth? : Int = 0,
-  pretty? : Bool = false,
-  in_sexp? : Bool = false,
+  depth~ : Int32 = 0,
+  pretty~ : Bool = false,
+  in_sexp~ : Bool = false,
 ) -> String raise @ion.IonError {
   let buffer = StringBuilder()
   write_value(buffer, value, depth, pretty, in_sexp)
@@ -130,7 +130,7 @@ pub fn write_fragment(
 /// Render a symbol token in an existing text context.
 pub fn symbol_to_text(
   token : @ion.SymbolToken,
-  in_sexp? : Bool = false,
+  in_sexp~ : Bool = false,
 ) -> String raise @ion.IonError {
   let buffer = StringBuilder()
   write_symbol(buffer, token, in_sexp)
@@ -139,7 +139,7 @@ pub fn symbol_to_text(
 
 ///|
 /// Append `depth` indent units.
-fn write_indent(buffer : StringBuilder, depth : Int) -> Unit {
+fn write_indent(buffer : StringBuilder, depth : Int32) -> Unit {
   for _ in 0..<depth {
     buffer.write_string(indent_unit)
   }
@@ -150,7 +150,7 @@ fn write_indent(buffer : StringBuilder, depth : Int) -> Unit {
 fn write_value(
   buffer : StringBuilder,
   value : @ion.IonValue,
-  depth : Int,
+  depth : Int32,
   pretty : Bool,
   in_sexp : Bool,
 ) -> Unit raise @ion.IonError {
@@ -197,7 +197,7 @@ fn write_value(
 fn write_list(
   buffer : StringBuilder,
   items : Array[@ion.IonValue],
-  depth : Int,
+  depth : Int32,
   pretty : Bool,
 ) -> Unit raise @ion.IonError {
   if items.is_empty() {
@@ -229,7 +229,7 @@ fn write_list(
 fn write_sexp(
   buffer : StringBuilder,
   items : Array[@ion.IonValue],
-  depth : Int,
+  depth : Int32,
   pretty : Bool,
 ) -> Unit raise @ion.IonError {
   if items.is_empty() {
@@ -258,7 +258,7 @@ fn write_sexp(
 fn write_struct(
   buffer : StringBuilder,
   fields : Array[@ion.Field],
-  depth : Int,
+  depth : Int32,
   pretty : Bool,
 ) -> Unit raise @ion.IonError {
   if fields.is_empty() {
@@ -390,7 +390,7 @@ let hex_digits : Array[String] = [
 
 ///|
 /// Two lowercase hexadecimal digits for a byte value.
-fn hex_byte(value : Int) -> String {
+fn hex_byte(value : Int32) -> String {
   hex_digits[(value >> 4) & 0xF] + hex_digits[value & 0xF]
 }
 

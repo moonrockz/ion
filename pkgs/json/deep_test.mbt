@@ -2,12 +2,12 @@
 // accept.
 
 ///|
-let deep : Int = 100_000
+let deep : Int32 = 100_000
 
 ///|
 /// How many one-child arrays or one-member objects lead to the innermost
 /// JSON value, and that value. A loop, so it works at any depth.
-fn json_innermost(json : Json) -> (Json, Int) {
+fn json_innermost(json : Json) -> (Json, Int32) {
   let mut current = json
   let mut depth = 0
   while true {

@@ -38,7 +38,7 @@ struct BinaryWriter {
   sink : &@io.Writer
   mut symbols : @ion.SymbolTable
   /// The highest symbol ID reserved with unknown text in this context.
-  mut reserved : Int
+  mut reserved : Int32
   mut started : Bool
 }
 

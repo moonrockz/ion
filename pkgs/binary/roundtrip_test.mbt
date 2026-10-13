@@ -358,7 +358,7 @@ fn table_value(
 
 ///|
 /// A symbol known only by its ID.
-fn sid_symbol(sid : Int) -> @ion.IonValue {
+fn sid_symbol(sid : Int32) -> @ion.IonValue {
   @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(sid))
 }
 

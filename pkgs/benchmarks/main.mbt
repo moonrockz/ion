@@ -1,6 +1,6 @@
 ///|
 struct CountingSink {
-  mut count : Int
+  mut count : Int32
 }
 
 ///|
@@ -16,7 +16,7 @@ fn source(bytes : Bytes) -> @io.MemoryReader {
 }
 
 ///|
-async fn operation(mode : String, fixture : Fixture) -> Int {
+async fn operation(mode : String, fixture : Fixture) -> Int32 {
   let values = fixture.values
   let text = fixture.text
   let binary = fixture.binary
@@ -206,7 +206,7 @@ async fn main {
 }
 
 ///|
-fn positive_int(text : String) -> Int raise @ion.IonError {
+fn positive_int(text : String) -> Int32 raise @ion.IonError {
   let mut number = 0
   for c in text {
     if c < '0' || c > '9' {
@@ -223,7 +223,7 @@ fn positive_int(text : String) -> Int raise @ion.IonError {
 ///|
 /// One value nested 100 levels deep (list, struct and sexp in turn), below
 /// the reader limit so every mode can read it back.
-fn deep_fixture_value(index : Int) -> @ion.IonValue {
+fn deep_fixture_value(index : Int32) -> @ion.IonValue {
   let mut value = @ion.IonValue::int(index)
   for level = 99; level >= 0; level = level - 1 {
     value = match level % 3 {
@@ -238,7 +238,7 @@ fn deep_fixture_value(index : Int) -> @ion.IonValue {
 ///|
 /// One value with every scalar type, annotations, an S-expression with
 /// operators, and symbols known only by a system symbol ID.
-fn mixed_fixture_value(index : Int) -> @ion.IonValue {
+fn mixed_fixture_value(index : Int32) -> @ion.IonValue {
   let sid = @ion.SymbolToken::from_sid
   @ion.IonValue::from_fields([
     @ion.Field::new("int", @ion.IonValue::int(index)),
@@ -293,7 +293,7 @@ fn mixed_fixture_value(index : Int) -> @ion.IonValue {
 /// `deep` values nested 100 levels, or `mixed` values of every type.
 fn fixture_values(
   shape : String,
-  items : Int,
+  items : Int32,
 ) -> Array[@ion.IonValue] raise @ion.IonError {
   match shape {
     "many" =>
@@ -325,7 +325,7 @@ struct Fixture {
 
 ///|
 struct ValueCounter {
-  mut count : Int
+  mut count : Int32
 }
 
 ///|
@@ -335,7 +335,7 @@ impl @ion.IonVisitor for ValueCounter with fn visit_value(self, _value) {
 
 ///|
 struct EventCounter {
-  mut count : Int
+  mut count : Int32
 }
 
 ///|

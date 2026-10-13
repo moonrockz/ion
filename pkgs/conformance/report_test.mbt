@@ -4,16 +4,16 @@
 ///|
 fn report_conformance(
   suite : String,
-  total : Int,
-  passed : Int,
-  skipped? : Int = 0,
-  known_failures? : Int = 0,
-  not_applicable? : Int = 0,
-  unexpected? : Int = 0,
-  stale? : Int = 0,
-  files? : Int = 0,
-  out_of_scope? : Int = 0,
-  details? : Array[String] = [],
+  total : Int32,
+  passed : Int32,
+  skipped~ : Int32 = 0,
+  known_failures~ : Int32 = 0,
+  not_applicable~ : Int32 = 0,
+  unexpected~ : Int32 = 0,
+  stale~ : Int32 = 0,
+  files~ : Int32 = 0,
+  out_of_scope~ : Int32 = 0,
+  details~ : Array[String] = [],
 ) -> Unit {
   let result = Json::object(
     Map([

@@ -11,13 +11,13 @@
 /// Whether a value's length follows its descriptor as a `VarUInt`: a length
 /// nibble of 14, or 1 for a struct, which marks an ordered struct (one whose
 /// fields are sorted by symbol ID).
-fn has_var_uint_length(type_code : Int, nibble : Int) -> Bool {
+fn has_var_uint_length(type_code : Int32, nibble : Int32) -> Bool {
   nibble == 0x0E || (type_code == 13 && nibble == 1)
 }
 
 ///|
 /// Whether the Ion binary version marker begins at `offset`.
-pub fn has_version_marker(bytes : BytesView, offset : Int) -> Bool {
+pub fn has_version_marker(bytes : BytesView, offset : Int32) -> Bool {
   offset + 4 <= bytes.length() &&
   bytes[offset].to_int() == 0xE0 &&
   bytes[offset + 1].to_int() == 0x01 &&
@@ -29,7 +29,7 @@ pub fn has_version_marker(bytes : BytesView, offset : Int) -> Bool {
 /// The total octets of the value (or NOP padding) whose descriptor sits at
 /// `offset` — the descriptor, its length field, and the representation — or
 /// `None` when the input does not hold all of them yet.
-fn frame(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
+fn frame(bytes : BytesView, offset : Int32) -> Int32? raise @ion.IonError {
   match value_size(bytes, offset) {
     Some(total) if offset + total <= bytes.length() => Some(total)
     _ => None
@@ -42,7 +42,10 @@ fn frame(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
 /// once the descriptor and length field have arrived, even when the
 /// representation has not. `None` means the length field is still incomplete.
 /// A streaming reader uses it to wait for a whole value before decoding.
-pub fn value_size(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
+pub fn value_size(
+  bytes : BytesView,
+  offset : Int32,
+) -> Int32? raise @ion.IonError {
   if offset >= bytes.length() {
     return None
   }
@@ -85,7 +88,7 @@ pub fn value_size(bytes : BytesView, offset : Int) -> Int? raise @ion.IonError {
 ///|
 /// The Ion type a type code denotes in a typed null, rejecting the codes that
 /// have no standalone type.
-fn null_type(type_code : Int) -> @ion.IonType raise @ion.IonError {
+fn null_type(type_code : Int32) -> @ion.IonType raise @ion.IonError {
   match IonTypeCode::from_int(type_code).to_ion_type() {
     Some(ty) => ty
     None => raise @ion.IonError::Syntax("invalid type code for a typed null")
@@ -99,11 +102,11 @@ fn null_type(type_code : Int) -> @ion.IonType raise @ion.IonError {
 /// reader reads more bytes and retries.
 pub fn decode_value(
   bytes : BytesView,
-  offset : Int,
+  offset : Int32,
   table : @ion.SymbolTable,
-) -> (@ion.IonValue, Int)? raise @ion.IonError {
+) -> (@ion.IonValue, Int32)? raise @ion.IonError {
   let mut start = offset
-  let mut result : (@ion.IonValue, Int)? = None
+  let mut result : (@ion.IonValue, Int32)? = None
   while result is None {
     match frame(bytes, start) {
       None => return None
@@ -156,8 +159,8 @@ fn decode_element(
 /// Decode a value whose type descriptor has already been read.
 fn decode_typed(
   cursor : Cursor,
-  type_code : Int,
-  nibble : Int,
+  type_code : Int32,
+  nibble : Int32,
   table : @ion.SymbolTable,
   depth : @ion.NestingDepth,
 ) -> @ion.IonValue raise @ion.IonError {
@@ -212,7 +215,7 @@ fn decode_typed(
 
 ///|
 /// Decode a bool, whose value is the length nibble.
-fn decode_bool(nibble : Int) -> @ion.IonValue raise @ion.IonError {
+fn decode_bool(nibble : Int32) -> @ion.IonValue raise @ion.IonError {
   match nibble {
     0 => @ion.IonValue::bool(false)
     1 => @ion.IonValue::bool(true)
@@ -224,7 +227,7 @@ fn decode_bool(nibble : Int) -> @ion.IonValue raise @ion.IonError {
 /// Decode an int: a `UInt` magnitude, negative for type code 3.
 fn decode_int(
   cursor : Cursor,
-  length : Int,
+  length : Int32,
   negative : Bool,
 ) -> @ion.IonValue raise @ion.IonError {
   if length == 0 {
@@ -249,7 +252,7 @@ fn decode_int(
 /// octets an IEEE-754 binary64.
 fn decode_float(
   cursor : Cursor,
-  length : Int,
+  length : Int32,
 ) -> @ion.IonValue raise @ion.IonError {
   match length {
     0 => @ion.IonValue::float(0.0)
@@ -280,7 +283,7 @@ fn decode_float(
 fn signed_decimal(
   magnitude : BigInt,
   negative : Bool,
-  exponent : Int,
+  exponent : Int32,
 ) -> @ion.Decimal {
   if negative && magnitude.is_zero() {
     @ion.Decimal::negative_zero_at(exponent)
@@ -296,7 +299,7 @@ fn signed_decimal(
 /// coefficient is zero, and an empty representation is `0d0`.
 fn decode_decimal(
   cursor : Cursor,
-  length : Int,
+  length : Int32,
 ) -> @ion.IonValue raise @ion.IonError {
   if length == 0 {
     return @ion.IonValue::decimal(@ion.Decimal::zero())
@@ -320,7 +323,7 @@ fn decode_decimal(
 /// components are in UTC, so the result is shifted back to local time.
 fn decode_timestamp(
   cursor : Cursor,
-  length : Int,
+  length : Int32,
 ) -> @ion.IonValue raise @ion.IonError {
   if length == 0 {
     raise @ion.IonError::Syntax(
@@ -336,7 +339,7 @@ fn decode_timestamp(
     @ion.TimestampOffset::Known(offset_minutes)
   }
   let year = cursor.var_uint()
-  let components : Array[Int] = []
+  let components : Array[Int32] = []
   while !cursor.at_end() && components.length() < 5 {
     components.push(cursor.var_uint())
   }
@@ -383,7 +386,7 @@ fn decode_timestamp(
 /// Decode a symbol: a `UInt` symbol ID.
 fn decode_symbol(
   cursor : Cursor,
-  length : Int,
+  length : Int32,
   table : @ion.SymbolTable,
 ) -> @ion.IonValue raise @ion.IonError {
   let sid = if length == 0 { 0 } else { cursor.uint(length).to_int() }
@@ -394,7 +397,7 @@ fn decode_symbol(
 /// Decode a string: UTF-8 octets.
 fn decode_string(
   cursor : Cursor,
-  length : Int,
+  length : Int32,
 ) -> @ion.IonValue raise @ion.IonError {
   let view = cursor.take(length)
   let text = @utf8.decode(view) catch {
@@ -408,7 +411,7 @@ fn decode_string(
 /// nesting depth inside it.
 fn decode_sequence(
   cursor : Cursor,
-  end : Int,
+  end : Int32,
   table : @ion.SymbolTable,
   is_list : Bool,
   depth : @ion.NestingDepth,
@@ -435,7 +438,7 @@ fn decode_sequence(
 /// nesting depth inside it.
 fn decode_struct(
   cursor : Cursor,
-  end : Int,
+  end : Int32,
   table : @ion.SymbolTable,
   depth : @ion.NestingDepth,
 ) -> @ion.IonValue raise @ion.IonError {
@@ -460,7 +463,7 @@ fn decode_struct(
 /// IDs followed by the annotated value. Annotations do not add `depth`.
 fn decode_annotated(
   cursor : Cursor,
-  nibble : Int,
+  nibble : Int32,
   table : @ion.SymbolTable,
   depth : @ion.NestingDepth,
 ) -> @ion.IonValue raise @ion.IonError {
@@ -507,7 +510,7 @@ fn decode_annotated(
 /// Whether the octets from `offset` to the end are all NOP padding.
 pub fn is_padding_only(
   bytes : BytesView,
-  offset : Int,
+  offset : Int32,
 ) -> Bool raise @ion.IonError {
   let cursor = Cursor::new(bytes, offset, bytes.length())
   while !cursor.at_end() {
@@ -545,7 +548,7 @@ pub fn accept_value(
 /// symbol tables that local symbol tables import.
 pub fn read_binary(
   bytes : BytesView,
-  catalog? : @ion.Catalog = @ion.Catalog::new(),
+  catalog~ : @ion.Catalog = @ion.Catalog::new(),
 ) -> Array[@ion.IonValue] raise @ion.IonError {
   let table = @ion.SymbolTable::system(catalog~)
   let values : Array[@ion.IonValue] = []
@@ -579,7 +582,7 @@ pub fn read_binary(
 /// Decode exactly one Ion binary value, rejecting anything after it.
 pub fn read_binary_value(
   bytes : BytesView,
-  catalog? : @ion.Catalog = @ion.Catalog::new(),
+  catalog~ : @ion.Catalog = @ion.Catalog::new(),
 ) -> @ion.IonValue raise @ion.IonError {
   let values = read_binary(bytes, catalog~)
   match values {

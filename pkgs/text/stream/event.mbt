@@ -8,7 +8,7 @@ struct TextEventReader {
   values : TextReader
   /// The events of the current value that are not yet handed out.
   events : Array[@text.IonEvent]
-  mut index : Int
+  mut index : Int32
   mut started : Bool
   mut ended : Bool
 }
@@ -19,7 +19,7 @@ struct TextEventReader {
 /// tables import.
 pub fn TextEventReader::new(
   source : &@io.Reader,
-  catalog? : @ion.Catalog = @ion.Catalog::new(),
+  catalog~ : @ion.Catalog = @ion.Catalog::new(),
 ) -> TextEventReader {
   {
     values: TextReader::new(source, catalog~),

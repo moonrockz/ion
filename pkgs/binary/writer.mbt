@@ -7,7 +7,7 @@
 
 ///|
 /// The magnitude of an `Int`.
-fn abs_int(value : Int) -> Int {
+fn abs_int(value : Int32) -> Int32 {
   if value < 0 {
     -value
   } else {
@@ -27,7 +27,7 @@ fn magnitude_of(value : BigInt) -> BigInt {
 
 ///|
 /// Prepend a type descriptor and length to a representation.
-fn wrap(type_code : Int, representation : Array[Byte]) -> Array[Byte] {
+fn wrap(type_code : Int32, representation : Array[Byte]) -> Array[Byte] {
   let length_field : Array[Byte] = []
   let nibble = push_length(length_field, representation.length())
   let out : Array[Byte] = [((type_code << 4) | nibble).to_byte()]
@@ -45,7 +45,7 @@ fn wrap(type_code : Int, representation : Array[Byte]) -> Array[Byte] {
 fn symbol_id(
   token : @ion.SymbolToken,
   symbols : @ion.SymbolTable,
-) -> Int raise @ion.IonError {
+) -> Int32 raise @ion.IonError {
   symbols.intern_token(token)
 }
 

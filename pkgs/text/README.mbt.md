@@ -199,8 +199,8 @@ test "pull events" {
 
 ///|
 struct Depth {
-  mut depth : Int
-  mut deepest : Int
+  mut depth : Int32
+  mut deepest : Int32
 }
 
 ///|

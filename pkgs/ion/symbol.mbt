@@ -9,7 +9,7 @@
 /// one-based position in the shared table, not its ID in a stream.
 pub struct ImportLocation {
   name : String
-  sid : Int
+  sid : Int32
 } derive(Eq, Hash, Debug)
 
 ///|
@@ -17,9 +17,9 @@ pub struct ImportLocation {
 /// location when an imported symbol's text is unknown.
 pub struct SymbolToken {
   text : String?
-  sid : Int?
+  sid : Int32?
   import_location : ImportLocation?
-  import_version : Int?
+  import_version : Int32?
 } derive(Eq, Hash, Debug)
 
 ///|
@@ -30,7 +30,7 @@ pub fn SymbolToken::new(text : String) -> SymbolToken {
 
 ///|
 /// A symbol token known only by its symbol ID.
-pub fn SymbolToken::from_sid(sid : Int) -> SymbolToken {
+pub fn SymbolToken::from_sid(sid : Int32) -> SymbolToken {
   { text: None, sid: Some(sid), import_location: None, import_version: None, }
 }
 
@@ -38,10 +38,10 @@ pub fn SymbolToken::from_sid(sid : Int) -> SymbolToken {
 /// An imported symbol with unknown text. The local ID and table version are
 /// retained for serialization; equivalence uses only `name` and `import_sid`.
 pub fn SymbolToken::from_import(
-  sid : Int,
+  sid : Int32,
   name : String,
-  version : Int,
-  import_sid : Int,
+  version : Int32,
+  import_sid : Int32,
 ) -> SymbolToken {
   {
     text: None,
@@ -70,7 +70,7 @@ pub fn SymbolToken::text(self : SymbolToken) -> String? {
 
 ///|
 /// The symbol's ID, when the context assigned one.
-pub fn SymbolToken::sid(self : SymbolToken) -> Int? {
+pub fn SymbolToken::sid(self : SymbolToken) -> Int32? {
   self.sid
 }
 
@@ -98,7 +98,7 @@ pub fn SymbolToken::require_text(self : SymbolToken) -> String raise IonError {
 /// range. The system symbol table is the initial symbol table shared by every
 /// Ion stream; IDs `0` and `10` and above have no text without a local symbol
 /// table.
-pub fn system_symbol_text(sid : Int) -> String? {
+pub fn system_symbol_text(sid : Int32) -> String? {
   match sid {
     1 => Some("$ion")
     2 => Some("$ion_1_0")

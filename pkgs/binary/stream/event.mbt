@@ -17,8 +17,8 @@ struct BinaryEventReader {
 /// `catalog` supplies the shared symbol tables that local tables import.
 pub fn BinaryEventReader::new(
   source : &@io.Reader,
-  prefix? : Bytes = b"",
-  catalog? : @ion.Catalog = @ion.Catalog::new(),
+  prefix~ : Bytes = b"",
+  catalog~ : @ion.Catalog = @ion.Catalog::new(),
 ) -> BinaryEventReader {
   {
     values: BinaryReader::new(source, prefix~, catalog~),

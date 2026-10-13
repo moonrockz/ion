@@ -3,16 +3,16 @@
 ///|
 priv struct WriterFrame {
   kind : IonType
-  mut count : Int
+  mut count : Int32
   mut field : SymbolToken?
 }
 
 ///|
 /// The position of the next value in an incremental writer.
 pub struct WritePosition {
-  depth : Int
+  depth : Int32
   parent : IonType?
-  index : Int
+  index : Int32
   field : SymbolToken?
   annotations : Array[SymbolToken]
 }
@@ -22,7 +22,7 @@ pub struct WritePosition {
 struct WriterState {
   frames : Array[WriterFrame]
   mut annotations : Array[SymbolToken]
-  mut count : Int
+  mut count : Int32
   mut busy : Bool
   mut failed : Bool
   mut finished : Bool
@@ -131,7 +131,7 @@ pub fn WriterState::enter(self : WriterState, kind : IonType) -> Unit {
 ///|
 pub fn WriterState::closing(
   self : WriterState,
-) -> (IonType, Int, Int) raise IonError {
+) -> (IonType, Int32, Int32) raise IonError {
   self.check()
   if !self.annotations.is_empty() {
     raise DataModel("annotations have no following value")

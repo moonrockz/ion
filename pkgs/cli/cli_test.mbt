@@ -17,7 +17,7 @@ impl @io.Writer for Captured with fn write_once(self, data, offset~, len~) {
 ///|
 /// What one run of the command line did.
 struct Run {
-  status : Int
+  status : Int32
   stdout : Bytes
   stderr : String
 }
@@ -32,7 +32,7 @@ fn Run::out(self : Run) -> String {
 
 ///|
 /// Run the command line with `args` and `stdin`.
-async fn ion(args : Array[String], stdin? : Bytes = b"") -> Run {
+async fn ion(args : Array[String], stdin~ : Bytes = b"") -> Run {
   let input = @io.MemoryReader(async fn(writer) { writer.write(stdin) })
   defer input.close()
   let stdout : Captured = { bytes: b"", }

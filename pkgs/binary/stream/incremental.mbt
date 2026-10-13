@@ -15,13 +15,13 @@ struct IncrementalWriter {
   symbols : @ion.SymbolTable
   containers : Array[EncodedContainer]
   mut started : Bool
-  mut emitted_max : Int
+  mut emitted_max : Int32
 }
 
 ///|
 pub fn IncrementalWriter::new(
   sink : &@io.Writer,
-  symbols? : @ion.SymbolTable = @ion.SymbolTable::system(),
+  symbols~ : @ion.SymbolTable = @ion.SymbolTable::system(),
 ) -> IncrementalWriter {
   {
     sink,
@@ -179,7 +179,7 @@ pub async fn IncrementalWriter::write(
 ///|
 pub async fn IncrementalWriter::write_int(
   self : IncrementalWriter,
-  value : Int,
+  value : Int32,
 ) -> Unit {
   self.write(@ion.IonValue::int(value))
 }
@@ -203,7 +203,7 @@ pub async fn IncrementalWriter::write_bool(
 ///|
 pub async fn IncrementalWriter::write_null(
   self : IncrementalWriter,
-  kind? : @ion.IonType = Null,
+  kind~ : @ion.IonType = Null,
 ) -> Unit {
   self.write(@ion.IonValue::typed_null(kind))
 }

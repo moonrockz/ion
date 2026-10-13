@@ -2,7 +2,7 @@
 
 ///|
 test "a type descriptor round-trips its type code and length nibble" {
-  @quickcheck.check((pair : (Int, Int)) => {
+  @quickcheck.check((pair : (Int32, Int32)) => {
     let code = @binary.IonTypeCode::from_int(pair.0 & 0x0F)
     let nibble = pair.1 & 0x0F
     let descriptor = @binary.type_descriptor(code, nibble)
