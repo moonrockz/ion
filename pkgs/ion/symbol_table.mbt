@@ -215,9 +215,12 @@ pub fn highest_symbol_id(values : Array[IonValue]) -> Int32 {
 /// `highest_symbol_id` for one value.
 fn value_highest_symbol_id(value : IonValue) -> Int32 {
   let mut highest = 0
-  for token in value.tokens() {
-    highest = @cmp.maximum(highest, token_symbol_id(token))
-  }
+  ignore(
+    value.any_token(token => {
+      highest = @cmp.maximum(highest, token_symbol_id(token))
+      false
+    }),
+  )
   highest
 }
 
@@ -460,12 +463,7 @@ fn SymbolTable::resolve_token(
 /// Whether a value holds a symbol known only by a nonzero ID, in an
 /// annotation, a field name, or a symbol value at any depth.
 fn has_symbol_ids(value : IonValue) -> Bool {
-  for token in value.tokens() {
-    if is_symbol_id(token) {
-      return true
-    }
-  }
-  false
+  value.any_token(is_symbol_id)
 }
 
 ///|
