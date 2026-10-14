@@ -36,7 +36,7 @@ test "a repeated field name keeps the last value in the first position" {
 test "to_json keeps document order when the first error is far deeper" {
   let sid = @core.SymbolToken::from_sid
   let mut inner = @core.IonValue::symbol_token(sid(20))
-  for _ in 0..<100 {
+  for _ in 0..<300 {
     inner = @core.IonValue::list([inner])
   }
   let value = @core.IonValue::list([
@@ -51,7 +51,7 @@ test "to_json keeps document order when the first error is far deeper" {
 
 ///|
 test "to_json converts every level of a value nested past any fixed depth" {
-  for depth in [1, 31, 32, 33, 64, 65, 200] {
+  for depth in [1, 63, 64, 65, 128, 129, 300] {
     let mut value = @core.IonValue::int(7)
     for _ in 0..<depth {
       value = @core.IonValue::from_fields([@core.Field::new("a", value)])
@@ -62,5 +62,20 @@ test "to_json converts every level of a value nested past any fixed depth" {
       expected = "[{\"a\":" + expected + "}]"
     }
     assert_eq(@json.to_json(value).stringify(), expected)
+  }
+}
+
+///|
+test "to_ion keeps field order and every level past any fixed depth" {
+  for depth in [1, 63, 64, 65, 128, 129, 300] {
+    let mut json = Json::number(7.0)
+    for _ in 0..<depth {
+      json = Json::array([Json::object(Map([("b", Json::null()), ("a", json)]))])
+    }
+    let mut expected = "7"
+    for _ in 0..<depth {
+      expected = "[{b: null, a: " + expected + "}]"
+    }
+    assert_eq(@text.write_ion(@json.to_ion(json)), expected)
   }
 }

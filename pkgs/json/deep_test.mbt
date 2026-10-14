@@ -51,7 +51,6 @@ test "write_json writes values 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.8: to_ion recurses once per level")
 test "to_ion converts JSON 100,000 levels deep" {
   let mut array = Json::number(1.0)
   let mut object = Json::number(1.0)

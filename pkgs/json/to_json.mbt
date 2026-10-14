@@ -27,11 +27,11 @@
 // object cannot carry the duplicates.
 
 ///|
-/// How many levels of containers `to_json` converts with recursion. Recursion
-/// is the fastest way to convert a small value; below this depth `to_json`
-/// switches to a stack of open containers, so the call stack stays small at
-/// any depth.
-let shallow_depth : Int32 = 32
+/// How many levels of containers `to_json` and `to_ion` convert with
+/// recursion: the deepest nesting that the readers accept. Recursion is the
+/// fastest way to convert a value; below this depth the conversions switch to
+/// a stack of open containers, so the call stack stays small at any depth.
+let shallow_depth : Int32 = @core.MAX_NESTING_DEPTH
 
 ///|
 /// Convert an Ion value to a core `Json` value following the cookbook's
