@@ -25,18 +25,118 @@
 // shortest spelling really does carry an exponent, becomes an Ion float.
 
 ///|
-/// Convert a core `Json` value to an Ion value.
+/// Convert a core `Json` value to an Ion value. Object fields keep their
+/// order, and any nesting depth works.
 ///
 /// See the module comment for the mapping, especially for numbers.
 pub fn to_ion(json : Json) -> @core.IonValue {
+  ion_shallow(json, shallow_depth)
+}
+
+///|
+/// Convert `json` with recursion while `levels` is above zero, then with
+/// `ion_deep`. Recursion is the fastest way to convert a small value; the
+/// limit keeps the call stack small at any depth.
+fn ion_shallow(json : Json, levels : Int32) -> @core.IonValue {
+  match json {
+    Json::Array(elements) if levels > 0 => {
+      let items : Array[@core.IonValue] = Array::new(capacity=elements.length())
+      for element in elements {
+        items.push(ion_shallow(element, levels - 1))
+      }
+      @core.IonValue::list(items)
+    }
+    Json::Object(entries) if levels > 0 => {
+      let fields : Array[@core.Field] = Array::new(capacity=entries.length())
+      for name, member in entries {
+        fields.push(@core.Field::new(name, ion_shallow(member, levels - 1)))
+      }
+      @core.IonValue::from_fields(fields)
+    }
+    Json::Array(_) | Json::Object(_) => ion_deep(json)
+    scalar => scalar_to_ion(scalar)
+  }
+}
+
+///|
+/// A container that `ion_deep` is filling: its JSON children, and the Ion
+/// elements or fields that receive their conversions. An object's members are
+/// copied into an array so that they can be taken by index, in order.
+priv enum IonContainer {
+  Items(Array[Json], Array[@core.IonValue])
+  Fields(Array[(String, Json)], Array[@core.Field])
+}
+
+///|
+/// Convert `json` top-down with a stack of open containers, not recursion.
+/// Each container's Ion value is added to its parent when the walk enters it,
+/// and filled while the walk is inside it.
+fn ion_deep(json : Json) -> @core.IonValue {
+  let open : Array[IonContainer] = []
+  // The index of the next child of each open container.
+  let next : Array[Int32] = []
+  let root = ion_start(json, open, next)
+  while open.last() is Some(container) {
+    let top = next.length() - 1
+    let index = next[top]
+    match container {
+      Items(elements, items) if index < elements.length() => {
+        next[top] = index + 1
+        items.push(ion_start(elements[index], open, next))
+      }
+      Fields(members, fields) if index < members.length() => {
+        next[top] = index + 1
+        let (name, member) = members[index]
+        fields.push(@core.Field::new(name, ion_start(member, open, next)))
+      }
+      _ => {
+        ignore(open.pop())
+        ignore(next.pop())
+      }
+    }
+  }
+  root
+}
+
+///|
+/// The Ion value of `json`. A container's value is empty here: it is pushed
+/// onto `open`, and `ion_deep` fills it in place.
+fn ion_start(
+  json : Json,
+  open : Array[IonContainer],
+  next : Array[Int32],
+) -> @core.IonValue {
+  match json {
+    Json::Array(elements) => {
+      let items : Array[@core.IonValue] = Array::new(capacity=elements.length())
+      open.push(Items(elements, items))
+      next.push(0)
+      @core.IonValue::list(items)
+    }
+    Json::Object(entries) => {
+      let members : Array[(String, Json)] = Array::new(
+        capacity=entries.length(),
+      )
+      for name, member in entries {
+        members.push((name, member))
+      }
+      let fields : Array[@core.Field] = Array::new(capacity=entries.length())
+      open.push(Fields(members, fields))
+      next.push(0)
+      @core.IonValue::from_fields(fields)
+    }
+    scalar => scalar_to_ion(scalar)
+  }
+}
+
+///|
+/// The Ion value of a JSON value with no children.
+fn scalar_to_ion(json : Json) -> @core.IonValue {
   match json {
     Json::Null => @core.IonValue::untyped_null()
     Json::True => @core.IonValue::bool(true)
     Json::False => @core.IonValue::bool(false)
     Json::String(text) => @core.IonValue::string(text)
-    Json::Array(elements) =>
-      @core.IonValue::list(elements.map(element => to_ion(element)))
-    Json::Object(entries) => object_to_ion(entries)
     Json::Number(value, repr~) =>
       number_text_to_ion(
         match repr {
@@ -45,17 +145,9 @@ pub fn to_ion(json : Json) -> @core.IonValue {
         },
         value,
       )
+    Json::Array(_) | Json::Object(_) =>
+      abort("ion_shallow and ion_start convert containers")
   }
-}
-
-///|
-/// Convert a JSON object to an Ion struct, preserving field order.
-fn object_to_ion(entries : Map[String, Json]) -> @core.IonValue {
-  let fields : Array[@core.Field] = []
-  for name, value in entries {
-    fields.push(@core.Field::new(name, to_ion(value)))
-  }
-  @core.IonValue::from_fields(fields)
 }
 
 ///|

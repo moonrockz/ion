@@ -27,13 +27,124 @@
 // object cannot carry the duplicates.
 
 ///|
+/// How many levels of containers `to_json` and `to_ion` convert with
+/// recursion: the deepest nesting that the readers accept. Recursion is the
+/// fastest way to convert a value; below this depth the conversions switch to
+/// a stack of open containers, so the call stack stays small at any depth.
+let shallow_depth : Int32 = @core.MAX_NESTING_DEPTH
+
+///|
 /// Convert an Ion value to a core `Json` value following the cookbook's
-/// down-conversion rules (see the module comment).
+/// down-conversion rules (see the module comment). Any nesting depth works.
 ///
 /// Raises [`@core.IonError::Unsupported`] when a symbol or struct field name
-/// is known only by symbol ID, so it has no text to emit.
+/// is known only by symbol ID, so it has no text to emit: for the first such
+/// symbol in document order. Repeated field names fold onto the last
+/// occurrence, because a JSON object cannot hold duplicates.
 pub fn to_json(value : @core.IonValue) -> Json raise @core.IonError {
+  json_shallow(value, shallow_depth)
+}
+
+///|
+/// Convert `value` with recursion while `levels` is above zero, then with
+/// `json_deep`.
+fn json_shallow(
+  value : @core.IonValue,
+  levels : Int32,
+) -> Json raise @core.IonError {
   match value.kind() {
+    @core.IonValueKind::List(items) | @core.IonValueKind::Sexp(items) if levels >
+      0 => {
+      let elements : Array[Json] = Array::new(capacity=items.length())
+      for item in items {
+        elements.push(json_shallow(item, levels - 1))
+      }
+      Json::array(elements)
+    }
+    @core.IonValueKind::Struct(fields) if levels > 0 => {
+      let members : Map[String, Json] = Map::new(capacity=fields.length())
+      for field in fields {
+        let name = symbol_text(field.name())
+        members.set(name, json_shallow(field.value(), levels - 1))
+      }
+      Json::object(members)
+    }
+    @core.IonValueKind::List(_)
+    | @core.IonValueKind::Sexp(_)
+    | @core.IonValueKind::Struct(_) => json_deep(value)
+    kind => scalar_to_json(kind)
+  }
+}
+
+///|
+/// A container that `json_deep` is filling: its Ion children, and the JSON
+/// array or object that receives their conversions.
+priv enum JsonContainer {
+  Elements(Array[@core.IonValue], Array[Json])
+  Members(Array[@core.Field], Map[String, Json])
+}
+
+///|
+/// Convert `value` top-down with a stack of open containers, not recursion.
+/// Each container's JSON is added to its parent when the walk enters it, and
+/// filled while the walk is inside it.
+fn json_deep(value : @core.IonValue) -> Json raise @core.IonError {
+  let open : Array[JsonContainer] = []
+  // The index of the next child of each open container.
+  let next : Array[Int32] = []
+  let root = json_start(value, open, next)
+  while open.last() is Some(container) {
+    let top = next.length() - 1
+    let index = next[top]
+    match container {
+      Elements(items, elements) if index < items.length() => {
+        next[top] = index + 1
+        elements.push(json_start(items[index], open, next))
+      }
+      Members(fields, members) if index < fields.length() => {
+        next[top] = index + 1
+        let field = fields[index]
+        let name = symbol_text(field.name())
+        members.set(name, json_start(field.value(), open, next))
+      }
+      _ => {
+        ignore(open.pop())
+        ignore(next.pop())
+      }
+    }
+  }
+  root
+}
+
+///|
+/// The JSON of `value`. A container's JSON is empty here: it is pushed onto
+/// `open`, and `json_deep` fills it in place.
+fn json_start(
+  value : @core.IonValue,
+  open : Array[JsonContainer],
+  next : Array[Int32],
+) -> Json raise @core.IonError {
+  match value.kind() {
+    @core.IonValueKind::List(items) | @core.IonValueKind::Sexp(items) => {
+      let elements : Array[Json] = Array::new(capacity=items.length())
+      open.push(Elements(items, elements))
+      next.push(0)
+      Json::array(elements)
+    }
+    @core.IonValueKind::Struct(fields) => {
+      let members : Map[String, Json] = Map::new(capacity=fields.length())
+      open.push(Members(fields, members))
+      next.push(0)
+      Json::object(members)
+    }
+    kind => scalar_to_json(kind)
+  }
+}
+
+///|
+/// The JSON of a value with no children.
+fn scalar_to_json(kind : @core.IonValueKind) -> Json raise @core.IonError {
+  match kind {
     @core.IonValueKind::Null(_) => Json::null()
     @core.IonValueKind::Bool(flag) => Json::boolean(flag)
     @core.IonValueKind::Int(number) => int_to_json(number)
@@ -46,33 +157,11 @@ pub fn to_json(value : @core.IonValue) -> Json raise @core.IonError {
     @core.IonValueKind::String(text) => Json::string(text)
     @core.IonValueKind::Clob(bytes) => Json::string(clob_to_string(bytes))
     @core.IonValueKind::Blob(bytes) => Json::string(@base64.encode(bytes[:]))
-    @core.IonValueKind::List(values) => Json::array(convert_values(values))
-    @core.IonValueKind::Sexp(values) => Json::array(convert_values(values))
-    @core.IonValueKind::Struct(fields) => struct_to_json(fields)
+    @core.IonValueKind::List(_)
+    | @core.IonValueKind::Sexp(_)
+    | @core.IonValueKind::Struct(_) =>
+      abort("json_shallow and json_start convert containers")
   }
-}
-
-///|
-/// Convert a list or s-expression element array to a JSON array.
-fn convert_values(
-  values : Array[@core.IonValue],
-) -> Array[Json] raise @core.IonError {
-  let result : Array[Json] = []
-  for value in values {
-    result.push(to_json(value))
-  }
-  result
-}
-
-///|
-/// Convert an Ion struct to a JSON object. Repeated field names fold onto the
-/// last occurrence, because a JSON object cannot hold duplicates.
-fn struct_to_json(fields : Array[@core.Field]) -> Json raise @core.IonError {
-  let object : Map[String, Json] = Map([])
-  for field in fields {
-    object.set(symbol_text(field.name()), to_json(field.value()))
-  }
-  Json::object(object)
 }
 
 ///|
