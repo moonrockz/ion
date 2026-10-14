@@ -79,3 +79,29 @@ test "to_ion keeps field order and every level past any fixed depth" {
     assert_eq(@text.write_ion(@json.to_ion(json)), expected)
   }
 }
+
+///|
+test "to_json names a field name before its value below the recursion limit" {
+  let sid = @core.SymbolToken::from_sid
+  let mut value = @core.IonValue::from_fields([
+    @core.Field::from_token(sid(20), @core.IonValue::symbol_token(sid(30))),
+  ])
+  for _ in 0..<300 {
+    value = @core.IonValue::list([value])
+  }
+  inspect(
+    json_error(value),
+    content="a symbol known only by symbol ID 20 has no text to convert to JSON",
+  )
+}
+
+///|
+test "a repeated field name keeps the last value in the first position below the recursion limit" {
+  let mut value = @text.read_ion("{a: [1], b: 2, a: {c: 3}}")
+  let mut expected = "{\"a\":{\"c\":3},\"b\":2}"
+  for _ in 0..<300 {
+    value = @core.IonValue::list([value])
+    expected = "[" + expected + "]"
+  }
+  assert_eq(@json.to_json(value).stringify(), expected)
+}
