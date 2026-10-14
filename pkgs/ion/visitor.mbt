@@ -56,10 +56,55 @@ impl IonVisitor with fn visit_struct(_self, _fields) {
 ///|
 /// Accept `visitor` on this value, traversing depth-first in document order:
 /// the value, then its annotations, then — for containers — the child values
-/// (struct field names precede their values). The walk uses no recursion, so
-/// it works at any nesting depth.
+/// (struct field names precede their values). It works at any nesting depth.
 pub fn IonValue::accept(self : IonValue, visitor : &IonVisitor) -> Unit {
-  let walker = self.walker()
+  accept_shallow(self, visitor, MAX_NESTING_DEPTH)
+}
+
+///|
+/// Accept `visitor` with recursion while `levels` is above zero, then with
+/// `accept_deep`. Recursion is the fastest walk; the limit keeps the call
+/// stack small at any depth.
+fn accept_shallow(
+  value : IonValue,
+  visitor : &IonVisitor,
+  levels : Int32,
+) -> Unit {
+  if levels == 0 {
+    return accept_deep(value, visitor)
+  }
+  visitor.visit_value(value)
+  for annotation in value.annotations {
+    visitor.visit_annotation(annotation)
+  }
+  match value.kind {
+    List(items) => {
+      visitor.visit_list(items)
+      for item in items {
+        accept_shallow(item, visitor, levels - 1)
+      }
+    }
+    Sexp(items) => {
+      visitor.visit_sexp(items)
+      for item in items {
+        accept_shallow(item, visitor, levels - 1)
+      }
+    }
+    Struct(fields) => {
+      visitor.visit_struct(fields)
+      for field in fields {
+        visitor.visit_field_name(field.name)
+        accept_shallow(field.value, visitor, levels - 1)
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+/// Accept `visitor` with no recursion, on a `ValueWalker`.
+fn accept_deep(value : IonValue, visitor : &IonVisitor) -> Unit {
+  let walker = value.walker()
   while true {
     match walker.step() {
       AtScalar | AtEnter => ()

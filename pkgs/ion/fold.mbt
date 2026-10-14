@@ -68,7 +68,7 @@ pub fn[A, N] continuing(f : (A, N) -> A) -> (A, N) -> FoldAction[A] {
 /// Fold over this value, depth-first in document order, threading `acc` and
 /// honoring [`FoldAction`] flow control.
 pub fn[A] IonValue::fold(self : IonValue, acc : A, folder : IonFold[A]) -> A {
-  fold_value(self, acc, folder).value()
+  fold_shallow(self, acc, folder, MAX_NESTING_DEPTH).value()
 }
 
 ///|
@@ -80,7 +80,7 @@ pub fn[A] fold_values(
 ) -> A {
   let mut acc = acc
   for value in values {
-    match fold_value(value, acc, folder) {
+    match fold_shallow(value, acc, folder, MAX_NESTING_DEPTH) {
       Stop(a) => return a
       Continue(a) | SkipChildren(a) => acc = a
     }
@@ -89,11 +89,68 @@ pub fn[A] fold_values(
 }
 
 ///|
-/// The core of [`IonValue::fold`]: a walk with no recursion. Returns `Stop`
-/// to abort the whole traversal. For each value it calls `visit_field_name`
-/// (inside a struct), then `visit_value`, then `visit_annotation` for each
-/// annotation, then folds the children unless `visit_value` skipped them.
-fn[A] fold_value(
+/// The core of [`IonValue::fold`], with recursion while `levels` is above
+/// zero, then with `fold_deep`. Recursion is the fastest walk; the limit keeps
+/// the call stack small at any depth. Returns `Stop` to abort the whole
+/// traversal.
+fn[A] fold_shallow(
+  value : IonValue,
+  acc : A,
+  folder : IonFold[A],
+  levels : Int32,
+) -> FoldAction[A] {
+  if levels == 0 {
+    return fold_deep(value, acc, folder)
+  }
+  let mut acc = acc
+  let mut descend = true
+  match (folder.visit_value)(acc, value) {
+    Stop(a) => return Stop(a)
+    SkipChildren(a) => {
+      acc = a
+      descend = false
+    }
+    Continue(a) => acc = a
+  }
+  for annotation in value.annotations {
+    match (folder.visit_annotation)(acc, annotation) {
+      Stop(a) => return Stop(a)
+      Continue(a) | SkipChildren(a) => acc = a
+    }
+  }
+  if !descend {
+    return Continue(acc)
+  }
+  match value.kind {
+    List(items) | Sexp(items) =>
+      for item in items {
+        match fold_shallow(item, acc, folder, levels - 1) {
+          Stop(a) => return Stop(a)
+          Continue(a) | SkipChildren(a) => acc = a
+        }
+      }
+    Struct(fields) =>
+      for field in fields {
+        match (folder.visit_field_name)(acc, field.name) {
+          Stop(a) => return Stop(a)
+          Continue(a) | SkipChildren(a) => acc = a
+        }
+        match fold_shallow(field.value, acc, folder, levels - 1) {
+          Stop(a) => return Stop(a)
+          Continue(a) | SkipChildren(a) => acc = a
+        }
+      }
+    _ => ()
+  }
+  Continue(acc)
+}
+
+///|
+/// [`IonValue::fold`] with no recursion, on a `ValueWalker`. For each value
+/// it calls `visit_field_name` (inside a struct), then `visit_value`, then
+/// `visit_annotation` for each annotation, then folds the children unless
+/// `visit_value` skipped them.
+fn[A] fold_deep(
   value : IonValue,
   acc : A,
   folder : IonFold[A],
