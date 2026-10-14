@@ -26,17 +26,31 @@ fn magnitude_of(value : BigInt) -> BigInt {
 }
 
 ///|
+/// Append a type descriptor and length for a representation of `length`
+/// octets.
+fn push_header(out : Array[Byte], type_code : Int32, length : Int32) -> Unit {
+  if length < 14 {
+    out.push(((type_code << 4) | length).to_byte())
+  } else {
+    out.push(((type_code << 4) | 14).to_byte())
+    push_var_uint(out, length)
+  }
+}
+
+///|
+/// A type descriptor and length for a representation of `length` octets.
+fn header_octets(type_code : Int32, length : Int32) -> Array[Byte] {
+  let out : Array[Byte] = []
+  push_header(out, type_code, length)
+  out
+}
+
+///|
 /// Prepend a type descriptor and length to a representation.
 fn wrap(type_code : Int32, representation : Array[Byte]) -> Array[Byte] {
-  let length_field : Array[Byte] = []
-  let nibble = push_length(length_field, representation.length())
-  let out : Array[Byte] = [((type_code << 4) | nibble).to_byte()]
-  for octet in length_field {
-    out.push(octet)
-  }
-  for octet in representation {
-    out.push(octet)
-  }
+  let out : Array[Byte] = Array(capacity=representation.length() + 6)
+  push_header(out, type_code, representation.length())
+  out.append(representation)
   out
 }
 
@@ -171,40 +185,8 @@ fn encode_symbol(
 }
 
 ///|
-/// The representations of a list of values, in order.
-fn encode_all(
-  values : Array[@ion.IonValue],
-  symbols : @ion.SymbolTable,
-) -> Array[Byte] raise @ion.IonError {
-  let out : Array[Byte] = []
-  for value in values {
-    for octet in encode(value, symbols) {
-      out.push(octet)
-    }
-  }
-  out
-}
-
-///|
-/// The representation of a struct: a `VarUInt` field-name symbol ID followed by
-/// each field's value.
-fn encode_fields(
-  fields : Array[@ion.Field],
-  symbols : @ion.SymbolTable,
-) -> Array[Byte] raise @ion.IonError {
-  let out : Array[Byte] = []
-  for field in fields {
-    push_var_uint(out, symbol_id(field.name(), symbols))
-    for octet in encode(field.value(), symbols) {
-      out.push(octet)
-    }
-  }
-  out
-}
-
-///|
-/// The representation of a value's kind, without its descriptor.
-fn encode_body(
+/// The representation of a scalar: its descriptor, length and content.
+fn encode_scalar(
   kind : @ion.IonValueKind,
   symbols : @ion.SymbolTable,
 ) -> Array[Byte] raise @ion.IonError {
@@ -228,37 +210,181 @@ fn encode_body(
     @ion.IonValueKind::String(text) => wrap(8, @utf8.encode(text).to_array())
     @ion.IonValueKind::Clob(bytes) => wrap(9, bytes.to_array())
     @ion.IonValueKind::Blob(bytes) => wrap(10, bytes.to_array())
-    @ion.IonValueKind::List(items) => wrap(11, encode_all(items, symbols))
-    @ion.IonValueKind::Sexp(items) => wrap(12, encode_all(items, symbols))
-    @ion.IonValueKind::Struct(fields) =>
-      wrap(13, encode_fields(fields, symbols))
+    @ion.IonValueKind::List(_)
+    | @ion.IonValueKind::Sexp(_)
+    | @ion.IonValueKind::Struct(_) => abort("encode_start encodes containers")
   }
 }
 
 ///|
-/// Encode one value, wrapping it in an annotation wrapper when it carries
-/// annotations.
+/// A place in the body where a container's header goes. The header holds the
+/// length of what follows it, so it is known only when the container closes.
+priv struct HeaderGap {
+  position : Int32
+  mut header : Array[Byte]
+}
+
+///|
+/// A container the encoder is inside.
+priv struct OpenContainer {
+  value : @ion.IonValue
+  /// The index of its next child.
+  mut next : Int32
+  /// Its index in the gaps.
+  gap : Int32
+  /// Where its content starts in the body.
+  start : Int32
+  type_code : Int32
+  /// Its annotation symbol IDs, as `VarUInt`s.
+  ids : Array[Byte]
+  /// The header octets of the containers inside it, which are not in the body.
+  mut nested : Int32
+}
+
+///|
+/// The symbol IDs of `annotations`, as `VarUInt`s.
+fn annotation_ids(
+  annotations : Array[@ion.SymbolToken],
+  symbols : @ion.SymbolTable,
+) -> Array[Byte] raise @ion.IonError {
+  let ids : Array[Byte] = []
+  for annotation in annotations {
+    push_var_uint(ids, symbol_id(annotation, symbols))
+  }
+  ids
+}
+
+///|
+/// An annotation wrapper around a value of `length` octets whose own header
+/// is `header`, or `header` alone when there are no annotations.
+fn annotated_header(
+  ids : Array[Byte],
+  header : Array[Byte],
+  length : Int32,
+) -> Array[Byte] {
+  if ids.is_empty() {
+    return header
+  }
+  let count : Array[Byte] = []
+  push_var_uint(count, ids.length())
+  let wrapped = count.length() + ids.length() + header.length() + length
+  let out = header_octets(14, wrapped)
+  out.append(count)
+  out.append(ids)
+  out.append(header)
+  out
+}
+
+///|
+/// Encode one value, with no recursion. The walk writes every octet of the
+/// value once into one body, in document order, so symbols are interned in
+/// document order: for each value, its field name, then its annotations, then
+/// its symbol value. Each container leaves a gap for its header; the headers
+/// are computed when their containers close and put into the gaps at the end.
 fn encode(
   value : @ion.IonValue,
   symbols : @ion.SymbolTable,
 ) -> Array[Byte] raise @ion.IonError {
-  if value.has_annotations() {
-    let annotations : Array[Byte] = []
-    for annotation in value.annotations() {
-      push_var_uint(annotations, symbol_id(annotation, symbols))
-    }
-    let inner : Array[Byte] = []
-    push_var_uint(inner, annotations.length())
-    for octet in annotations {
-      inner.push(octet)
-    }
-    for octet in encode(value.with_annotations([]), symbols) {
-      inner.push(octet)
-    }
-    wrap(14, inner)
-  } else {
-    encode_body(value.kind(), symbols)
+  if !value.has_annotations() &&
+    !(value.kind() is (List(_) | Sexp(_) | Struct(_))) {
+    return encode_scalar(value.kind(), symbols)
   }
+  let body : Array[Byte] = []
+  let gaps : Array[HeaderGap] = []
+  let open : Array[OpenContainer] = []
+  encode_start(body, gaps, open, value, symbols)
+  while open.last() is Some(container) {
+    let index = container.next
+    match container.value.kind() {
+      List(items) | Sexp(items) if index < items.length() => {
+        container.next = index + 1
+        encode_start(body, gaps, open, items[index], symbols)
+      }
+      Struct(fields) if index < fields.length() => {
+        container.next = index + 1
+        push_var_uint(body, symbol_id(fields[index].name(), symbols))
+        encode_start(body, gaps, open, fields[index].value(), symbols)
+      }
+      _ => {
+        ignore(open.pop())
+        let length = body.length() - container.start + container.nested
+        let header = annotated_header(
+          container.ids,
+          header_octets(container.type_code, length),
+          length,
+        )
+        gaps[container.gap].header = header
+        if open.last() is Some(parent) {
+          parent.nested += container.nested + header.length()
+        }
+      }
+    }
+  }
+  if gaps.is_empty() {
+    return body
+  }
+  let out : Array[Byte] = Array(
+    capacity=body.length() + open_header_octets(gaps),
+  )
+  let mut copied = 0
+  for gap in gaps {
+    out.append(body[copied:gap.position])
+    out.append(gap.header)
+    copied = gap.position
+  }
+  out.append(body[copied:])
+  out
+}
+
+///|
+/// The total length of the container headers in `gaps`.
+fn open_header_octets(gaps : Array[HeaderGap]) -> Int32 {
+  let mut total = 0
+  for gap in gaps {
+    total += gap.header.length()
+  }
+  total
+}
+
+///|
+/// Encode `value` up to its children: its annotations, then a whole scalar,
+/// or a gap for a container's header, with the container put on `open`. The
+/// caller writes a struct field's name first.
+fn encode_start(
+  body : Array[Byte],
+  gaps : Array[HeaderGap],
+  open : Array[OpenContainer],
+  value : @ion.IonValue,
+  symbols : @ion.SymbolTable,
+) -> Unit raise @ion.IonError {
+  let ids = if value.has_annotations() {
+    annotation_ids(value.annotations(), symbols)
+  } else {
+    []
+  }
+  let type_code = match value.kind() {
+    List(_) => 11
+    Sexp(_) => 12
+    Struct(_) => 13
+    scalar => {
+      let representation = encode_scalar(scalar, symbols)
+      if !ids.is_empty() {
+        body.append(annotated_header(ids, [], representation.length()))
+      }
+      body.append(representation)
+      return
+    }
+  }
+  gaps.push({ position: body.length(), header: [], })
+  open.push({
+    value,
+    next: 0,
+    gap: gaps.length() - 1,
+    start: body.length(),
+    type_code,
+    ids,
+    nested: 0,
+  })
 }
 
 ///|
