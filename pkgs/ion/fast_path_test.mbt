@@ -168,3 +168,44 @@ test "fold skips the children of a container past the nesting limit" {
   }
   assert_eq(trace, expected[:skipped].to_owned() + tail)
 }
+
+///|
+test "equals compares every level past the nesting limit" {
+  for levels in crossing_levels {
+    let value = layered(levels)
+    assert_true(value.equals(layered(levels)))
+    assert_true(value.equals(@testkit.reverse_fields(value)))
+    assert_true(!value.equals(layered(levels + 1)))
+    // A changed scalar is found at every depth: index 0 is the outermost
+    // level number, and the last index is the innermost symbol.
+    let scalars = levels * 2 + 1
+    for index in [0, scalars / 2, scalars - 2, scalars - 1] {
+      assert_true(!value.equals(@testkit.change_one_leaf(value, index)))
+    }
+  }
+}
+
+///|
+test "equals pairs repeated field names past the nesting limit" {
+  // `{a: 1, a: 2}` against `{a: 2, a: 1}`: the first pairing by position
+  // fails, and only another pairing shows that the structs are equal.
+  let left = @ion.IonValue::from_fields([
+    @ion.Field::new("a", @ion.IonValue::int(1)),
+    @ion.Field::new("a", @ion.IonValue::int(2)),
+  ])
+  let right = @ion.IonValue::from_fields([
+    @ion.Field::new("a", @ion.IonValue::int(2)),
+    @ion.Field::new("a", @ion.IonValue::int(1)),
+  ])
+  let other = @ion.IonValue::from_fields([
+    @ion.Field::new("a", @ion.IonValue::int(2)),
+    @ion.Field::new("a", @ion.IonValue::int(3)),
+  ])
+  for depth in [0, 127, 128, 129, 300] {
+    let wrap = (value : @ion.IonValue) => {
+      @testkit.deep_value(List, depth, leaf=value)
+    }
+    assert_true(wrap(left).equals(wrap(right)))
+    assert_true(!wrap(left).equals(wrap(other)))
+  }
+}

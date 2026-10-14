@@ -1,17 +1,18 @@
-// Structural equality of Ion values, with no recursion.
+// Structural equality of Ion values at any depth.
 //
-// Two values are compared in lockstep on a stack of frames, one frame for
-// each pair of containers being compared. Each frame compares its children
-// as pairs: list and S-expression items by position, struct fields by name.
-// Struct fields are an unordered multiset. When the names line up by
-// position, the fields pair by position; otherwise both field arrays are
-// sorted by name and pair in that order. When the names are all different,
-// that pairing is the only one possible, so a difference is final. When names
-// repeat and the pairing finds a difference, another pairing could still
-// match. The comparison then stops and decides with class IDs for the two
-// whole values: every value gets an integer class ID, bottom-up with
-// `fold_up`, so that equal values get equal IDs. Each subtree is classified
-// once, however many structs with repeated names it is inside.
+// Two values are compared in lockstep: with recursion down to
+// MAX_NESTING_DEPTH levels, and below that on a stack of frames, one frame
+// for each pair of containers being compared. Each pair of containers
+// compares its children as pairs: list and S-expression items by position,
+// struct fields by name. Struct fields are an unordered multiset. When the
+// names line up by position, the fields pair by position; otherwise both
+// field arrays are sorted by name and pair in that order. When the names are
+// all different, that pairing is the only one possible, so a difference is
+// final. When names repeat and the pairing finds a difference, another
+// pairing could still match. The comparison then stops and decides with class
+// IDs for the two whole values: every value gets an integer class ID,
+// bottom-up with `fold_up`, so that equal values get equal IDs. Each subtree
+// is classified once, however many structs with repeated names it is inside.
 
 ///|
 /// Structural equality following the Ion data model: annotations must match in
@@ -19,23 +20,102 @@
 /// and sexp elements are compared pairwise, and struct fields are compared as
 /// an unordered multiset. It works at any nesting depth.
 pub fn IonValue::equals(self : IonValue, other : IonValue) -> Bool {
-  let frames : Array[PairFrame] = []
-  let mut outcome = begin_pair(self, other, frames)
-  while frames.last() is Some(frame) {
-    outcome = frame.advance(outcome, frames)
-    if outcome is Ambiguous {
-      break
-    }
-  }
-  match outcome {
+  match pair_shallow(self, other, MAX_NESTING_DEPTH) {
     Equal => true
-    // The loop runs until no frame is left, so the outcome is not `Pending`.
+    // `pair_shallow` decides every pair, so the outcome is not `Pending`.
     Unequal | Pending => false
     Ambiguous => {
       let classes = ValueClasses::new()
       classes.class_of(self) == classes.class_of(other)
     }
   }
+}
+
+///|
+/// Compare `a` and `b` with recursion while `levels` is above zero, then with
+/// `pair_deep`. Recursion is the fastest comparison; the limit keeps the call
+/// stack small at any depth.
+fn pair_shallow(a : IonValue, b : IonValue, levels : Int32) -> PairOutcome {
+  if levels == 0 {
+    return pair_deep(a, b)
+  }
+  if !(a.annotations.is_empty() && b.annotations.is_empty()) &&
+    !annotations_equal(a.annotations, b.annotations) {
+    return Unequal
+  }
+  match (a.kind, b.kind) {
+    (List(x), List(y)) | (Sexp(x), Sexp(y)) => {
+      if x.length() != y.length() {
+        return Unequal
+      }
+      for index in 0..<x.length() {
+        match pair_shallow(x[index], y[index], levels - 1) {
+          Equal => ()
+          outcome => return outcome
+        }
+      }
+      Equal
+    }
+    (Struct(x), Struct(y)) => {
+      guard pair_fields(x, y) is Some((left, right)) else { return Unequal }
+      for index in 0..<left.length() {
+        match pair_shallow(left[index].value, right[index].value, levels - 1) {
+          Equal => ()
+          Unequal if has_repeated_names(left) => return Ambiguous
+          outcome => return outcome
+        }
+      }
+      Equal
+    }
+    // The scalar comparisons are here, not in a helper, because a call per
+    // scalar costs a quarter of the time of comparing a list of integers.
+    (Null(x), Null(y)) => outcome(x == y)
+    (Bool(x), Bool(y)) => outcome(x == y)
+    (Int(x), Int(y)) => outcome(x.equal(y))
+    (Float(x), Float(y)) =>
+      // All NaNs are equivalent, and positive and negative zero are not.
+      outcome(
+        (x.is_nan() && y.is_nan()) ||
+        x.reinterpret_as_uint64() == y.reinterpret_as_uint64(),
+      )
+    (Decimal(x), Decimal(y)) =>
+      outcome(
+        x.coefficient().equal(y.coefficient()) &&
+        x.exponent() == y.exponent() &&
+        x.is_negative_zero() == y.is_negative_zero(),
+      )
+    (Timestamp(x), Timestamp(y)) =>
+      outcome(x.to_ion_string() == y.to_ion_string())
+    (Symbol(x), Symbol(y)) => outcome(x.equivalent(y))
+    (String(x), String(y)) => outcome(x == y)
+    (Clob(x), Clob(y)) => outcome(x == y)
+    (Blob(x), Blob(y)) => outcome(x == y)
+    // Different kinds, including containers of different kinds.
+    _ => Unequal
+  }
+}
+
+///|
+fn outcome(equal : Bool) -> PairOutcome {
+  if equal {
+    Equal
+  } else {
+    Unequal
+  }
+}
+
+///|
+/// Compare `a` and `b` with no recursion, on a stack of frames.
+fn pair_deep(a : IonValue, b : IonValue) -> PairOutcome {
+  let frames : Array[PairFrame] = []
+  let mut outcome = begin_pair(a, b, frames)
+  while frames.last() is Some(frame) {
+    outcome = frame.advance(outcome, frames)
+    if outcome is Ambiguous {
+      break
+    }
+  }
+  outcome
 }
 
 ///|
@@ -89,7 +169,8 @@ fn begin_pair(
       frames.push({ children: Fields(left, right), next: 0, })
       Pending
     }
-    (x, y) => if scalars_equal(x, y) { Equal } else { Unequal }
+    // Scalars, or containers of different kinds: nothing to recurse into.
+    _ => pair_shallow(a, b, 1)
   }
 }
 
@@ -216,31 +297,6 @@ fn annotations_equal(a : Array[SymbolToken], b : Array[SymbolToken]) -> Bool {
     }
   }
   true
-}
-
-///|
-/// Equality of two kinds that are not both lists, both S-expressions or both
-/// structs. Containers of different kinds are unequal.
-fn scalars_equal(a : IonValueKind, b : IonValueKind) -> Bool {
-  match (a, b) {
-    (Null(x), Null(y)) => x == y
-    (Bool(x), Bool(y)) => x == y
-    (Int(x), Int(y)) => x.equal(y)
-    (Float(x), Float(y)) =>
-      // All NaNs are equivalent, and positive and negative zero are not.
-      (x.is_nan() && y.is_nan()) ||
-      x.reinterpret_as_uint64() == y.reinterpret_as_uint64()
-    (Decimal(x), Decimal(y)) =>
-      x.coefficient().equal(y.coefficient()) &&
-      x.exponent() == y.exponent() &&
-      x.is_negative_zero() == y.is_negative_zero()
-    (Timestamp(x), Timestamp(y)) => x.to_ion_string() == y.to_ion_string()
-    (Symbol(x), Symbol(y)) => x.equivalent(y)
-    (String(x), String(y)) => x == y
-    (Clob(x), Clob(y)) => x == y
-    (Blob(x), Blob(y)) => x == y
-    _ => false
-  }
 }
 
 ///|
