@@ -232,19 +232,6 @@ fn push_int(out : Array[Byte], magnitude : BigInt, negative : Bool) -> Unit {
 }
 
 ///|
-/// Append `count` octets of a `VarUInt` length that is at least `14`, or the
-/// nibble itself when it fits. Ion binary uses the nibble `14` to signal a
-/// `VarUInt` length, so a length below that stays in the descriptor.
-fn push_length(out : Array[Byte], length : Int32) -> Int32 {
-  if length < 14 {
-    length
-  } else {
-    push_var_uint(out, length)
-    14
-  }
-}
-
-///|
 /// Skip a NOP padding value at the cursor, when one is there: a type code of
 /// zero with a length nibble other than `15` occupies the descriptor, an
 /// optional `VarUInt` length, and that many padding octets.

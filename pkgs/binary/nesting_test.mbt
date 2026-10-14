@@ -57,19 +57,23 @@ fn nested(frames : Array[Frame], depth : Int32) -> Bytes {
   let mut length = inner.length()
   for _ in 0..<depth {
     for frame in frames {
-      let level = [
-        ..header(frame.type_code, frame.prefix.length() + length),
-        ..frame.prefix,
-      ]
+      let level = header(frame.type_code, frame.prefix.length() + length)
+      for octet in frame.prefix {
+        level.push(octet)
+      }
       headers.push(level)
       length += level.length()
     }
   }
-  let out : Array[Byte] = []
+  let out : Array[Byte] = Array(capacity=length)
   for index = headers.length() - 1; index >= 0; index = index - 1 {
-    out.push_iter(headers[index].iter())
+    for octet in headers[index] {
+      out.push(octet)
+    }
   }
-  out.push_iter(inner.iter())
+  for octet in inner {
+    out.push(octet)
+  }
   Bytes::from_array(out)
 }
 

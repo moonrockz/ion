@@ -6,7 +6,6 @@
 let deep : Int32 = 100_000
 
 ///|
-#skip("ion-dql.6: encode recurses once per level")
 test "write_binary encodes values 100,000 levels deep" {
   let cases : Array[(@testkit.DeepShape, Array[Frame])] = [
     (List, spellings[0]),
