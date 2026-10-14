@@ -1,8 +1,8 @@
 // The symbol tokens of a value, at any depth.
 //
 // Each walk recurses while a value is at most MAX_NESTING_DEPTH levels deep,
-// which is the fastest walk and covers every value a reader returns, and
-// switches to an explicit stack below that depth.
+// which is the fastest walk and covers the containers of every value a
+// reader returns, and switches to an explicit stack below that depth.
 
 ///|
 /// Whether `found` holds for a symbol token in `self`: an annotation, a struct

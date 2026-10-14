@@ -383,7 +383,8 @@ fn write_bytes_key(buffer : StringBuilder, bytes : Bytes) -> Unit {
 
 ///|
 /// The key of a value with no children (a typed null of a container type
-/// included), from the same comparisons as `scalars_equal`.
+/// included), from the same comparisons as the scalar arms of
+/// `pair_shallow`.
 fn scalar_key(value : IonValue) -> String {
   let buffer = StringBuilder()
   write_annotations_key(buffer, value)

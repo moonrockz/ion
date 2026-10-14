@@ -468,11 +468,11 @@ fn has_symbol_ids(value : IonValue) -> Bool {
 
 ///|
 /// `has_symbol_ids` with recursion while `levels` is above zero, then with
-/// `any_token`. It calls `is_symbol_id` directly, not through a closure,
+/// `any_token_deep`. It calls `is_symbol_id` directly, not through a closure,
 /// because `resolve` runs it on every value it is given.
 fn has_symbol_ids_shallow(value : IonValue, levels : Int32) -> Bool {
   if levels == 0 {
-    return value.any_token(is_symbol_id)
+    return any_token_deep(value, is_symbol_id)
   }
   for annotation in value.annotations {
     if is_symbol_id(annotation) {
