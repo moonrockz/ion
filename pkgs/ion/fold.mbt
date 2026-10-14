@@ -90,7 +90,8 @@ pub fn[A] fold_values(
 
 ///|
 /// The core of [`IonValue::fold`], with recursion while `levels` is above
-/// zero, then with `fold_deep`. Recursion is the fastest walk; the limit keeps
+/// zero. At zero levels a container switches to `fold_deep`; a scalar stays
+/// here. Recursion is the fastest walk; the limit keeps
 /// the call stack small at any depth. Returns `Stop` to abort the whole
 /// traversal.
 fn[A] fold_shallow(
@@ -99,7 +100,7 @@ fn[A] fold_shallow(
   folder : IonFold[A],
   levels : Int32,
 ) -> FoldAction[A] {
-  if levels == 0 {
+  if levels == 0 && value.kind is (List(_) | Sexp(_) | Struct(_)) {
     return fold_deep(value, acc, folder)
   }
   let mut acc = acc

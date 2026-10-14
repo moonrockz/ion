@@ -1,8 +1,10 @@
 // The symbol tokens of a value, at any depth.
 //
 // Each walk recurses while a value is at most MAX_NESTING_DEPTH levels deep,
-// which is the fastest walk and covers the containers of every value a
-// reader returns, and switches to an explicit stack below that depth.
+// which is the fastest walk and covers every value a reader returns. Below
+// that depth a container switches to an explicit stack; a scalar is still
+// handled directly, so a wide container at the limit starts no stack walk
+// for each of its children.
 
 ///|
 /// Whether `found` holds for a symbol token in `self`: an annotation, a struct
@@ -21,7 +23,7 @@ fn any_token_shallow(
   found : (SymbolToken) -> Bool,
   levels : Int32,
 ) -> Bool {
-  if levels == 0 {
+  if levels == 0 && value.kind is (List(_) | Sexp(_) | Struct(_)) {
     return any_token_deep(value, found)
   }
   for annotation in value.annotations {
@@ -119,7 +121,7 @@ fn each_token_shallow(
   visit : (SymbolToken) -> Unit,
   levels : Int32,
 ) -> Unit {
-  if levels == 0 {
+  if levels == 0 && value.kind is (List(_) | Sexp(_) | Struct(_)) {
     return each_token_deep(value, visit)
   }
   for annotation in value.annotations {
@@ -193,7 +195,7 @@ fn map_tokens_shallow(
   rewrite : (SymbolToken) -> SymbolToken raise IonError,
   levels : Int32,
 ) -> IonValue raise IonError {
-  if levels == 0 {
+  if levels == 0 && value.kind is (List(_) | Sexp(_) | Struct(_)) {
     return map_tokens_deep(value, rewrite)
   }
   let annotations = map_annotations(value.annotations, rewrite)

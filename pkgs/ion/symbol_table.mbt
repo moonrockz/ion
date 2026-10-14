@@ -467,11 +467,11 @@ fn has_symbol_ids(value : IonValue) -> Bool {
 }
 
 ///|
-/// `has_symbol_ids` with recursion while `levels` is above zero, then with
-/// `any_token_deep`. It calls `is_symbol_id` directly, not through a closure,
+/// `has_symbol_ids` with recursion while `levels` is above zero. At zero
+/// levels a container switches to `any_token_deep`; a scalar stays here. It calls `is_symbol_id` directly, not through a closure,
 /// because `resolve` runs it on every value it is given.
 fn has_symbol_ids_shallow(value : IonValue, levels : Int32) -> Bool {
-  if levels == 0 {
+  if levels == 0 && value.kind is (List(_) | Sexp(_) | Struct(_)) {
     return any_token_deep(value, is_symbol_id)
   }
   for annotation in value.annotations {

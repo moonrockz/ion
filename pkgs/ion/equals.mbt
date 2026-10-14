@@ -32,11 +32,13 @@ pub fn IonValue::equals(self : IonValue, other : IonValue) -> Bool {
 }
 
 ///|
-/// Compare `a` and `b` with recursion while `levels` is above zero, then with
-/// `pair_deep`. Recursion is the fastest comparison; the limit keeps the call
+/// Compare `a` and `b` with recursion while `levels` is above zero. At zero
+/// levels a pair of containers switches to `pair_deep`; scalars stay here. Recursion is the fastest comparison; the limit keeps the call
 /// stack small at any depth.
 fn pair_shallow(a : IonValue, b : IonValue, levels : Int32) -> PairOutcome {
-  if levels == 0 {
+  if levels == 0 &&
+    a.kind is (List(_) | Sexp(_) | Struct(_)) &&
+    b.kind is (List(_) | Sexp(_) | Struct(_)) {
     return pair_deep(a, b)
   }
   if !(a.annotations.is_empty() && b.annotations.is_empty()) &&

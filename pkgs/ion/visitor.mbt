@@ -62,15 +62,15 @@ pub fn IonValue::accept(self : IonValue, visitor : &IonVisitor) -> Unit {
 }
 
 ///|
-/// Accept `visitor` with recursion while `levels` is above zero, then with
-/// `accept_deep`. Recursion is the fastest walk; the limit keeps the call
+/// Accept `visitor` with recursion while `levels` is above zero. At zero
+/// levels a container switches to `accept_deep`; a scalar stays here. Recursion is the fastest walk; the limit keeps the call
 /// stack small at any depth.
 fn accept_shallow(
   value : IonValue,
   visitor : &IonVisitor,
   levels : Int32,
 ) -> Unit {
-  if levels == 0 {
+  if levels == 0 && value.kind is (List(_) | Sexp(_) | Struct(_)) {
     return accept_deep(value, visitor)
   }
   visitor.visit_value(value)
