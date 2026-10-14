@@ -17,7 +17,9 @@ codecs, Ion Hash, JSON conversion, and Ion Schema all build on it.
 - Every failure is an `IonError`: `Syntax`, `DataModel`, `Unsupported`, or
   `LimitExceeded`.
 - The readers accept containers nested at most `MAX_NESTING_DEPTH` (128)
-  levels deep, and raise `LimitExceeded` past it.
+  levels deep, and raise `LimitExceeded` past it. Every walker (equality,
+  fold, visitor, writers, events, Ion Hash and JSON conversion) uses a
+  bounded call stack, so a value built in code works at any depth.
 
 ## Building values
 
@@ -257,6 +259,7 @@ with the incremental writer when the versions differ between values.
 `IonValue::accept` walks a value depth-first with an `IonVisitor`, whose
 methods all default to doing nothing. `IonValue::fold` threads an accumulator
 instead, and each callback can continue, skip a value's children, or stop.
+None of these recurse: they work at any depth.
 
 ```mbt check
 ///|
