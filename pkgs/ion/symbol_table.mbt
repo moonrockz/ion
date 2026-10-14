@@ -215,22 +215,12 @@ pub fn highest_symbol_id(values : Array[IonValue]) -> Int32 {
 /// `highest_symbol_id` for one value.
 fn value_highest_symbol_id(value : IonValue) -> Int32 {
   let mut highest = 0
-  for annotation in value.annotations() {
-    highest = @cmp.maximum(highest, token_symbol_id(annotation))
-  }
-  match value.kind() {
-    Symbol(token) => highest = @cmp.maximum(highest, token_symbol_id(token))
-    List(items) | Sexp(items) =>
-      for item in items {
-        highest = @cmp.maximum(highest, value_highest_symbol_id(item))
-      }
-    Struct(fields) =>
-      for field in fields {
-        highest = @cmp.maximum(highest, token_symbol_id(field.name()))
-        highest = @cmp.maximum(highest, value_highest_symbol_id(field.value()))
-      }
-    _ => ()
-  }
+  ignore(
+    value.any_token(token => {
+      highest = @cmp.maximum(highest, token_symbol_id(token))
+      false
+    }),
+  )
   highest
 }
 
@@ -442,7 +432,8 @@ fn is_local_symbol_table_annotation(value : IonValue) -> Bool {
 /// `value` with text for every symbol ID the table defines, in its
 /// annotations, field names, and symbol values at any depth. A symbol ID the
 /// table leaves without text retains its import location when applicable,
-/// and an ID beyond the table raises, as `lookup` does.
+/// and an ID beyond the table raises, as `lookup` does: for the first such ID
+/// in document order.
 pub fn SymbolTable::resolve(
   self : SymbolTable,
   value : IonValue,
@@ -450,23 +441,7 @@ pub fn SymbolTable::resolve(
   if !has_symbol_ids(value) {
     return value
   }
-  let annotations = value.annotations().map(token => self.resolve_token(token))
-  let resolved = match value.kind() {
-    Symbol(token) => IonValue::symbol_token(self.resolve_token(token))
-    List(items) => IonValue::list(items.map(item => self.resolve(item)))
-    Sexp(items) => IonValue::sexp(items.map(item => self.resolve(item)))
-    Struct(fields) =>
-      IonValue::from_fields(
-        fields.map(field => {
-          Field::from_token(
-            self.resolve_token(field.name()),
-            self.resolve(field.value()),
-          )
-        }),
-      )
-    _ => value
-  }
-  resolved.with_annotations(annotations)
+  value.map_tokens(token => self.resolve_token(token))
 }
 
 ///|
@@ -488,31 +463,7 @@ fn SymbolTable::resolve_token(
 /// Whether a value holds a symbol known only by a nonzero ID, in an
 /// annotation, a field name, or a symbol value at any depth.
 fn has_symbol_ids(value : IonValue) -> Bool {
-  for annotation in value.annotations() {
-    if is_symbol_id(annotation) {
-      return true
-    }
-  }
-  match value.kind() {
-    Symbol(token) => is_symbol_id(token)
-    List(items) | Sexp(items) => {
-      for item in items {
-        if has_symbol_ids(item) {
-          return true
-        }
-      }
-      false
-    }
-    Struct(fields) => {
-      for field in fields {
-        if is_symbol_id(field.name()) || has_symbol_ids(field.value()) {
-          return true
-        }
-      }
-      false
-    }
-    _ => false
-  }
+  value.any_token(is_symbol_id)
 }
 
 ///|

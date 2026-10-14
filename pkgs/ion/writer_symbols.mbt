@@ -106,20 +106,7 @@ pub fn SymbolTable::for_values(
 /// Match encoder traversal: annotations, then value; struct names precede
 /// their values. This gives batch and incremental writers the same IDs.
 fn collect_writer_tokens(value : IonValue, tokens : Array[SymbolToken]) -> Unit {
-  tokens.append(value.annotations())
-  match value.kind() {
-    Symbol(token) => tokens.push(token)
-    List(items) | Sexp(items) =>
-      for item in items {
-        collect_writer_tokens(item, tokens)
-      }
-    Struct(fields) =>
-      for field in fields {
-        tokens.push(field.name())
-        collect_writer_tokens(field.value(), tokens)
-      }
-    _ => ()
-  }
+  value.each_token(token => tokens.push(token))
 }
 
 ///|
@@ -190,30 +177,11 @@ pub fn SymbolTable::localize_for_text(
   self : SymbolTable,
   value : IonValue,
 ) -> IonValue raise IonError {
-  let rewrite = fn(token : SymbolToken) -> SymbolToken raise IonError {
+  value.map_tokens(token => {
     if token.text is Some(_) {
       token
     } else {
       SymbolToken::from_sid(self.writer_token_id(token))
     }
-  }
-  let annotations = value.annotations().map(rewrite)
-  let mapped = match value.kind() {
-    Symbol(token) => IonValue::symbol_token(rewrite(token))
-    List(items) =>
-      IonValue::list(items.map(item => self.localize_for_text(item)))
-    Sexp(items) =>
-      IonValue::sexp(items.map(item => self.localize_for_text(item)))
-    Struct(fields) =>
-      IonValue::from_fields(
-        fields.map(field => {
-          Field::from_token(
-            rewrite(field.name()),
-            self.localize_for_text(field.value()),
-          )
-        }),
-      )
-    _ => value
-  }
-  mapped.with_annotations(annotations)
+  })
 }

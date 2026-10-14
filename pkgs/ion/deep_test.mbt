@@ -57,7 +57,6 @@ test "has_imported_symbols finds a symbol 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.4: value_highest_symbol_id recurses once per level")
 test "highest_symbol_id finds an ID 100,000 levels deep" {
   let leaf = @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(12))
   for shape in shapes {
@@ -69,7 +68,6 @@ test "highest_symbol_id finds an ID 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.4: SymbolTable::resolve recurses once per level")
 test "resolve gives text to a symbol 100,000 levels deep" {
   let leaf = @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(4))
   for shape in shapes {
@@ -83,7 +81,6 @@ test "resolve gives text to a symbol 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.4: collect_writer_tokens recurses once per level")
 test "for_values interns a symbol 100,000 levels deep" {
   let leaf = @ion.IonValue::symbol("zzz")
   for shape in shapes {
@@ -95,7 +92,6 @@ test "for_values interns a symbol 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.4: localize_for_text recurses once per level")
 test "localize_for_text rewrites a symbol 100,000 levels deep" {
   let leaf = @ion.IonValue::symbol_token(
     @ion.SymbolToken::from_import(10, "shared", 1, 1),
