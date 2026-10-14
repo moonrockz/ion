@@ -192,7 +192,7 @@ fn write_shallow(
         write_separator(buffer, index, sexp, depth, pretty)
         write_shallow(buffer, item, depth + 1, pretty, sexp, levels - 1)
       }
-      write_close(buffer, kind, items.length(), depth, pretty)
+      write_close(buffer, kind, items.is_empty(), depth, pretty)
     }
     Struct(fields) => {
       buffer.write_string("{")
@@ -209,7 +209,13 @@ fn write_shallow(
           levels - 1,
         )
       }
-      write_close(buffer, @ion.IonType::Struct, fields.length(), depth, pretty)
+      write_close(
+        buffer,
+        @ion.IonType::Struct,
+        fields.is_empty(),
+        depth,
+        pretty,
+      )
     }
     other => write_scalar(buffer, other, in_sexp)
   }
@@ -238,15 +244,16 @@ fn write_separator(
 }
 
 ///|
-/// Close a container of `count` children whose own indent level is `depth`.
+/// Close a container whose own indent level is `depth`. Pretty text puts the
+/// close of a container with children on a new line.
 fn write_close(
   buffer : StringBuilder,
   kind : @ion.IonType,
-  count : Int32,
+  empty : Bool,
   depth : Int32,
   pretty : Bool,
 ) -> Unit {
-  if pretty && count > 0 {
+  if pretty && !empty {
     buffer.write_string("\n")
     write_indent(buffer, depth)
   }
@@ -274,25 +281,16 @@ fn write_deep(
         (fields[index].value(), Some(fields[index].name()))
       _ => {
         ignore(open.pop())
-        if pretty {
-          buffer.write_string("\n")
-          write_indent(buffer, depth + open.length())
-        }
-        buffer.write_string(close_text(frame.kind))
+        // A container on `open` has children; `write_start` closes an empty
+        // one at once.
+        write_close(buffer, frame.kind, false, depth + open.length(), pretty)
         continue
       }
     }
     frame.next = index + 1
     let sexp = frame.kind == @ion.IonType::Sexp
-    if pretty {
-      if !sexp && index > 0 {
-        buffer.write_string(",")
-      }
-      buffer.write_string("\n")
-      write_indent(buffer, depth + open.length())
-    } else if index > 0 {
-      buffer.write_string(if sexp { " " } else { ", " })
-    }
+    // The container's own indent level is one less than its children's.
+    write_separator(buffer, index, sexp, depth + open.length() - 1, pretty)
     if field is Some(name) {
       write_symbol(buffer, name, false)
       buffer.write_string(": ")

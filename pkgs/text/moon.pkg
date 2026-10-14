@@ -20,3 +20,7 @@ import {
   "moonbitlang/core/encoding/utf16",
   "moonrockz/ion/testkit",
 } for "test"
+
+import {
+  "moonrockz/ion/testkit",
+} for "wbtest"

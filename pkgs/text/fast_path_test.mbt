@@ -72,7 +72,7 @@ test "write_ion_pretty indents every level past the nesting limit" {
 }
 
 ///|
-test "write_fragment writes an operator bare inside an S-expression past the nesting limit" {
+test "write_ion writes an operator bare inside S-expressions past the nesting limit" {
   let plus = @ion.IonValue::symbol("+")
   for depth in [0, 127, 128, 129, 300] {
     let value = @testkit.deep_value(Sexp, depth, leaf=plus)
