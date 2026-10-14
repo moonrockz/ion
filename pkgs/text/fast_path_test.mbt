@@ -176,3 +176,33 @@ test "dispatch_value calls the handler in document order past the nesting limit"
     assert_eq(trace.events, layered_events(levels))
   }
 }
+
+///|
+struct ScalarAnnotations {
+  counts : Array[Int32]
+}
+
+///|
+impl @text.IonHandler for ScalarAnnotations with fn on_scalar(self, value) {
+  self.counts.push(value.annotations().length())
+}
+
+///|
+test "a scalar event carries no annotations, on both sides of the nesting limit" {
+  for depth in [0, 127, 128, 129, 300] {
+    let leaf = @ion.IonValue::int(1).with_annotation(@ion.SymbolToken::new("a"))
+    let value = @testkit.deep_value(List, depth, leaf~)
+    let handler : ScalarAnnotations = { counts: [], }
+    @text.dispatch_value(value, handler)
+    assert_eq(handler.counts, [0])
+    let scalars = @text.IonReader::from_value(value)
+      .remaining()
+      .filter_map(event => {
+        match event {
+          Scalar(scalar) => Some(scalar.annotations().length())
+          _ => None
+        }
+      })
+    assert_eq(scalars, [0])
+  }
+}

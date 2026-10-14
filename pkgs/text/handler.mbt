@@ -144,7 +144,7 @@ fn dispatch_shallow(
       }
       handler.on_struct_end()
     }
-    _ => handler.on_scalar(value.with_annotations([]))
+    _ => handler.on_scalar(without_annotations(value))
   }
 }
 
@@ -159,7 +159,7 @@ fn dispatch_deep(value : @ion.IonValue, handler : &IonHandler) -> Unit {
         List(_) => handler.on_list_start()
         Sexp(_) => handler.on_sexp_start()
         Struct(_) => handler.on_struct_start()
-        _ => handler.on_scalar(current.with_annotations([]))
+        _ => handler.on_scalar(without_annotations(current))
       }
     },
     current => {

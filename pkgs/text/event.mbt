@@ -99,7 +99,7 @@ fn emit_shallow(
       }
       events.push(StructEnd)
     }
-    _ => events.push(Scalar(value.with_annotations([])))
+    _ => events.push(Scalar(without_annotations(value)))
   }
 }
 
@@ -113,7 +113,7 @@ fn emit_deep(value : @ion.IonValue, events : Array[IonEvent]) -> Unit {
       match current.kind() {
         List(_) | Sexp(_) | Struct(_) =>
           events.push(container_events(current).0)
-        _ => events.push(IonEvent::Scalar(current.with_annotations([])))
+        _ => events.push(IonEvent::Scalar(without_annotations(current)))
       }
     },
     current => events.push(container_events(current).1),
@@ -189,3 +189,14 @@ pub fn IonReader::remaining(self : IonReader) -> Array[IonEvent] {
 
 ///|
 pub extend IonEvent with @debug.Debug::{to_repr}
+
+///|
+/// `value` without its annotations, which the events carry separately. A
+/// value with none is returned as it is, so most scalars cost no copy.
+fn without_annotations(value : @ion.IonValue) -> @ion.IonValue {
+  if value.has_annotations() {
+    value.with_annotations([])
+  } else {
+    value
+  }
+}
