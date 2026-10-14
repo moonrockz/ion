@@ -209,3 +209,121 @@ test "equals pairs repeated field names past the nesting limit" {
     assert_true(!wrap(left).equals(wrap(other)))
   }
 }
+
+///|
+/// `leaf` inside `depth` lists.
+fn in_lists(depth : Int32, leaf : @ion.IonValue) -> @ion.IonValue {
+  @testkit.deep_value(List, depth, leaf~)
+}
+
+///|
+/// The value inside `depth` lists, found with a loop.
+fn under_lists(value : @ion.IonValue, depth : Int32) -> @ion.IonValue {
+  let mut current = value
+  for _ in 0..<depth {
+    guard current.kind() is List([item]) else { abort("expected a list") }
+    current = item
+  }
+  current
+}
+
+///|
+test "symbol walks find and resolve IDs past the nesting limit" {
+  let sid = @ion.SymbolToken::from_sid
+  // `imports::{name: version}` with every token known only by its ID.
+  let leaf = @ion.IonValue::from_fields([
+    @ion.Field::from_token(sid(4), @ion.IonValue::symbol_token(sid(5))),
+  ]).with_annotation(sid(6))
+  for depth in [0, 127, 128, 129, 300] {
+    let value = in_lists(depth, leaf)
+    assert_eq(@ion.highest_symbol_id([value]), 6)
+    let resolved = under_lists(@ion.SymbolTable::system().resolve(value), depth)
+    inspect(@text.write_ion(resolved), content="imports::{name: version}")
+  }
+}
+
+///|
+test "resolve names the first failing ID in document order across the nesting limit" {
+  let sid = @ion.SymbolToken::from_sid
+  let symbol = (id : Int32) => @ion.IonValue::symbol_token(sid(id))
+  // The first failing ID is deep, and a later one is shallow.
+  inspect(
+    resolve_error(@ion.IonValue::list([in_lists(300, symbol(20)), symbol(30)])),
+    content="symbol ID $20 is beyond the symbol table, whose largest ID is 9",
+  )
+  // The first failing ID is shallow, and a later one is deep.
+  inspect(
+    resolve_error(@ion.IonValue::list([symbol(30), in_lists(300, symbol(20))])),
+    content="symbol ID $30 is beyond the symbol table, whose largest ID is 9",
+  )
+  // Below the limit, a field name comes before its value's annotations.
+  let field_first = @ion.IonValue::from_fields([
+    @ion.Field::from_token(sid(20), symbol(30).with_annotation(sid(40))),
+  ])
+  inspect(
+    resolve_error(in_lists(300, field_first)),
+    content="symbol ID $20 is beyond the symbol table, whose largest ID is 9",
+  )
+}
+
+///|
+test "for_values interns symbols in document order past the nesting limit" {
+  // Level i is `{f<i>: t<i>::[s<i>, <level i + 1>]}`: two containers a level.
+  let levels = 100
+  let mut value = @ion.IonValue::symbol("leaf")
+  for level = levels - 1; level >= 0; level = level - 1 {
+    let list = @ion.IonValue::list([@ion.IonValue::symbol("s\{level}"), value]).with_annotation(
+      @ion.SymbolToken::new("t\{level}"),
+    )
+    value = @ion.IonValue::from_fields([@ion.Field::new("f\{level}", list)])
+  }
+  let table = @ion.SymbolTable::for_values([value])
+  for level in 0..<levels {
+    assert_eq(table.find("f\{level}"), Some(10 + level * 3))
+    assert_eq(table.find("t\{level}"), Some(11 + level * 3))
+    assert_eq(table.find("s\{level}"), Some(12 + level * 3))
+  }
+  assert_eq(table.find("leaf"), Some(10 + levels * 3))
+}
+
+///|
+test "localize_for_text rewrites imported symbols past the nesting limit" {
+  let shared = @ion.SymbolToken::from_import(10, "shared", 1, 1)
+  let leaf = @ion.IonValue::from_fields([
+    @ion.Field::from_token(shared, @ion.IonValue::symbol_token(shared)),
+  ])
+  for depth in [0, 127, 128, 129, 300] {
+    let value = in_lists(depth, leaf)
+    let table = @ion.SymbolTable::for_values([value])
+    let localized = under_lists(table.localize_for_text(value), depth)
+    guard localized.kind() is Struct([field]) else { fail("expected a struct") }
+    assert_eq(field.name().sid(), Some(10))
+    assert_true(
+      field.value().kind() is Symbol(token) && token.sid() == Some(10),
+    )
+  }
+}
+
+///|
+test "resolve rewrites a field name even when its value has no IDs" {
+  let sid = @ion.SymbolToken::from_sid
+  let value = @ion.IonValue::from_fields([
+    @ion.Field::from_token(sid(4), @ion.IonValue::int(1)),
+  ])
+  inspect(
+    @text.write_ion(@ion.SymbolTable::system().resolve(value)),
+    content="{name: 1}",
+  )
+}
+
+///|
+test "resolve keeps the annotations of a container whose children change" {
+  let sid = @ion.SymbolToken::from_sid
+  let value = @ion.IonValue::list([@ion.IonValue::symbol_token(sid(5))]).with_annotation(
+    @ion.SymbolToken::new("a"),
+  )
+  inspect(
+    @text.write_ion(@ion.SymbolTable::system().resolve(value)),
+    content="a::[version]",
+  )
+}

@@ -463,7 +463,43 @@ fn SymbolTable::resolve_token(
 /// Whether a value holds a symbol known only by a nonzero ID, in an
 /// annotation, a field name, or a symbol value at any depth.
 fn has_symbol_ids(value : IonValue) -> Bool {
-  value.any_token(is_symbol_id)
+  has_symbol_ids_shallow(value, MAX_NESTING_DEPTH)
+}
+
+///|
+/// `has_symbol_ids` with recursion while `levels` is above zero, then with
+/// `any_token`. It calls `is_symbol_id` directly, not through a closure,
+/// because `resolve` runs it on every value it is given.
+fn has_symbol_ids_shallow(value : IonValue, levels : Int32) -> Bool {
+  if levels == 0 {
+    return value.any_token(is_symbol_id)
+  }
+  for annotation in value.annotations {
+    if is_symbol_id(annotation) {
+      return true
+    }
+  }
+  match value.kind {
+    Symbol(token) => is_symbol_id(token)
+    List(items) | Sexp(items) => {
+      for item in items {
+        if has_symbol_ids_shallow(item, levels - 1) {
+          return true
+        }
+      }
+      false
+    }
+    Struct(fields) => {
+      for field in fields {
+        if is_symbol_id(field.name) ||
+          has_symbol_ids_shallow(field.value, levels - 1) {
+          return true
+        }
+      }
+      false
+    }
+    _ => false
+  }
 }
 
 ///|
