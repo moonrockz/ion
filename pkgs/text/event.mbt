@@ -56,8 +56,56 @@ fn container_events(value : @ion.IonValue) -> (IonEvent, IonEvent) {
 }
 
 ///|
-/// Emit `value`'s events into `events`, with no recursion.
+/// Emit `value`'s events into `events`, at any depth.
 fn emit_value(value : @ion.IonValue, events : Array[IonEvent]) -> Unit {
+  emit_shallow(value, events, @ion.MAX_NESTING_DEPTH)
+}
+
+///|
+/// Emit `value`'s events with recursion while `levels` is above zero. At zero
+/// levels a container switches to `emit_deep`; a scalar stays here. Recursion
+/// is the fastest walk; the limit keeps the call stack small at any depth.
+fn emit_shallow(
+  value : @ion.IonValue,
+  events : Array[IonEvent],
+  levels : Int32,
+) -> Unit {
+  if levels == 0 && value.kind() is (List(_) | Sexp(_) | Struct(_)) {
+    return emit_deep(value, events)
+  }
+  for annotation in value.annotations() {
+    events.push(Annotation(annotation))
+  }
+  match value.kind() {
+    List(items) => {
+      events.push(ListStart)
+      for item in items {
+        emit_shallow(item, events, levels - 1)
+      }
+      events.push(ListEnd)
+    }
+    Sexp(items) => {
+      events.push(SexpStart)
+      for item in items {
+        emit_shallow(item, events, levels - 1)
+      }
+      events.push(SexpEnd)
+    }
+    Struct(fields) => {
+      events.push(StructStart)
+      for field in fields {
+        events.push(FieldName(field.name()))
+        emit_shallow(field.value(), events, levels - 1)
+      }
+      events.push(StructEnd)
+    }
+    _ => events.push(Scalar(without_annotations(value)))
+  }
+}
+
+///|
+/// Emit `value`'s events with no recursion.
+fn emit_deep(value : @ion.IonValue, events : Array[IonEvent]) -> Unit {
   traverse(
     value,
     (current, field) => {
@@ -65,7 +113,7 @@ fn emit_value(value : @ion.IonValue, events : Array[IonEvent]) -> Unit {
       match current.kind() {
         List(_) | Sexp(_) | Struct(_) =>
           events.push(container_events(current).0)
-        _ => events.push(IonEvent::Scalar(current.with_annotations([])))
+        _ => events.push(IonEvent::Scalar(without_annotations(current)))
       }
     },
     current => events.push(container_events(current).1),
@@ -141,3 +189,14 @@ pub fn IonReader::remaining(self : IonReader) -> Array[IonEvent] {
 
 ///|
 pub extend IonEvent with @debug.Debug::{to_repr}
+
+///|
+/// `value` without its annotations, which the events carry separately. A
+/// value with none is returned as it is, so most scalars cost no copy.
+fn without_annotations(value : @ion.IonValue) -> @ion.IonValue {
+  if value.has_annotations() {
+    value.with_annotations([])
+  } else {
+    value
+  }
+}

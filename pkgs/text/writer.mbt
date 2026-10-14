@@ -154,11 +154,116 @@ priv struct TextFrame {
 }
 
 ///|
-/// Render one value into `buffer`, with no recursion: the containers that the
-/// writer is inside are on a heap stack. `depth` is the pretty indent level of
-/// the value, and `in_sexp` says whether the value is inside an S-expression,
-/// where an operator symbol is written bare.
+/// Render one value into `buffer`, at any depth. `depth` is the pretty indent
+/// level of the value, and `in_sexp` says whether the value is inside an
+/// S-expression, where an operator symbol is written bare.
 fn write_value(
+  buffer : StringBuilder,
+  value : @ion.IonValue,
+  depth : Int32,
+  pretty : Bool,
+  in_sexp : Bool,
+) -> Unit raise @ion.IonError {
+  write_shallow(buffer, value, depth, pretty, in_sexp, @ion.MAX_NESTING_DEPTH)
+}
+
+///|
+/// Render `value` with recursion while `levels` is above zero. At zero levels
+/// a container switches to `write_deep`; a scalar stays here. Recursion is the
+/// fastest walk; the limit keeps the call stack small at any depth.
+fn write_shallow(
+  buffer : StringBuilder,
+  value : @ion.IonValue,
+  depth : Int32,
+  pretty : Bool,
+  in_sexp : Bool,
+  levels : Int32,
+) -> Unit raise @ion.IonError {
+  if levels == 0 && value.kind() is (List(_) | Sexp(_) | Struct(_)) {
+    return write_deep(buffer, value, depth, pretty, in_sexp)
+  }
+  write_annotations(buffer, value)
+  match value.kind() {
+    List(items) | Sexp(items) => {
+      let kind = value.ion_type()
+      let sexp = kind == @ion.IonType::Sexp
+      buffer.write_string(open_text(kind))
+      for index, item in items {
+        write_separator(buffer, index, sexp, depth, pretty)
+        write_shallow(buffer, item, depth + 1, pretty, sexp, levels - 1)
+      }
+      write_close(buffer, kind, items.is_empty(), depth, pretty)
+    }
+    Struct(fields) => {
+      buffer.write_string("{")
+      for index, field in fields {
+        write_separator(buffer, index, false, depth, pretty)
+        write_symbol(buffer, field.name(), false)
+        buffer.write_string(": ")
+        write_shallow(
+          buffer,
+          field.value(),
+          depth + 1,
+          pretty,
+          false,
+          levels - 1,
+        )
+      }
+      write_close(
+        buffer,
+        @ion.IonType::Struct,
+        fields.is_empty(),
+        depth,
+        pretty,
+      )
+    }
+    other => write_scalar(buffer, other, in_sexp)
+  }
+}
+
+///|
+/// Write what comes before child `index` of a container whose own indent
+/// level is `depth`: the separator after the previous child, and in pretty
+/// text a new line and the child's indent.
+fn write_separator(
+  buffer : StringBuilder,
+  index : Int32,
+  sexp : Bool,
+  depth : Int32,
+  pretty : Bool,
+) -> Unit {
+  if pretty {
+    if !sexp && index > 0 {
+      buffer.write_string(",")
+    }
+    buffer.write_string("\n")
+    write_indent(buffer, depth + 1)
+  } else if index > 0 {
+    buffer.write_string(if sexp { " " } else { ", " })
+  }
+}
+
+///|
+/// Close a container whose own indent level is `depth`. Pretty text puts the
+/// close of a container with children on a new line.
+fn write_close(
+  buffer : StringBuilder,
+  kind : @ion.IonType,
+  empty : Bool,
+  depth : Int32,
+  pretty : Bool,
+) -> Unit {
+  if pretty && !empty {
+    buffer.write_string("\n")
+    write_indent(buffer, depth)
+  }
+  buffer.write_string(close_text(kind))
+}
+
+///|
+/// Render `value` with no recursion: the containers that the writer is inside
+/// are on a heap stack.
+fn write_deep(
   buffer : StringBuilder,
   value : @ion.IonValue,
   depth : Int32,
@@ -176,25 +281,16 @@ fn write_value(
         (fields[index].value(), Some(fields[index].name()))
       _ => {
         ignore(open.pop())
-        if pretty {
-          buffer.write_string("\n")
-          write_indent(buffer, depth + open.length())
-        }
-        buffer.write_string(close_text(frame.kind))
+        // A container on `open` has children; `write_start` closes an empty
+        // one at once.
+        write_close(buffer, frame.kind, false, depth + open.length(), pretty)
         continue
       }
     }
     frame.next = index + 1
     let sexp = frame.kind == @ion.IonType::Sexp
-    if pretty {
-      if !sexp && index > 0 {
-        buffer.write_string(",")
-      }
-      buffer.write_string("\n")
-      write_indent(buffer, depth + open.length())
-    } else if index > 0 {
-      buffer.write_string(if sexp { " " } else { ", " })
-    }
+    // The container's own indent level is one less than its children's.
+    write_separator(buffer, index, sexp, depth + open.length() - 1, pretty)
     if field is Some(name) {
       write_symbol(buffer, name, false)
       buffer.write_string(": ")
