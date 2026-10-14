@@ -114,6 +114,8 @@ test "nesting past the limit" {
 }
 ```
 
+The writer has no such limit: it writes a value built in code at any depth.
+
 ## Symbol tables
 
 A local symbol table gives text to symbol IDs such as `$10`; it is applied,

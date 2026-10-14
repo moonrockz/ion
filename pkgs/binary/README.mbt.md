@@ -128,6 +128,7 @@ test "a truncated value" {
 
 Like the text reader, the binary reader raises `@ion.IonError::LimitExceeded`
 for containers nested deeper than `@ion.MAX_NESTING_DEPTH` (128) levels.
+The writer has no such limit: it writes a value built in code at any depth.
 
 ## One value at a time
 
