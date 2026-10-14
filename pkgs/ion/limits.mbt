@@ -5,11 +5,13 @@
 /// The deepest container nesting a reader accepts. A top-level container is
 /// at depth 1, so `[[1]]` nests to depth 2. Annotations do not add depth.
 ///
-/// The limit protects the readers and the host from hostile input. The code
-/// that walks values (equality, fold, visitor, writers, events, Ion Hash and
-/// JSON conversion) keeps its call stack bounded at any depth: it uses an
-/// explicit stack, and the JSON conversions recurse only down to this depth.
-/// So a value built in code works at any depth.
+/// The limit keeps deeply nested hostile input from exhausting the readers'
+/// call stack. It does not bound the size of a value.
+///
+/// The code that walks values (equality, fold, visitor, writers, events, Ion
+/// Hash and JSON conversion) keeps its call stack bounded at any depth: it
+/// uses an explicit stack, and the JSON conversions recurse only down to this
+/// depth. So a value built in code works at any depth.
 pub const MAX_NESTING_DEPTH : Int32 = 128
 
 ///|

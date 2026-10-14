@@ -310,8 +310,9 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   A shared table's `imports` field is informational metadata and is ignored.
 - **Bounded nesting.** The text, binary and JSON readers accept containers
   nested at most `@ion.MAX_NESTING_DEPTH` (128) levels deep and raise
-  `IonError::LimitExceeded` past it, so hostile input cannot exhaust the
-  host. Every walker (equality, fold, visitor, writers, events, Ion Hash and
+  `IonError::LimitExceeded` past it, so deeply nested hostile input cannot
+  exhaust the readers' call stack. The limit does not bound the size of a
+  value. Every walker (equality, fold, visitor, writers, events, Ion Hash and
   JSON conversion) keeps its call stack bounded, so a value built in code
   works at any depth.
 - **Unsupported is an error.** The schema loader raises
