@@ -4,7 +4,6 @@
 let deep : Int32 = 100_000
 
 ///|
-#skip("ion-dql.7: serialize_with recurses once per level")
 test "ion_hash serializes lists and sexps 100,000 levels deep" {
   let cases : Array[(@testkit.DeepShape, Byte)] = [
     (List, b'\xB0'),
@@ -32,7 +31,6 @@ test "ion_hash serializes lists and sexps 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.7: serialize_with recurses once per level")
 test "ion_hash tells apart structs and annotated values 100,000 levels deep" {
   let shapes : Array[@testkit.DeepShape] = [Struct, AnnotatedList, Mixed]
   for shape in shapes {

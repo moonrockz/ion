@@ -64,23 +64,98 @@ fn utf8_bytes(text : String) -> Array[Byte] {
 }
 
 ///|
+/// A container whose serialization is being written: its next child, and the
+/// buffer it writes into. A struct collects the hashes of its fields, and each
+/// field writes into a buffer of its own.
+priv struct HashFrame {
+  value : @ion.IonValue
+  mut next : Int32
+  out : Array[Byte]
+  hashes : Array[Array[Byte]]
+}
+
+///|
 /// The Ion Hash serialization `s(value)` of a value, including its annotations.
-/// Struct field hashes use `hash` (the caller's `h`).
+/// Struct field hashes use `hash` (the caller's `h`). The value is serialized
+/// with a stack of open containers, not recursion, so any depth works.
 fn serialize_with(
   value : @ion.IonValue,
   hash : (Array[Byte]) -> Array[Byte],
 ) -> Array[Byte] raise @ion.IonError {
-  if value.has_annotations() {
-    let out : Array[Byte] = [0x0B, 0xE0]
+  let root : Array[Byte] = []
+  let open : Array[HashFrame] = []
+  if serialize_start(root, value, open) {
+    return root
+  }
+  while open.last() is Some(frame) {
+    match frame.value.kind() {
+      List(items) | Sexp(items) if frame.next < items.length() => {
+        let item = items[frame.next]
+        frame.next += 1
+        ignore(serialize_start(frame.out, item, open))
+      }
+      Struct(fields) if frame.next < fields.length() => {
+        let field = fields[frame.next]
+        frame.next += 1
+        let buffer = symbol_serialization(field.name())
+        if serialize_start(buffer, field.value(), open) {
+          frame.hashes.push(hash(buffer))
+        }
+      }
+      _ => {
+        ignore(open.pop())
+        if !frame.hashes.is_empty() {
+          frame.hashes.sort_by(compare_bytes)
+          for digest in frame.hashes {
+            append_escaped(frame.out, digest)
+          }
+        }
+        frame.out.push(0x0E)
+        if frame.value.has_annotations() {
+          frame.out.push(0x0E)
+        }
+        if open.last() is Some(parent) && parent.value.kind() is Struct(_) {
+          parent.hashes.push(hash(frame.out))
+        }
+      }
+    }
+  }
+  root
+}
+
+///|
+/// Start `s(value)` in `out`: the annotation wrapper, then all of a scalar, or
+/// the opening octets of a container, which is pushed onto `open`. Returns
+/// whether the value is complete.
+fn serialize_start(
+  out : Array[Byte],
+  value : @ion.IonValue,
+  open : Array[HashFrame],
+) -> Bool raise @ion.IonError {
+  let annotated = value.has_annotations()
+  if annotated {
+    out.push(0x0B)
+    out.push(0xE0)
     for annotation in value.annotations() {
       append_bytes(out, symbol_serialization(annotation))
     }
-    append_bytes(out, body_serialization(value.with_annotations([]), hash))
-    out.push(0x0E)
-    out
-  } else {
-    body_serialization(value, hash)
   }
+  let code : Byte = match value.kind() {
+    List(_) => 0xB0
+    Sexp(_) => 0xC0
+    Struct(_) => 0xD0
+    kind => {
+      scalar_serialization(out, kind)
+      if annotated {
+        out.push(0x0E)
+      }
+      return true
+    }
+  }
+  out.push(0x0B)
+  out.push(code)
+  open.push({ value, next: 0, out, hashes: [], })
+  false
 }
 
 ///|
@@ -163,13 +238,13 @@ fn magnitude(value : BigInt) -> BigInt {
 }
 
 ///|
-/// `s(value)` for a value whose annotations the caller has already handled.
-fn body_serialization(
-  value : @ion.IonValue,
-  hash : (Array[Byte]) -> Array[Byte],
-) -> Array[Byte] raise @ion.IonError {
-  let out : Array[Byte] = [0x0B]
-  match value.kind() {
+/// Append `s(value)` for a scalar, without its annotations, to `out`.
+fn scalar_serialization(
+  out : Array[Byte],
+  kind : @ion.IonValueKind,
+) -> Unit raise @ion.IonError {
+  out.push(0x0B)
+  match kind {
     @ion.IonValueKind::Null(t) =>
       out.push(((type_code(t) << 4) | 0x0F).to_byte())
     @ion.IonValueKind::Bool(b) =>
@@ -213,25 +288,12 @@ fn body_serialization(
       out.push(0xA0)
       append_escaped(out, bytes.to_array())
     }
-    @ion.IonValueKind::List(items) => {
-      out.push(0xB0)
-      for item in items {
-        append_bytes(out, serialize_with(item, hash))
-      }
-    }
-    @ion.IonValueKind::Sexp(items) => {
-      out.push(0xC0)
-      for item in items {
-        append_bytes(out, serialize_with(item, hash))
-      }
-    }
-    @ion.IonValueKind::Struct(fields) => {
-      out.push(0xD0)
-      append_escaped(out, struct_representation(fields, hash))
-    }
+    @ion.IonValueKind::List(_)
+    | @ion.IonValueKind::Sexp(_)
+    | @ion.IonValueKind::Struct(_) =>
+      abort("serialize_start serializes containers")
   }
   out.push(0x0E)
-  out
 }
 
 ///|
@@ -328,27 +390,6 @@ fn timestamp_representation(ts : @ion.Timestamp) -> Array[Byte] {
       }
     }
     None => ()
-  }
-  out
-}
-
-///|
-/// A struct's representation: the sorted field hashes, concatenated.
-fn struct_representation(
-  fields : Array[@ion.Field],
-  hash : (Array[Byte]) -> Array[Byte],
-) -> Array[Byte] raise @ion.IonError {
-  let hashes : Array[Array[Byte]] = []
-  for field in fields {
-    let buffer : Array[Byte] = []
-    append_bytes(buffer, symbol_serialization(field.name()))
-    append_bytes(buffer, serialize_with(field.value(), hash))
-    hashes.push(hash(buffer))
-  }
-  hashes.sort_by(compare_bytes)
-  let out : Array[Byte] = []
-  for digest in hashes {
-    append_bytes(out, digest)
   }
   out
 }
