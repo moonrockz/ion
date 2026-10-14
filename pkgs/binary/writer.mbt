@@ -285,6 +285,10 @@ fn encode(
   value : @ion.IonValue,
   symbols : @ion.SymbolTable,
 ) -> Array[Byte] raise @ion.IonError {
+  if !value.has_annotations() &&
+    !(value.kind() is (List(_) | Sexp(_) | Struct(_))) {
+    return encode_scalar(value.kind(), symbols)
+  }
   let body : Array[Byte] = []
   let gaps : Array[HeaderGap] = []
   let open : Array[OpenContainer] = []
@@ -353,7 +357,11 @@ fn encode_start(
   value : @ion.IonValue,
   symbols : @ion.SymbolTable,
 ) -> Unit raise @ion.IonError {
-  let ids = annotation_ids(value.annotations(), symbols)
+  let ids = if value.has_annotations() {
+    annotation_ids(value.annotations(), symbols)
+  } else {
+    []
+  }
   let type_code = match value.kind() {
     List(_) => 11
     Sexp(_) => 12
