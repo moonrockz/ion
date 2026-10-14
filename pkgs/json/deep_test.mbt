@@ -25,7 +25,6 @@ fn json_innermost(json : Json) -> (Json, Int32) {
 }
 
 ///|
-#skip("ion-dql.8: to_json recurses once per level")
 test "to_json converts values 100,000 levels deep" {
   let shapes : Array[@testkit.DeepShape] = [
     List,
@@ -44,7 +43,6 @@ test "to_json converts values 100,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.8: to_json recurses once per level")
 test "write_json writes values 100,000 levels deep" {
   let list = @json.write_json(@testkit.deep_value(List, deep))
   assert_true(list == "[".repeat(deep) + "1" + "]".repeat(deep))
