@@ -146,7 +146,18 @@ fn write_indent(buffer : StringBuilder, depth : Int32) -> Unit {
 }
 
 ///|
-/// Render one value into `buffer`.
+/// A container the text writer is inside, and the index of its next child.
+priv struct TextFrame {
+  value : @ion.IonValue
+  kind : @ion.IonType
+  mut next : Int32
+}
+
+///|
+/// Render one value into `buffer`, with no recursion: the containers that the
+/// writer is inside are on a heap stack. `depth` is the pretty indent level of
+/// the value, and `in_sexp` says whether the value is inside an S-expression,
+/// where an operator symbol is written bare.
 fn write_value(
   buffer : StringBuilder,
   value : @ion.IonValue,
@@ -154,138 +165,138 @@ fn write_value(
   pretty : Bool,
   in_sexp : Bool,
 ) -> Unit raise @ion.IonError {
+  let open : Array[TextFrame] = []
+  write_start(buffer, open, value, in_sexp)
+  while open.last() is Some(frame) {
+    let index = frame.next
+    let (child, field) = match frame.value.kind() {
+      List(items) | Sexp(items) if index < items.length() =>
+        (items[index], None)
+      Struct(fields) if index < fields.length() =>
+        (fields[index].value(), Some(fields[index].name()))
+      _ => {
+        ignore(open.pop())
+        if pretty {
+          buffer.write_string("\n")
+          write_indent(buffer, depth + open.length())
+        }
+        buffer.write_string(close_text(frame.kind))
+        continue
+      }
+    }
+    frame.next = index + 1
+    let sexp = frame.kind == @ion.IonType::Sexp
+    if pretty {
+      if !sexp && index > 0 {
+        buffer.write_string(",")
+      }
+      buffer.write_string("\n")
+      write_indent(buffer, depth + open.length())
+    } else if index > 0 {
+      buffer.write_string(if sexp { " " } else { ", " })
+    }
+    if field is Some(name) {
+      write_symbol(buffer, name, false)
+      buffer.write_string(": ")
+    }
+    write_start(buffer, open, child, sexp)
+  }
+}
+
+///|
+/// Write `value` up to its children: its annotations, then a whole scalar, or
+/// an empty container, or the opening of a container, which goes on `open`.
+/// `bare_operators` lets an operator symbol be written without quotes.
+fn write_start(
+  buffer : StringBuilder,
+  open : Array[TextFrame],
+  value : @ion.IonValue,
+  bare_operators : Bool,
+) -> Unit raise @ion.IonError {
+  write_annotations(buffer, value)
+  let kind = value.ion_type()
+  let empty = match value.kind() {
+    List(items) | Sexp(items) => items.is_empty()
+    Struct(fields) => fields.is_empty()
+    other => {
+      write_scalar(buffer, other, bare_operators)
+      return
+    }
+  }
+  buffer.write_string(open_text(kind))
+  if empty {
+    buffer.write_string(close_text(kind))
+  } else {
+    open.push({ value, kind, next: 0, })
+  }
+}
+
+///|
+/// Write the annotations of `value`, each followed by `::`.
+fn write_annotations(
+  buffer : StringBuilder,
+  value : @ion.IonValue,
+) -> Unit raise @ion.IonError {
   for annotation in value.annotations() {
     write_symbol(buffer, annotation, false)
     buffer.write_string("::")
   }
-  match value.kind() {
-    @ion.IonValueKind::Null(@ion.IonType::Null) => buffer.write_string("null")
-    @ion.IonValueKind::Null(t) => buffer.write_string("null." + t.to_text())
-    @ion.IonValueKind::Bool(value) =>
-      buffer.write_string(if value { "true" } else { "false" })
-    @ion.IonValueKind::Int(value) => buffer.write_string(value.to_string())
-    @ion.IonValueKind::Float(value) => buffer.write_string(float_to_ion(value))
-    @ion.IonValueKind::Decimal(value) =>
-      buffer.write_string(value.to_ion_string())
-    @ion.IonValueKind::Timestamp(value) =>
-      buffer.write_string(value.to_ion_string())
-    @ion.IonValueKind::Symbol(token) => write_symbol(buffer, token, in_sexp)
-    @ion.IonValueKind::String(value) => {
+}
+
+///|
+/// The text that opens a container of type `kind`.
+fn open_text(kind : @ion.IonType) -> String {
+  match kind {
+    List => "["
+    Sexp => "("
+    _ => "{"
+  }
+}
+
+///|
+/// The text that closes a container of type `kind`.
+fn close_text(kind : @ion.IonType) -> String {
+  match kind {
+    List => "]"
+    Sexp => ")"
+    _ => "}"
+  }
+}
+
+///|
+/// Render a value with no children. `bare_operators` lets an operator symbol
+/// be written without quotes.
+fn write_scalar(
+  buffer : StringBuilder,
+  kind : @ion.IonValueKind,
+  bare_operators : Bool,
+) -> Unit raise @ion.IonError {
+  match kind {
+    Null(@ion.IonType::Null) => buffer.write_string("null")
+    Null(t) => buffer.write_string("null." + t.to_text())
+    Bool(value) => buffer.write_string(if value { "true" } else { "false" })
+    Int(value) => buffer.write_string(value.to_string())
+    Float(value) => buffer.write_string(float_to_ion(value))
+    Decimal(value) => buffer.write_string(value.to_ion_string())
+    Timestamp(value) => buffer.write_string(value.to_ion_string())
+    Symbol(token) => write_symbol(buffer, token, bare_operators)
+    String(value) => {
       buffer.write_string("\"")
       buffer.write_string(escape_ion(value, '"'))
       buffer.write_string("\"")
     }
-    @ion.IonValueKind::Clob(bytes) => {
+    Clob(bytes) => {
       buffer.write_string("{{ ")
       buffer.write_string(escape_clob(bytes))
       buffer.write_string(" }}")
     }
-    @ion.IonValueKind::Blob(bytes) => {
+    Blob(bytes) => {
       buffer.write_string("{{ ")
       buffer.write_string(@base64.encode(bytes))
       buffer.write_string(" }}")
     }
-    @ion.IonValueKind::List(items) => write_list(buffer, items, depth, pretty)
-    @ion.IonValueKind::Sexp(items) => write_sexp(buffer, items, depth, pretty)
-    @ion.IonValueKind::Struct(fields) =>
-      write_struct(buffer, fields, depth, pretty)
+    List(_) | Sexp(_) | Struct(_) => abort("write_start writes containers")
   }
-}
-
-///|
-/// Render a list as `[a, b]` (or one element per line in pretty mode).
-fn write_list(
-  buffer : StringBuilder,
-  items : Array[@ion.IonValue],
-  depth : Int32,
-  pretty : Bool,
-) -> Unit raise @ion.IonError {
-  if items.is_empty() {
-    buffer.write_string("[]")
-    return
-  }
-  buffer.write_string("[")
-  for index in 0..<items.length() {
-    if pretty {
-      buffer.write_string("\n")
-      write_indent(buffer, depth + 1)
-    } else if index > 0 {
-      buffer.write_string(", ")
-    }
-    write_value(buffer, items[index], depth + 1, pretty, false)
-    if pretty && index + 1 < items.length() {
-      buffer.write_string(",")
-    }
-  }
-  if pretty {
-    buffer.write_string("\n")
-    write_indent(buffer, depth)
-  }
-  buffer.write_string("]")
-}
-
-///|
-/// Render an S-expression as `(a b)` (or one element per line in pretty mode).
-fn write_sexp(
-  buffer : StringBuilder,
-  items : Array[@ion.IonValue],
-  depth : Int32,
-  pretty : Bool,
-) -> Unit raise @ion.IonError {
-  if items.is_empty() {
-    buffer.write_string("()")
-    return
-  }
-  buffer.write_string("(")
-  for index in 0..<items.length() {
-    if pretty {
-      buffer.write_string("\n")
-      write_indent(buffer, depth + 1)
-    } else if index > 0 {
-      buffer.write_string(" ")
-    }
-    write_value(buffer, items[index], depth + 1, pretty, true)
-  }
-  if pretty {
-    buffer.write_string("\n")
-    write_indent(buffer, depth)
-  }
-  buffer.write_string(")")
-}
-
-///|
-/// Render a struct as `{a: 1, b: 2}` (or one field per line in pretty mode).
-fn write_struct(
-  buffer : StringBuilder,
-  fields : Array[@ion.Field],
-  depth : Int32,
-  pretty : Bool,
-) -> Unit raise @ion.IonError {
-  if fields.is_empty() {
-    buffer.write_string("{}")
-    return
-  }
-  buffer.write_string("{")
-  for index in 0..<fields.length() {
-    if pretty {
-      buffer.write_string("\n")
-      write_indent(buffer, depth + 1)
-    } else if index > 0 {
-      buffer.write_string(", ")
-    }
-    let field = fields[index]
-    write_symbol(buffer, field.name(), false)
-    buffer.write_string(": ")
-    write_value(buffer, field.value(), depth + 1, pretty, false)
-    if pretty && index + 1 < fields.length() {
-      buffer.write_string(",")
-    }
-  }
-  if pretty {
-    buffer.write_string("\n")
-    write_indent(buffer, depth)
-  }
-  buffer.write_string("}")
 }
 
 ///|

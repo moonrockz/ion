@@ -100,35 +100,41 @@ pub fn dispatch_values(
 }
 
 ///|
-/// Push the events of a single value to `handler`.
+/// Push the events of a single value to `handler`, with no recursion.
 pub fn dispatch_value(value : @ion.IonValue, handler : &IonHandler) -> Unit {
+  traverse(
+    value,
+    (current, field) => {
+      dispatch_prefix(current, field, handler)
+      match current.kind() {
+        List(_) => handler.on_list_start()
+        Sexp(_) => handler.on_sexp_start()
+        Struct(_) => handler.on_struct_start()
+        _ => handler.on_scalar(current.with_annotations([]))
+      }
+    },
+    current => {
+      match current.kind() {
+        List(_) => handler.on_list_end()
+        Sexp(_) => handler.on_sexp_end()
+        _ => handler.on_struct_end()
+      }
+    },
+  )
+}
+
+///|
+/// Push the field-name and annotation events before a value.
+fn dispatch_prefix(
+  value : @ion.IonValue,
+  field : @ion.SymbolToken?,
+  handler : &IonHandler,
+) -> Unit {
+  if field is Some(name) {
+    handler.on_field_name(name)
+  }
   for annotation in value.annotations() {
     handler.on_annotation(annotation)
-  }
-  match value.kind() {
-    @ion.IonValueKind::List(items) => {
-      handler.on_list_start()
-      for item in items {
-        dispatch_value(item, handler)
-      }
-      handler.on_list_end()
-    }
-    @ion.IonValueKind::Sexp(items) => {
-      handler.on_sexp_start()
-      for item in items {
-        dispatch_value(item, handler)
-      }
-      handler.on_sexp_end()
-    }
-    @ion.IonValueKind::Struct(fields) => {
-      handler.on_struct_start()
-      for field in fields {
-        handler.on_field_name(field.name())
-        dispatch_value(field.value(), handler)
-      }
-      handler.on_struct_end()
-    }
-    _ => handler.on_scalar(value.with_annotations([]))
   }
 }
 
