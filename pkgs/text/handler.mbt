@@ -106,15 +106,16 @@ pub fn dispatch_value(value : @ion.IonValue, handler : &IonHandler) -> Unit {
 }
 
 ///|
-/// Push the events of `value` with recursion while `levels` is above zero,
-/// then with `dispatch_deep`. Recursion is the fastest walk; the limit keeps
-/// the call stack small at any depth.
+/// Push the events of `value` with recursion while `levels` is above zero. At
+/// zero levels a container switches to `dispatch_deep`; a scalar stays here.
+/// Recursion is the fastest walk; the limit keeps the call stack small at any
+/// depth.
 fn dispatch_shallow(
   value : @ion.IonValue,
   handler : &IonHandler,
   levels : Int32,
 ) -> Unit {
-  if levels == 0 {
+  if levels == 0 && value.kind() is (List(_) | Sexp(_) | Struct(_)) {
     return dispatch_deep(value, handler)
   }
   for annotation in value.annotations() {

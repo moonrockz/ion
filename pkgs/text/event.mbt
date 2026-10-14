@@ -62,15 +62,15 @@ fn emit_value(value : @ion.IonValue, events : Array[IonEvent]) -> Unit {
 }
 
 ///|
-/// Emit `value`'s events with recursion while `levels` is above zero, then
-/// with `emit_deep`. Recursion is the fastest walk; the limit keeps the call
-/// stack small at any depth.
+/// Emit `value`'s events with recursion while `levels` is above zero. At zero
+/// levels a container switches to `emit_deep`; a scalar stays here. Recursion
+/// is the fastest walk; the limit keeps the call stack small at any depth.
 fn emit_shallow(
   value : @ion.IonValue,
   events : Array[IonEvent],
   levels : Int32,
 ) -> Unit {
-  if levels == 0 {
+  if levels == 0 && value.kind() is (List(_) | Sexp(_) | Struct(_)) {
     return emit_deep(value, events)
   }
   for annotation in value.annotations() {

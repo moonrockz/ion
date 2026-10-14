@@ -168,9 +168,9 @@ fn write_value(
 }
 
 ///|
-/// Render `value` with recursion while `levels` is above zero, then with
-/// `write_deep`. Recursion is the fastest walk; the limit keeps the call stack
-/// small at any depth.
+/// Render `value` with recursion while `levels` is above zero. At zero levels
+/// a container switches to `write_deep`; a scalar stays here. Recursion is the
+/// fastest walk; the limit keeps the call stack small at any depth.
 fn write_shallow(
   buffer : StringBuilder,
   value : @ion.IonValue,
@@ -179,7 +179,7 @@ fn write_shallow(
   in_sexp : Bool,
   levels : Int32,
 ) -> Unit raise @ion.IonError {
-  if levels == 0 {
+  if levels == 0 && value.kind() is (List(_) | Sexp(_) | Struct(_)) {
     return write_deep(buffer, value, depth, pretty, in_sexp)
   }
   write_annotations(buffer, value)
