@@ -154,11 +154,109 @@ priv struct TextFrame {
 }
 
 ///|
-/// Render one value into `buffer`, with no recursion: the containers that the
-/// writer is inside are on a heap stack. `depth` is the pretty indent level of
-/// the value, and `in_sexp` says whether the value is inside an S-expression,
-/// where an operator symbol is written bare.
+/// Render one value into `buffer`, at any depth. `depth` is the pretty indent
+/// level of the value, and `in_sexp` says whether the value is inside an
+/// S-expression, where an operator symbol is written bare.
 fn write_value(
+  buffer : StringBuilder,
+  value : @ion.IonValue,
+  depth : Int32,
+  pretty : Bool,
+  in_sexp : Bool,
+) -> Unit raise @ion.IonError {
+  write_shallow(buffer, value, depth, pretty, in_sexp, @ion.MAX_NESTING_DEPTH)
+}
+
+///|
+/// Render `value` with recursion while `levels` is above zero, then with
+/// `write_deep`. Recursion is the fastest walk; the limit keeps the call stack
+/// small at any depth.
+fn write_shallow(
+  buffer : StringBuilder,
+  value : @ion.IonValue,
+  depth : Int32,
+  pretty : Bool,
+  in_sexp : Bool,
+  levels : Int32,
+) -> Unit raise @ion.IonError {
+  if levels == 0 {
+    return write_deep(buffer, value, depth, pretty, in_sexp)
+  }
+  write_annotations(buffer, value)
+  match value.kind() {
+    List(items) | Sexp(items) => {
+      let kind = value.ion_type()
+      let sexp = kind == @ion.IonType::Sexp
+      buffer.write_string(open_text(kind))
+      for index, item in items {
+        write_separator(buffer, index, sexp, depth, pretty)
+        write_shallow(buffer, item, depth + 1, pretty, sexp, levels - 1)
+      }
+      write_close(buffer, kind, items.length(), depth, pretty)
+    }
+    Struct(fields) => {
+      buffer.write_string("{")
+      for index, field in fields {
+        write_separator(buffer, index, false, depth, pretty)
+        write_symbol(buffer, field.name(), false)
+        buffer.write_string(": ")
+        write_shallow(
+          buffer,
+          field.value(),
+          depth + 1,
+          pretty,
+          false,
+          levels - 1,
+        )
+      }
+      write_close(buffer, @ion.IonType::Struct, fields.length(), depth, pretty)
+    }
+    other => write_scalar(buffer, other, in_sexp)
+  }
+}
+
+///|
+/// Write what comes before child `index` of a container whose own indent
+/// level is `depth`: the separator after the previous child, and in pretty
+/// text a new line and the child's indent.
+fn write_separator(
+  buffer : StringBuilder,
+  index : Int32,
+  sexp : Bool,
+  depth : Int32,
+  pretty : Bool,
+) -> Unit {
+  if pretty {
+    if !sexp && index > 0 {
+      buffer.write_string(",")
+    }
+    buffer.write_string("\n")
+    write_indent(buffer, depth + 1)
+  } else if index > 0 {
+    buffer.write_string(if sexp { " " } else { ", " })
+  }
+}
+
+///|
+/// Close a container of `count` children whose own indent level is `depth`.
+fn write_close(
+  buffer : StringBuilder,
+  kind : @ion.IonType,
+  count : Int32,
+  depth : Int32,
+  pretty : Bool,
+) -> Unit {
+  if pretty && count > 0 {
+    buffer.write_string("\n")
+    write_indent(buffer, depth)
+  }
+  buffer.write_string(close_text(kind))
+}
+
+///|
+/// Render `value` with no recursion: the containers that the writer is inside
+/// are on a heap stack.
+fn write_deep(
   buffer : StringBuilder,
   value : @ion.IonValue,
   depth : Int32,

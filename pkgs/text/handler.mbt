@@ -100,8 +100,56 @@ pub fn dispatch_values(
 }
 
 ///|
-/// Push the events of a single value to `handler`, with no recursion.
+/// Push the events of a single value to `handler`, at any depth.
 pub fn dispatch_value(value : @ion.IonValue, handler : &IonHandler) -> Unit {
+  dispatch_shallow(value, handler, @ion.MAX_NESTING_DEPTH)
+}
+
+///|
+/// Push the events of `value` with recursion while `levels` is above zero,
+/// then with `dispatch_deep`. Recursion is the fastest walk; the limit keeps
+/// the call stack small at any depth.
+fn dispatch_shallow(
+  value : @ion.IonValue,
+  handler : &IonHandler,
+  levels : Int32,
+) -> Unit {
+  if levels == 0 {
+    return dispatch_deep(value, handler)
+  }
+  for annotation in value.annotations() {
+    handler.on_annotation(annotation)
+  }
+  match value.kind() {
+    List(items) => {
+      handler.on_list_start()
+      for item in items {
+        dispatch_shallow(item, handler, levels - 1)
+      }
+      handler.on_list_end()
+    }
+    Sexp(items) => {
+      handler.on_sexp_start()
+      for item in items {
+        dispatch_shallow(item, handler, levels - 1)
+      }
+      handler.on_sexp_end()
+    }
+    Struct(fields) => {
+      handler.on_struct_start()
+      for field in fields {
+        handler.on_field_name(field.name())
+        dispatch_shallow(field.value(), handler, levels - 1)
+      }
+      handler.on_struct_end()
+    }
+    _ => handler.on_scalar(value.with_annotations([]))
+  }
+}
+
+///|
+/// Push the events of `value` to `handler` with no recursion.
+fn dispatch_deep(value : @ion.IonValue, handler : &IonHandler) -> Unit {
   traverse(
     value,
     (current, field) => {
