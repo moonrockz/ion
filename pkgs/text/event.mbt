@@ -46,35 +46,44 @@ pub fn IonEvent::to_text(self : IonEvent) -> String {
 }
 
 ///|
-/// Emit `value`'s events into `events`.
+/// The start and end events of a list, S-expression or struct.
+fn container_events(value : @ion.IonValue) -> (IonEvent, IonEvent) {
+  match value.kind() {
+    List(_) => (ListStart, ListEnd)
+    Sexp(_) => (SexpStart, SexpEnd)
+    _ => (StructStart, StructEnd)
+  }
+}
+
+///|
+/// Emit `value`'s events into `events`, with no recursion.
 fn emit_value(value : @ion.IonValue, events : Array[IonEvent]) -> Unit {
+  traverse(
+    value,
+    (current, field) => {
+      emit_prefix(current, field, events)
+      match current.kind() {
+        List(_) | Sexp(_) | Struct(_) =>
+          events.push(container_events(current).0)
+        _ => events.push(IonEvent::Scalar(current.with_annotations([])))
+      }
+    },
+    current => events.push(container_events(current).1),
+  )
+}
+
+///|
+/// The field-name and annotation events before a value.
+fn emit_prefix(
+  value : @ion.IonValue,
+  field : @ion.SymbolToken?,
+  events : Array[IonEvent],
+) -> Unit {
+  if field is Some(name) {
+    events.push(FieldName(name))
+  }
   for annotation in value.annotations() {
     events.push(Annotation(annotation))
-  }
-  match value.kind() {
-    @ion.IonValueKind::List(items) => {
-      events.push(ListStart)
-      for item in items {
-        emit_value(item, events)
-      }
-      events.push(ListEnd)
-    }
-    @ion.IonValueKind::Sexp(items) => {
-      events.push(SexpStart)
-      for item in items {
-        emit_value(item, events)
-      }
-      events.push(SexpEnd)
-    }
-    @ion.IonValueKind::Struct(fields) => {
-      events.push(StructStart)
-      for field in fields {
-        events.push(FieldName(field.name()))
-        emit_value(field.value(), events)
-      }
-      events.push(StructEnd)
-    }
-    _ => events.push(Scalar(value.with_annotations([])))
   }
 }
 

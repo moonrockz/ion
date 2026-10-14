@@ -108,7 +108,6 @@ test "write_ion_pretty writes values 3,000 levels deep" {
 }
 
 ///|
-#skip("ion-dql.5: emit_value recurses once per level")
 test "IonReader emits the events of values 100,000 levels deep" {
   for shape in shapes {
     let events = @text.IonReader::from_value(@testkit.deep_value(shape, deep)).remaining()
@@ -182,7 +181,6 @@ impl @text.IonHandler for DepthCounter with fn on_scalar(self, _value) {
 }
 
 ///|
-#skip("ion-dql.5: dispatch_value recurses once per level")
 test "dispatch_value pushes the events of values 100,000 levels deep" {
   for shape in shapes {
     let counter : DepthCounter = { depth: 0, deepest: 0, scalars: 0, }
