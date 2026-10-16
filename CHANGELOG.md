@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-16
+
+### Added
+
+- **ion:** Add a stack-safe walker and run fold and the visitor on it (#70)
+
+### Documentation
+
+- State that every walker works at any depth (#80)
+
+### Fixed
+
+- **ci:** Install MoonBit in the release tag and release jobs (#68)
+- **ion:** Make IonValue::equals stack-safe (#71)
+- **ion:** Make the symbol table walks stack-safe (#72)
+- **text:** Make the text writer, events and dispatch stack-safe (#76)
+- **binary:** Make the binary encoder stack-safe (#77)
+- **hash:** Serialize values for Ion Hash without recursion (#78)
+- **json:** Make to_json and to_ion stack-safe (#79)
+
+### Performance
+
+- **ion:** Walk shallow values with recursion (#81)
+- **text:** Write and emit shallow values with recursion (#82)
+
 ## [0.4.0] - 2026-10-08
 
 ### Fixed
