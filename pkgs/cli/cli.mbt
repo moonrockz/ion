@@ -9,7 +9,7 @@
 
 ///|
 /// The version the command line reports.
-let version : String = "moonrockz/ion 0.5.0"
+let version : String = "moonrockz/ion 0.6.0"
 
 ///|
 /// An error the command line reports in its own words, such as an input it
