@@ -18,7 +18,7 @@ Feature: Coverage report
     And the line coverage is 12 of 18
     And the point coverage is 12 of 24
     And file "pkgs/text/handler.mbt" has the uncovered lines "[2]"
-    And package "pkgs/ion" has the line coverage 4 of 6
+    And package "pkgs/ion" has the line coverage 6 of 9
     And the summary is:
       """
       ## Code coverage
@@ -38,8 +38,7 @@ Feature: Coverage report
 
       | Package | Covered / total | Coverage |
       | --- | ---: | ---: |
-      | pkgs/ion | 4 / 6 | 66.67% |
-      | pkgs/json | 2 / 3 | 66.67% |
+      | pkgs/ion | 6 / 9 | 66.67% |
       | pkgs/schema | 4 / 6 | 66.67% |
       | pkgs/text | 2 / 3 | 66.67% |
 
@@ -50,7 +49,7 @@ Feature: Coverage report
       | pkgs/text/handler.mbt | 2 / 3 | 66.67% |
       | pkgs/ion/fold.mbt | 2 / 3 | 66.67% |
       | pkgs/ion/visitor.mbt | 2 / 3 | 66.67% |
-      | pkgs/json/to_ion.mbt | 2 / 3 | 66.67% |
+      | pkgs/ion/json.mbt | 2 / 3 | 66.67% |
       | pkgs/schema/load.mbt | 2 / 3 | 66.67% |
       | pkgs/schema/validate.mbt | 2 / 3 | 66.67% |
 
@@ -99,7 +98,7 @@ Feature: Coverage report
             ],
             "source_digest": "digest"
           },
-          "pkgs/json/to_ion.mbt": {
+          "pkgs/ion/json.mbt": {
             "covered": 2,
             "total": 3,
             "percent": 66.66666666666667,
@@ -134,13 +133,8 @@ Feature: Coverage report
             "percent": 66.66666666666667
           },
           "pkgs/ion": {
-            "covered": 4,
-            "total": 6,
-            "percent": 66.66666666666667
-          },
-          "pkgs/json": {
-            "covered": 2,
-            "total": 3,
+            "covered": 6,
+            "total": 9,
             "percent": 66.66666666666667
           },
           "pkgs/schema": {

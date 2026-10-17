@@ -30,9 +30,19 @@ import {
 ///|
 /// The files whose line coverage the summary always shows.
 let focus : Array[String] = [
-  "pkgs/text/handler.mbt", "pkgs/ion/fold.mbt", "pkgs/ion/visitor.mbt", "pkgs/json/to_ion.mbt",
+  "pkgs/text/handler.mbt", "pkgs/ion/fold.mbt", "pkgs/ion/visitor.mbt", "pkgs/ion/json.mbt",
   "pkgs/schema/load.mbt", "pkgs/schema/validate.mbt",
 ]
+
+///|
+async test "focused coverage sources exist in the checkout" {
+  // Moon runs script tests from the scripts directory.
+  for name in focus {
+    if !is_file("../" + name) {
+      fail("focused coverage source does not exist: \{name}")
+    }
+  }
+}
 
 ///|
 enum Status {
