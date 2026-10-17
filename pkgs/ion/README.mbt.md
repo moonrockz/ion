@@ -15,11 +15,13 @@ codecs, Ion Hash, JSON conversion, and Ion Schema all build on it.
   `SymbolTable` maps IDs to text as a stream's symbol tables declare them.
 - `IonVisitor` and `IonFold` traverse a value depth-first.
 - Every failure is an `IonError`: `Syntax`, `DataModel`, `Unsupported`, or
-  `LimitExceeded`.
-- The readers accept containers nested at most `MAX_NESTING_DEPTH` (128)
-  levels deep, and raise `LimitExceeded` past it. Every walker (equality,
-  fold, visitor, writers, events, Ion Hash and JSON conversion) uses a
-  bounded call stack, so a value built in code works at any depth.
+  `FuelExhausted`.
+- Nesting is unrestricted by default. Readers and schema operations accept
+  optional `Fuel::Limited(Budget(...))` for defensive coding. Fuel bounds
+  open nested operations, with siblings reusing the enclosing budget.
+  Exhaustion carries the budget, operation and location.
+- Readers, equality, folds, visitors, writers, events, Ion Hash and JSON
+  conversion keep a bounded machine stack at any nesting depth.
 
 ## Building values
 

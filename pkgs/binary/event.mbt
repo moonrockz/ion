@@ -14,8 +14,9 @@ pub struct BinaryEventReader {
 pub fn BinaryEventReader::new(
   bytes : BytesView,
   catalog~ : @ion.Catalog = @ion.Catalog::new(),
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> BinaryEventReader raise @ion.IonError {
-  { events: @text.IonReader::from_values(read_binary(bytes, catalog~)), }
+  { events: @text.IonReader::from_values(read_binary(bytes, catalog~, fuel~)), }
 }
 
 ///|

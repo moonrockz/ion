@@ -164,7 +164,7 @@ fn write_value(
   pretty : Bool,
   in_sexp : Bool,
 ) -> Unit raise @ion.IonError {
-  write_shallow(buffer, value, depth, pretty, in_sexp, @ion.MAX_NESTING_DEPTH)
+  write_shallow(buffer, value, depth, pretty, in_sexp, @work.SHALLOW_DEPTH)
 }
 
 ///|

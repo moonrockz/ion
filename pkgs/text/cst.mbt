@@ -34,12 +34,15 @@ pub struct CstDocument {
 
 ///|
 /// Parse Ion text into a concrete syntax tree.
-pub fn parse_cst(text : StringView) -> CstDocument raise @ion.IonError {
-  let parser = CstParser::new(tokenize(text))
+pub fn parse_cst(
+  text : StringView,
+  fuel~ : @ion.Fuel = Unlimited,
+) -> CstDocument raise @ion.IonError {
+  let parser = CstParser::new(tokenize(text), fuel)
   let values : Array[CstValue] = []
   parser.skip_trivia()
   while !parser.at_end() {
-    values.push(parser.parse_value())
+    values.push(parser.runner.run(() => parser.parse_value()))
     parser.skip_trivia()
   }
   { values, }
@@ -101,13 +104,14 @@ pub fn CstValue::elements(self : CstValue) -> Array[CstValue]? {
 priv struct CstParser {
   tokens : Array[IonToken]
   mut index : Int32
-  /// Depth of nested containers, which the nesting limit caps.
-  mut depth : @ion.NestingDepth
+  /// Executor and scoped caller fuel for nested grammar operations.
+  runner : @work.Runner
+  mut fuel : @ion.FuelState
 }
 
 ///|
-fn CstParser::new(tokens : Array[IonToken]) -> CstParser {
-  { tokens, index: 0, depth: @ion.NestingDepth::top(), }
+fn CstParser::new(tokens : Array[IonToken], fuel : @ion.Fuel) -> CstParser {
+  { tokens, index: 0, runner: @work.Runner(), fuel: fuel.start(), }
 }
 
 ///|
@@ -211,7 +215,9 @@ fn CstParser::try_annotation(self : CstParser) -> IonToken? {
 
 ///|
 /// Parse one value: its annotations and its content.
-fn CstParser::parse_value(self : CstParser) -> CstValue raise @ion.IonError {
+async fn CstParser::parse_value(
+  self : CstParser,
+) -> CstValue raise @ion.IonError + nocancel {
   self.skip_trivia()
   if self.at_end() {
     raise @ion.IonError::Syntax("expected a value, found end of input")
@@ -230,9 +236,9 @@ fn CstParser::parse_value(self : CstParser) -> CstValue raise @ion.IonError {
 
 ///|
 /// Parse a value's content (its scalar token or a container).
-fn CstParser::parse_content(
+async fn CstParser::parse_content(
   self : CstParser,
-) -> (CstContent, Int32) raise @ion.IonError {
+) -> (CstContent, Int32) raise @ion.IonError + nocancel {
   self.skip_trivia()
   let token = match self.peek() {
     Some(token) => token
@@ -257,16 +263,24 @@ fn CstParser::parse_content(
 
 ///|
 /// Parse a container with `parse`, one level deeper than the cursor is now.
-/// Raises before parsing it when that passes the nesting limit.
-fn CstParser::parse_container(
+/// Optional fuel is spent while the container is open.
+async fn CstParser::parse_container(
   self : CstParser,
-  parse : (CstParser) -> (CstContent, Int32) raise @ion.IonError,
-) -> (CstContent, Int32) raise @ion.IonError {
-  let outer = self.depth
-  self.depth = outer.enter()
-  let content = parse(self)
-  self.depth = outer
-  content
+  parse : async (CstParser) -> (CstContent, Int32) raise @ion.IonError + nocancel,
+) -> (CstContent, Int32) raise @ion.IonError + nocancel {
+  self.runner.pause()
+  defer self.runner.pause()
+  let outer = self.fuel
+  defer {
+    self.fuel = outer
+  }
+  let offset = match self.peek() {
+    Some(token) => token.start()
+    None =>
+      raise @ion.IonError::Syntax("expected a container, found end of input")
+  }
+  self.fuel = outer.enter(CstRead, TextOffset(offset))
+  parse(self)
 }
 
 ///|
@@ -278,11 +292,11 @@ priv enum SequenceKind {
 
 ///|
 /// Parse a bracketed sequence of values.
-fn CstParser::parse_sequence(
+async fn CstParser::parse_sequence(
   self : CstParser,
   close : IonTokenKind,
   kind : SequenceKind,
-) -> (CstContent, Int32) raise @ion.IonError {
+) -> (CstContent, Int32) raise @ion.IonError + nocancel {
   ignore(self.advance())
   let items : Array[CstValue] = []
   self.skip_trivia()
@@ -321,9 +335,9 @@ fn is_end_of(kind : IonTokenKind, close : IonTokenKind) -> Bool {
 
 ///|
 /// Parse a struct's fields.
-fn CstParser::parse_struct(
+async fn CstParser::parse_struct(
   self : CstParser,
-) -> (CstContent, Int32) raise @ion.IonError {
+) -> (CstContent, Int32) raise @ion.IonError + nocancel {
   ignore(self.advance())
   let fields : Array[CstValue] = []
   self.skip_trivia()

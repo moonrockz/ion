@@ -22,15 +22,15 @@ pub fn dispatch_value(@ion.IonValue, &IonHandler) -> Unit
 
 pub fn dispatch_values(Array[@ion.IonValue], &IonHandler) -> Unit
 
-pub fn parse_cst(StringView) -> CstDocument raise @ion.IonError
+pub fn parse_cst(StringView, fuel? : @ion.Fuel) -> CstDocument raise @ion.IonError
 
-pub fn parse_with_handler(StringView, &IonHandler) -> Unit raise @ion.IonError
+pub fn parse_with_handler(StringView, &IonHandler, fuel? : @ion.Fuel) -> Unit raise @ion.IonError
 
-pub fn read_ion(StringView, catalog? : @ion.Catalog) -> @ion.IonValue raise @ion.IonError
+pub fn read_ion(StringView, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> @ion.IonValue raise @ion.IonError
 
-pub fn read_ion_datagram(StringView, catalog? : @ion.Catalog) -> Array[@ion.IonValue] raise @ion.IonError
+pub fn read_ion_datagram(StringView, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> Array[@ion.IonValue] raise @ion.IonError
 
-pub fn read_ion_prefix(StringView, symbols~ : @ion.SymbolTable, end_of_input~ : Bool) -> (@ion.IonValue?, Int)? raise @ion.IonError
+pub fn read_ion_prefix(StringView, symbols~ : @ion.SymbolTable, end_of_input~ : Bool, fuel? : @ion.Fuel) -> (@ion.IonValue?, Int)? raise @ion.IonError
 
 pub fn symbol_to_text(@ion.SymbolToken, in_sexp? : Bool) -> String raise @ion.IonError
 
@@ -102,7 +102,7 @@ pub struct IonReader {
   mut index : Int
 }
 pub fn IonReader::feed(Self, &IonHandler) -> Unit
-pub fn IonReader::from_text(StringView) -> Self raise @ion.IonError
+pub fn IonReader::from_text(StringView, fuel? : @ion.Fuel) -> Self raise @ion.IonError
 pub fn IonReader::from_value(@ion.IonValue) -> Self
 pub fn IonReader::from_values(Array[@ion.IonValue]) -> Self
 pub fn IonReader::next(Self) -> IonEvent?

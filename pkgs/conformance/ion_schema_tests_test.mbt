@@ -338,10 +338,22 @@ fn Suite::run_schema_test(
             Some(reason) => SchemaUnsupported(reason)
             None => {
               // `document::(...)` stands for a document of those values.
-              let valid = if annotated(value, "document") {
-                schema.is_valid_document(type_name, elements(value))
-              } else {
-                schema.is_valid(type_name, value)
+              let valid = try {
+                if annotated(value, "document") {
+                  schema.is_valid_document(type_name, elements(value))
+                } else {
+                  schema.is_valid(type_name, value)
+                }
+              } catch {
+                error => {
+                  outcomes.push(
+                    (
+                      case_id,
+                      SchemaFailed("validation raised: " + describe(error)),
+                    ),
+                  )
+                  continue
+                }
               }
               if valid == accept {
                 SchemaPassed

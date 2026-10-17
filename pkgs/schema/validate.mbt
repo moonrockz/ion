@@ -33,13 +33,15 @@ priv enum ValidationFrame {
 priv struct ValidationContext {
   active : Array[ValidationFrame]
   cycles : Array[Violation]
+  runner : @work.Runner
+  mut fuel : @ion.FuelState
 }
 
 ///|
 /// A real child consumes part of the finite input tree. Start a fresh reference
 /// chain there, while sharing cycle diagnostics with logical parent branches.
 fn ValidationContext::child(self : ValidationContext) -> ValidationContext {
-  { active: [], cycles: self.cycles, }
+  { active: [], cycles: self.cycles, runner: self.runner, fuel: self.fuel, }
 }
 
 ///|
@@ -80,18 +82,23 @@ pub fn Schema::validate(
   self : Schema,
   type_name : String,
   value : @ion.IonValue,
-) -> Array[Violation] {
+  fuel~ : @ion.Fuel = Unlimited,
+) -> Array[Violation] raise @ion.IonError {
   let out : Array[Violation] = []
   let context : ValidationContext = {
     active: [Value(type_name, value)],
     cycles: [],
+    runner: @work.Runner(),
+    fuel: fuel.start(),
   }
   match self.find(type_name) {
     None =>
       out.push({ path: "$", message: "unknown schema type: " + type_name, })
     Some(definition) =>
       for constraint in definition.constraints() {
-        check_constraint(self, context, constraint, value, "$", out)
+        context.runner.run(() => {
+          check_constraint(self, context, constraint, value, "$", out)
+        })
       }
   }
   if context.cycles.is_empty() {
@@ -107,8 +114,9 @@ pub fn Schema::is_valid(
   self : Schema,
   type_name : String,
   value : @ion.IonValue,
-) -> Bool {
-  self.validate(type_name, value).is_empty()
+  fuel~ : @ion.Fuel = Unlimited,
+) -> Bool raise @ion.IonError {
+  self.validate(type_name, value, fuel~).is_empty()
 }
 
 ///|
@@ -125,13 +133,13 @@ fn in_range(n : Int32, lower : Int32, upper : Int32?) -> Bool {
 
 ///|
 /// Whether `value` satisfies `constraint`, discarding any detail.
-fn satisfies(
+async fn satisfies(
   schema : Schema,
   context : ValidationContext,
   constraint : Constraint,
   value : @ion.IonValue,
   path : String,
-) -> Bool {
+) -> Bool raise @ion.IonError + nocancel {
   let out : Array[Violation] = []
   let cycle_count = context.cycles.length()
   check_constraint(schema, context, constraint, value, path, out)
@@ -140,14 +148,21 @@ fn satisfies(
 
 ///|
 /// Check `value` against `constraint`, appending violations to `out`.
-fn check_constraint(
+async fn check_constraint(
   schema : Schema,
   context : ValidationContext,
   constraint : Constraint,
   value : @ion.IonValue,
   path : String,
   out : Array[Violation],
-) -> Unit {
+) -> Unit raise @ion.IonError + nocancel {
+  context.runner.pause()
+  defer context.runner.pause()
+  let outer = context.fuel
+  defer {
+    context.fuel = outer
+  }
+  context.fuel = outer.enter(SchemaValidate, ValuePath(path))
   match constraint {
     IsType(types) => {
       let actual = value.ion_type()
@@ -514,14 +529,14 @@ fn check_constraint(
 
 ///|
 /// Check a container's elements against `inner`.
-fn check_elements(
+async fn check_elements(
   schema : Schema,
   context : ValidationContext,
   inner : Constraint,
   items : Array[@ion.IonValue],
   path : String,
   out : Array[Violation],
-) -> Unit {
+) -> Unit raise @ion.IonError + nocancel {
   for index in 0..<items.length() {
     check_constraint(
       schema,
@@ -536,14 +551,14 @@ fn check_elements(
 
 ///|
 /// Check a struct's fields against the field constraints.
-fn check_fields(
+async fn check_fields(
   schema : Schema,
   context : ValidationContext,
   field_constraints : Array[FieldConstraint],
   fields : Array[@ion.Field],
   path : String,
   out : Array[Violation],
-) -> Unit {
+) -> Unit raise @ion.IonError + nocancel {
   for constraint in field_constraints {
     let matching : Array[@ion.Field] = []
     for field in fields {
@@ -766,13 +781,13 @@ fn fits_format(f : Double, format : FloatFormat) -> Bool {
 /// Whether `items` are the slots in order, each repeated as its range
 /// allows. `reached[j]` is true when the slots so far can match exactly the
 /// first `j` items, so an ambiguous match never backtracks.
-fn matches_in_order(
+async fn matches_in_order(
   schema : Schema,
   context : ValidationContext,
   slots : Array[(Constraint, Occurs)],
   items : Array[@ion.IonValue],
   path : String,
-) -> Bool {
+) -> Bool raise @ion.IonError + nocancel {
   let n = items.length()
   let mut reached = Array::make(n + 1, false)
   reached[0] = true
@@ -819,18 +834,23 @@ pub fn Schema::validate_document(
   self : Schema,
   type_name : String,
   values : Array[@ion.IonValue],
-) -> Array[Violation] {
+  fuel~ : @ion.Fuel = Unlimited,
+) -> Array[Violation] raise @ion.IonError {
   let out : Array[Violation] = []
   let context : ValidationContext = {
     active: [Document(type_name)],
     cycles: [],
+    runner: @work.Runner(),
+    fuel: fuel.start(),
   }
   match self.find(type_name) {
     None =>
       out.push({ path: "$", message: "unknown schema type: " + type_name, })
     Some(definition) =>
       for constraint in definition.constraints() {
-        check_document(self, context, constraint, values, "$", out)
+        context.runner.run(() => {
+          check_document(self, context, constraint, values, "$", out)
+        })
       }
   }
   if context.cycles.is_empty() {
@@ -846,21 +866,31 @@ pub fn Schema::is_valid_document(
   self : Schema,
   type_name : String,
   values : Array[@ion.IonValue],
-) -> Bool {
-  self.validate_document(type_name, values).is_empty()
+  fuel~ : @ion.Fuel = Unlimited,
+) -> Bool raise @ion.IonError {
+  self.validate_document(type_name, values, fuel~).is_empty()
 }
 
 ///|
 /// Check a document against `constraint`, appending violations to `out`.
-fn check_document(
+async fn check_document(
   schema : Schema,
   context : ValidationContext,
   constraint : Constraint,
   values : Array[@ion.IonValue],
   path : String,
   out : Array[Violation],
-) -> Unit {
-  let satisfied = (inner : Constraint) => {
+) -> Unit raise @ion.IonError + nocancel {
+  context.runner.pause()
+  defer context.runner.pause()
+  let outer = context.fuel
+  defer {
+    context.fuel = outer
+  }
+  context.fuel = outer.enter(SchemaValidate, ValuePath(path))
+  async fn satisfied(
+    inner : Constraint,
+  ) -> Bool raise @ion.IonError + nocancel {
     let violations : Array[Violation] = []
     let cycle_count = context.cycles.length()
     check_document(schema, context, inner, values, path, violations)
@@ -901,7 +931,12 @@ fn check_document(
       }
     }
     OneOf(constraints) => {
-      let count = constraints.filter(satisfied).length()
+      let mut count = 0
+      for inner in constraints {
+        if satisfied(inner) {
+          count += 1
+        }
+      }
       if count != 1 {
         out.push({
           path,

@@ -3,4 +3,4 @@
 #MISE depends=["setup:submodules"]
 set -euo pipefail
 
-exec moon test
+exec moon test "$@"

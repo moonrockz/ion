@@ -1,6 +1,6 @@
 // The symbol tokens of a value, at any depth.
 //
-// Each walk recurses while a value is at most MAX_NESTING_DEPTH levels deep,
+// Each walk recurses while a value is at most @work.SHALLOW_DEPTH levels deep,
 // which is the fastest walk and covers every value a reader returns. Below
 // that depth a container switches to an explicit stack; a scalar is still
 // handled directly, so a wide container at the limit starts no stack walk
@@ -13,7 +13,7 @@
 /// containers, which costs less than a `ValueWalker`. Use
 /// [`IonValue::each_token`] when the order matters.
 fn IonValue::any_token(self : IonValue, found : (SymbolToken) -> Bool) -> Bool {
-  any_token_shallow(self, found, MAX_NESTING_DEPTH)
+  any_token_shallow(self, found, @work.SHALLOW_DEPTH)
 }
 
 ///|
@@ -111,7 +111,7 @@ fn visit_own_tokens(
 /// Writers intern symbols in this order, so batch and incremental writers give
 /// the same IDs.
 fn IonValue::each_token(self : IonValue, visit : (SymbolToken) -> Unit) -> Unit {
-  each_token_shallow(self, visit, MAX_NESTING_DEPTH)
+  each_token_shallow(self, visit, @work.SHALLOW_DEPTH)
 }
 
 ///|
@@ -181,7 +181,7 @@ fn IonValue::map_tokens(
   self : IonValue,
   rewrite : (SymbolToken) -> SymbolToken raise IonError,
 ) -> IonValue raise IonError {
-  map_tokens_shallow(self, rewrite, MAX_NESTING_DEPTH)
+  map_tokens_shallow(self, rewrite, @work.SHALLOW_DEPTH)
 }
 
 ///|

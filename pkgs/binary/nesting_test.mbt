@@ -1,6 +1,5 @@
-// The binary readers accept containers nested up to @ion.MAX_NESTING_DEPTH
-// and raise IonError::LimitExceeded past it, however deep the input goes,
-// instead of overflowing the call stack.
+// Optional binary fuel bounds active container nesting independently of the
+// machine stack. The default accepts any finite nesting depth.
 
 ///|
 /// The `VarUInt` encoding of `n`: seven bits per octet, most significant
@@ -78,10 +77,10 @@ fn nested(frames : Array[Frame], depth : Int32) -> Bytes {
 }
 
 ///|
-/// Whether `read` raises `IonError::LimitExceeded`.
+/// Whether `read` raises `IonError::FuelExhausted`.
 fn exceeds_limit(read : () -> Unit raise @ion.IonError) -> Bool {
   try read() catch {
-    @ion.IonError::LimitExceeded(_) => true
+    @ion.IonError::FuelExhausted(..) => true
     _ => false
   } noraise {
     _ => false
@@ -89,37 +88,47 @@ fn exceeds_limit(read : () -> Unit raise @ion.IonError) -> Bool {
 }
 
 ///|
-test "read_binary accepts containers nested to MAX_NESTING_DEPTH" {
+test "read_binary accepts containers nested to the finite fuel budget" {
   for frames in spellings {
-    let value = @binary.read_binary_value(
-      nested(frames, @ion.MAX_NESTING_DEPTH),
-    )
+    let value = @binary.read_binary_value(nested(frames, 128))
     let again = @binary.read_binary_value(@binary.write_binary_value(value))
     assert_true(value.equals(again))
   }
 }
 
 ///|
-test "read_binary rejects containers nested one level past MAX_NESTING_DEPTH" {
+test "finite binary fuel refuses containers one level past the budget" {
   for frames in spellings {
-    let bytes = nested(frames, @ion.MAX_NESTING_DEPTH + 1)
-    assert_true(exceeds_limit(() => ignore(@binary.read_binary(bytes))))
+    let bytes = nested(frames, 128 + 1)
+    assert_true(
+      exceeds_limit(() => {
+        ignore(@binary.read_binary(bytes, fuel=Limited(@ion.Budget(128))))
+      }),
+    )
   }
 }
 
 ///|
-test "read_binary rejects 100,000 nested containers without overflowing the stack" {
+test "finite binary fuel refuses 100000 nested containers without stack overflow" {
   for frames in spellings {
     let bytes = nested(frames, 100_000)
-    assert_true(exceeds_limit(() => ignore(@binary.read_binary(bytes))))
+    assert_true(
+      exceeds_limit(() => {
+        ignore(@binary.read_binary(bytes, fuel=Limited(@ion.Budget(128))))
+      }),
+    )
   }
 }
 
 ///|
 test "decode_value applies the limit to the value it decodes" {
-  let bytes = nested(spellings[0], @ion.MAX_NESTING_DEPTH + 1)
+  let bytes = nested(spellings[0], 128 + 1)
   let table = @ion.SymbolTable::system()
   assert_true(
-    exceeds_limit(() => ignore(@binary.decode_value(bytes, 0, table))),
+    exceeds_limit(() => {
+      ignore(
+        @binary.decode_value(bytes, 0, table, fuel=Limited(@ion.Budget(128))),
+      )
+    }),
   )
 }

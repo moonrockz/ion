@@ -43,14 +43,17 @@ priv enum IslVersion {
 pub fn Schema::load(
   values : Array[@ion.IonValue],
   resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError,
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> Schema raise @ion.IonError {
   let loader : Loader = {
     resolver,
+    runner: @work.Runner(),
+    fuel: fuel.start(),
     documents: Map([]),
     definitions: Map([]),
     types: [],
   }
-  let _ = loader.load_document(None, values)
+  let _ = loader.runner.run(() => loader.load_document(None, values))
   Schema::from_types(loader.types)
 }
 
@@ -172,6 +175,8 @@ priv struct Loader {
   /// they are in, for what a type reference refers to before it loads.
   definitions : Map[String, (Array[@ion.Field], Context)]
   types : Array[TypeDefinition]
+  runner : @work.Runner
+  mut fuel : @ion.FuelState
 }
 
 ///|
@@ -187,11 +192,20 @@ fn type_key(id : String?, name : String) -> String {
 ///|
 /// Load a schema document, `id` for an imported one, and return the names of
 /// the types it defines.
-fn Loader::load_document(
+async fn Loader::load_document(
   self : Loader,
   id : String?,
   values : Array[@ion.IonValue],
-) -> Array[String] raise @ion.IonError {
+) -> Array[String] raise @ion.IonError + nocancel {
+  self.runner.pause()
+  defer self.runner.pause()
+  let outer = self.fuel
+  defer {
+    self.fuel = outer
+  }
+  if id is Some(id) {
+    self.fuel = outer.enter(SchemaImport, SchemaId(id))
+  }
   let parsed = parse_document(values)
   let names : Array[String] = []
   for fields in parsed.definitions {
@@ -234,11 +248,11 @@ fn Loader::load_document(
 ///|
 /// The names of the types the document `id` defines, loading it first if
 /// needed. `importer` is the id of the document that imports it.
-fn Loader::names_of(
+async fn Loader::names_of(
   self : Loader,
   id : String,
   importer : String?,
-) -> Array[String] raise @ion.IonError {
+) -> Array[String] raise @ion.IonError + nocancel {
   if importer == Some(id) {
     raise @ion.IonError::DataModel("the schema '\{id}' imports itself")
   }
@@ -301,10 +315,10 @@ fn Context::add(
 ///|
 /// Apply a header import: all the types of a schema, or one type, by its own
 /// name or the name after `as`.
-fn Context::header_import(
+async fn Context::header_import(
   self : Context,
   import_ : @ion.IonValue,
-) -> Unit raise @ion.IonError {
+) -> Unit raise @ion.IonError + nocancel {
   let fields = match import_.kind() {
     @ion.IonValueKind::Struct(fields) if !import_.has_annotations() => fields
     _ =>
@@ -338,10 +352,10 @@ fn Context::header_import(
 /// The reference an inline import `{ id: ..., type: ... }` makes. It does not
 /// change the document's scope. ISL 1.0 also allows an `as`, which has no
 /// effect.
-fn Context::inline_import(
+async fn Context::inline_import(
   self : Context,
   fields : Array[@ion.Field],
-) -> Constraint raise @ion.IonError {
+) -> Constraint raise @ion.IonError + nocancel {
   let allowed = match self.version {
     Isl10 => ["id", "type", "as"]
     Isl20 => ["id", "type"]

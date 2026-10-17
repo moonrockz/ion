@@ -12,7 +12,7 @@ pub fn accept_value(@ion.SymbolTable, @ion.IonValue) -> @ion.IonValue? raise @io
 
 pub fn binary_version_marker() -> Bytes
 
-pub fn decode_value(BytesView, Int, @ion.SymbolTable) -> (@ion.IonValue, Int)? raise @ion.IonError
+pub fn decode_value(BytesView, Int, @ion.SymbolTable, fuel? : @ion.Fuel) -> (@ion.IonValue, Int)? raise @ion.IonError
 
 pub fn descriptor_is_null(Int) -> Bool
 
@@ -38,9 +38,9 @@ pub let length_null : Int
 
 pub fn local_symbol_table(@ion.SymbolTable) -> Bytes? raise @ion.IonError
 
-pub fn read_binary(BytesView, catalog? : @ion.Catalog) -> Array[@ion.IonValue] raise @ion.IonError
+pub fn read_binary(BytesView, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> Array[@ion.IonValue] raise @ion.IonError
 
-pub fn read_binary_value(BytesView, catalog? : @ion.Catalog) -> @ion.IonValue raise @ion.IonError
+pub fn read_binary_value(BytesView, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> @ion.IonValue raise @ion.IonError
 
 pub fn symbols_for_values(Array[@ion.IonValue]) -> @ion.SymbolTable raise @ion.IonError
 
@@ -58,7 +58,7 @@ pub fn write_binary_value(@ion.IonValue) -> Bytes raise @ion.IonError
 pub struct BinaryEventReader {
   events : @text.IonReader
 }
-pub fn BinaryEventReader::new(BytesView, catalog? : @ion.Catalog) -> Self raise @ion.IonError
+pub fn BinaryEventReader::new(BytesView, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> Self raise @ion.IonError
 pub fn BinaryEventReader::next(Self) -> @text.IonEvent?
 pub fn BinaryEventReader::remaining(Self) -> Array[@text.IonEvent]
 

@@ -58,7 +58,7 @@ impl IonVisitor with fn visit_struct(_self, _fields) {
 /// the value, then its annotations, then — for containers — the child values
 /// (struct field names precede their values). It works at any nesting depth.
 pub fn IonValue::accept(self : IonValue, visitor : &IonVisitor) -> Unit {
-  accept_shallow(self, visitor, MAX_NESTING_DEPTH)
+  accept_shallow(self, visitor, @work.SHALLOW_DEPTH)
 }
 
 ///|

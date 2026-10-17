@@ -20,7 +20,11 @@ fn load(text : String) -> @schema.Schema? {
 }
 
 ///|
-fn accepts(schema_text : String, type_name : String, ion_text : String) -> Bool {
+fn accepts(
+  schema_text : String,
+  type_name : String,
+  ion_text : String,
+) -> Bool raise @ion.IonError {
   let schema = match load(schema_text) {
     Some(schema) => schema
     None => return false
@@ -552,7 +556,7 @@ fn accepts_isl1(
   schema_text : String,
   type_name : String,
   ion_text : String,
-) -> Bool {
+) -> Bool raise @ion.IonError {
   let schema = @schema.Schema::load_from_text(schema_text) catch {
     _ => return false
   }

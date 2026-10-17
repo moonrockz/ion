@@ -28,10 +28,10 @@
 
 ///|
 /// How many levels of containers `to_json` and `to_ion` convert with
-/// recursion: the deepest nesting that the readers accept. Recursion is the
+/// recursion before switching to an explicit stack. Recursion is the
 /// fastest way to convert a value; below this depth the conversions switch to
 /// a stack of open containers, so the call stack stays small at any depth.
-let shallow_depth : Int32 = @core.MAX_NESTING_DEPTH
+let shallow_depth : Int32 = @work.SHALLOW_DEPTH
 
 ///|
 /// Convert an Ion value to a core `Json` value following the cookbook's

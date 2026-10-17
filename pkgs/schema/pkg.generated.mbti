@@ -88,7 +88,7 @@ pub struct Regex {
 pub fn Regex::ignore_case(Self) -> Bool
 pub fn Regex::matches(Self, String) -> Bool
 pub fn Regex::multiline(Self) -> Bool
-pub fn Regex::new(String, ignore_case? : Bool, multiline? : Bool) -> Self raise @ion.IonError
+pub fn Regex::new(String, ignore_case? : Bool, multiline? : Bool, fuel? : @ion.Fuel) -> Self raise @ion.IonError
 pub fn Regex::source(Self) -> String
 pub fn Regex::to_repr(Self) -> @debug.Repr
 
@@ -98,14 +98,14 @@ pub struct Schema {
 pub fn Schema::empty() -> Self
 pub fn Schema::find(Self, String) -> TypeDefinition?
 pub fn Schema::from_types(Array[TypeDefinition]) -> Self
-pub fn Schema::is_valid(Self, String, @ion.IonValue) -> Bool
-pub fn Schema::is_valid_document(Self, String, Array[@ion.IonValue]) -> Bool
-pub fn Schema::load(Array[@ion.IonValue], resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError) -> Self raise @ion.IonError
-pub fn Schema::load_from_text(StringView, resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError) -> Self raise @ion.IonError
+pub fn Schema::is_valid(Self, String, @ion.IonValue, fuel? : @ion.Fuel) -> Bool raise @ion.IonError
+pub fn Schema::is_valid_document(Self, String, Array[@ion.IonValue], fuel? : @ion.Fuel) -> Bool raise @ion.IonError
+pub fn Schema::load(Array[@ion.IonValue], resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError, fuel? : @ion.Fuel) -> Self raise @ion.IonError
+pub fn Schema::load_from_text(StringView, resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError, fuel? : @ion.Fuel) -> Self raise @ion.IonError
 pub fn Schema::to_repr(Self) -> @debug.Repr
 pub fn Schema::types(Self) -> Array[TypeDefinition]
-pub fn Schema::validate(Self, String, @ion.IonValue) -> Array[Violation]
-pub fn Schema::validate_document(Self, String, Array[@ion.IonValue]) -> Array[Violation]
+pub fn Schema::validate(Self, String, @ion.IonValue, fuel? : @ion.Fuel) -> Array[Violation] raise @ion.IonError
+pub fn Schema::validate_document(Self, String, Array[@ion.IonValue], fuel? : @ion.Fuel) -> Array[Violation] raise @ion.IonError
 
 pub struct TypeDefinition {
   name : String

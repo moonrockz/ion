@@ -1,5 +1,5 @@
 // The text writer, the event emitter and dispatch recurse while values are
-// shallow and switch to an explicit stack below the readers' nesting limit.
+// shallow and switch to an explicit stack below the shallow recursion threshold.
 // These tests cross that boundary and check that both paths give the same
 // output.
 
@@ -34,7 +34,7 @@ fn indent(depth : Int32) -> String {
 }
 
 ///|
-test "write_ion writes every level past the nesting limit" {
+test "write_ion writes every level past the shallow recursion threshold" {
   for levels in crossing_levels {
     let expected = StringBuilder()
     for level in 0..<levels {
@@ -49,7 +49,7 @@ test "write_ion writes every level past the nesting limit" {
 }
 
 ///|
-test "write_ion_pretty indents every level past the nesting limit" {
+test "write_ion_pretty indents every level past the shallow recursion threshold" {
   for levels in crossing_levels {
     let expected = StringBuilder()
     for level in 0..<levels {
@@ -72,7 +72,7 @@ test "write_ion_pretty indents every level past the nesting limit" {
 }
 
 ///|
-test "write_ion writes an operator bare inside S-expressions past the nesting limit" {
+test "write_ion writes an operator bare inside S-expressions past the shallow recursion threshold" {
   let plus = @ion.IonValue::symbol("+")
   for depth in [0, 127, 128, 129, 300] {
     let value = @testkit.deep_value(Sexp, depth, leaf=plus)
@@ -106,7 +106,7 @@ fn layered_events(levels : Int32) -> Array[String] {
 }
 
 ///|
-test "events come in document order past the nesting limit" {
+test "events come in document order past the shallow recursion threshold" {
   for levels in crossing_levels {
     let events = @text.IonReader::from_value(layered(levels))
       .remaining()
@@ -169,7 +169,7 @@ impl @text.IonHandler for EventTrace with fn on_scalar(self, value) {
 }
 
 ///|
-test "dispatch_value calls the handler in document order past the nesting limit" {
+test "dispatch_value calls the handler in document order past the shallow recursion threshold" {
   for levels in crossing_levels {
     let trace : EventTrace = { events: [], }
     @text.dispatch_value(layered(levels), trace)
@@ -188,7 +188,7 @@ impl @text.IonHandler for ScalarAnnotations with fn on_scalar(self, value) {
 }
 
 ///|
-test "a scalar event carries no annotations, on both sides of the nesting limit" {
+test "a scalar event carries no annotations, on both sides of the shallow recursion threshold" {
   for depth in [0, 127, 128, 129, 300] {
     let leaf = @ion.IonValue::int(1).with_annotation(@ion.SymbolToken::new("a"))
     let value = @testkit.deep_value(List, depth, leaf~)

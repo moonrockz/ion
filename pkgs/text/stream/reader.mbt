@@ -28,6 +28,7 @@ struct TextReader {
   /// The symbols in effect, as version markers and local symbol tables set
   /// them.
   symbols : @ion.SymbolTable
+  fuel : @ion.Fuel
   /// The code units at the end that the framer has not read yet.
   mut unscanned : String
   /// The octets of a character that a read split, or, before the encoding
@@ -48,6 +49,7 @@ pub fn TextReader::new(
   source : &@io.Reader,
   prefix~ : Bytes = b"",
   catalog~ : @ion.Catalog = @ion.Catalog::new(),
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> TextReader {
   {
     source,
@@ -56,6 +58,7 @@ pub fn TextReader::new(
     arrived: StringBuilder(),
     framer: Framer::new(),
     symbols: @ion.SymbolTable::system(catalog~),
+    fuel,
     unscanned: "",
     // Decoded with the first chunk, as octets a read left over would be.
     partial: prefix,
@@ -90,6 +93,7 @@ fn TextReader::take(self : TextReader) -> @ion.IonValue? raise @ion.IonError {
         self.pending(),
         symbols=self.symbols,
         end_of_input=self.eof,
+        fuel=self.fuel,
       ) {
       Some((value, consumed)) => {
         self.start += consumed

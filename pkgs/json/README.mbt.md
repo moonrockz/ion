@@ -83,3 +83,10 @@ test "a symbol with unknown text has no JSON form" {
   )
 }
 ```
+
+## Optional fuel
+
+`read_json` accepts unrestricted array and object nesting by default.
+Pass `fuel=Limited(@core.Budget(128))` to bound simultaneously open
+containers. Exhaustion raises `IonError::FuelExhausted`. Scalar tokens
+retain core JSON's number and Unicode decoding semantics.

@@ -95,26 +95,34 @@ test "a syntax error" {
 }
 ```
 
-Containers nest at most `@ion.MAX_NESTING_DEPTH` (128) levels deep. Deeper
-input raises `@ion.IonError::LimitExceeded` instead of overflowing the stack:
+Container nesting is unrestricted by default. Parsing keeps a bounded
+machine stack. Supply optional scoped fuel to refuse deeper input defensively:
 
 ```mbt check
 ///|
-test "nesting past the limit" {
-  let deep = "[".repeat(@ion.MAX_NESTING_DEPTH + 1)
-  let message = try @text.read_ion(deep) catch {
-    error => error.message()
+test "caller fuel bounds open containers" {
+  ignore(@text.read_ion("[[[1]]]"))
+  let refused = try
+    @text.read_ion("[[[1]]]", fuel=Limited(@ion.Budget(2)))
+  catch {
+    @ion.IonError::FuelExhausted(budget~, operation~, location~) => {
+      assert_eq(budget.units(), 2)
+      assert_eq(operation, @ion.FuelOperation::TextRead)
+      assert_eq(location, @ion.FuelLocation::TextOffset(2))
+      true
+    }
+    _ => false
   } noraise {
-    _ => "read"
+    _ => false
   }
-  inspect(
-    message,
-    content="containers nest deeper than the limit of 128 levels",
-  )
+  assert_true(refused)
 }
 ```
 
-The writer has no such limit: it writes a value built in code at any depth.
+Fuel is restored when a container closes, so siblings reuse it. Annotations
+and scalar values spend no text-reader fuel. The same option is accepted by
+datagram, prefix, CST, event and handler entry points. The asynchronous
+readers accept it in their constructors.
 
 ## Symbol tables
 

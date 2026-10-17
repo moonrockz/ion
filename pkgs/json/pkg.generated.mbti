@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn read_json(StringView) -> @ion.IonValue raise @ion.IonError
+pub fn read_json(StringView, fuel? : @ion.Fuel) -> @ion.IonValue raise @ion.IonError
 
 pub fn to_ion(Json) -> @ion.IonValue
 

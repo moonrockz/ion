@@ -68,7 +68,7 @@ pub fn[A, N] continuing(f : (A, N) -> A) -> (A, N) -> FoldAction[A] {
 /// Fold over this value, depth-first in document order, threading `acc` and
 /// honoring [`FoldAction`] flow control.
 pub fn[A] IonValue::fold(self : IonValue, acc : A, folder : IonFold[A]) -> A {
-  fold_shallow(self, acc, folder, MAX_NESTING_DEPTH).value()
+  fold_shallow(self, acc, folder, @work.SHALLOW_DEPTH).value()
 }
 
 ///|
@@ -80,7 +80,7 @@ pub fn[A] fold_values(
 ) -> A {
   let mut acc = acc
   for value in values {
-    match fold_shallow(value, acc, folder, MAX_NESTING_DEPTH) {
+    match fold_shallow(value, acc, folder, @work.SHALLOW_DEPTH) {
       Stop(a) => return a
       Continue(a) | SkipChildren(a) => acc = a
     }

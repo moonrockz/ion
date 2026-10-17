@@ -19,9 +19,10 @@ pub fn BinaryEventReader::new(
   source : &@io.Reader,
   prefix~ : Bytes = b"",
   catalog~ : @ion.Catalog = @ion.Catalog::new(),
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> BinaryEventReader {
   {
-    values: BinaryReader::new(source, prefix~, catalog~),
+    values: BinaryReader::new(source, prefix~, catalog~, fuel~),
     events: None,
     started: false,
     ended: false,

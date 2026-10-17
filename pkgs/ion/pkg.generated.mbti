@@ -8,8 +8,6 @@ import {
 }
 
 // Values
-pub const MAX_NESTING_DEPTH : Int = 128
-
 pub fn accept_values(Array[IonValue], &IonVisitor) -> Unit
 
 pub fn check_container_kind(IonType) -> Unit raise IonError
@@ -33,12 +31,21 @@ pub(all) suberror IonError {
   Syntax(String)
   DataModel(String)
   Unsupported(String)
-  LimitExceeded(String)
+  FuelExhausted(budget~ : Budget, operation~ : FuelOperation, location~ : FuelLocation)
 } derive(@debug.Debug)
 pub fn IonError::message(Self) -> String
 pub fn IonError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+pub struct Budget {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn Budget::Budget(Int) -> Self raise IonError
+pub fn Budget::equal(Self, Self) -> Bool
+pub fn Budget::not_equal(Self, Self) -> Bool
+pub fn Budget::to_repr(Self) -> @debug.Repr
+pub fn Budget::units(Self) -> Int
+
 type Catalog
 pub fn Catalog::add(Self, SharedSymbolTable) -> Unit
 pub fn Catalog::find(Self, String, Int) -> SharedSymbolTable?
@@ -93,6 +100,41 @@ pub fn[A] FoldAction::is_stop(Self[A]) -> Bool
 pub fn[A : Eq] FoldAction::not_equal(Self[A], Self[A]) -> Bool
 pub fn[A : @debug.Debug] FoldAction::to_repr(Self[A]) -> @debug.Repr
 pub fn[A] FoldAction::value(Self[A]) -> A
+
+pub(all) enum Fuel {
+  Unlimited
+  Limited(Budget)
+} derive(Eq, @debug.Debug)
+pub fn Fuel::equal(Self, Self) -> Bool
+pub fn Fuel::not_equal(Self, Self) -> Bool
+pub fn Fuel::to_repr(Self) -> @debug.Repr
+
+pub(all) enum FuelLocation {
+  TextOffset(Int)
+  CharacterOffset(Int)
+  RegexInstruction(Int)
+  BinaryOffset(Int)
+  ValuePath(String)
+  SchemaId(String)
+} derive(Eq, @debug.Debug)
+pub fn FuelLocation::equal(Self, Self) -> Bool
+pub fn FuelLocation::not_equal(Self, Self) -> Bool
+pub fn FuelLocation::to_repr(Self) -> @debug.Repr
+
+pub(all) enum FuelOperation {
+  TextRead
+  BinaryRead
+  CstRead
+  JsonRead
+  SchemaLoad
+  SchemaImport
+  SchemaValidate
+  RegexParse
+  RegexCompile
+} derive(Eq, @debug.Debug)
+pub fn FuelOperation::equal(Self, Self) -> Bool
+pub fn FuelOperation::not_equal(Self, Self) -> Bool
+pub fn FuelOperation::to_repr(Self) -> @debug.Repr
 
 pub struct ImportLocation {
   name : String
@@ -191,12 +233,6 @@ pub(all) enum IonValueKind {
   Struct(Array[Field])
 } derive(@debug.Debug)
 pub fn IonValueKind::to_repr(Self) -> @debug.Repr
-
-pub struct NestingDepth {
-  // private fields
-}
-pub fn NestingDepth::enter(Self) -> Self raise IonError
-pub fn NestingDepth::top() -> Self
 
 type SharedSymbolTable
 pub fn SharedSymbolTable::from_value(IonValue) -> Self? raise IonError

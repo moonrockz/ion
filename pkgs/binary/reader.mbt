@@ -104,6 +104,7 @@ pub fn decode_value(
   bytes : BytesView,
   offset : Int32,
   table : @ion.SymbolTable,
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> (@ion.IonValue, Int32)? raise @ion.IonError {
   let mut start = offset
   let mut result : (@ion.IonValue, Int32)? = None
@@ -121,7 +122,12 @@ pub fn decode_value(
           let cursor = Cursor::new(bytes, start, start + total)
           result = Some(
             (
-              decode_element(cursor, table, @ion.NestingDepth::top()),
+              decode_element_shallow(
+                cursor,
+                table,
+                fuel.start(),
+                @work.SHALLOW_DEPTH,
+              ),
               start + total - offset,
             ),
           )
@@ -136,12 +142,15 @@ pub fn decode_value(
 /// Decode one value at the cursor: a scalar, a container, or an annotation
 /// wrapper. NOP padding is rejected, because a caller that allows it skips it
 /// before decoding. `depth` is the nesting depth of the value; a container
-/// that would pass the nesting limit raises.
-fn decode_element(
+/// that would exhaust caller fuel raises.
+async fn decode_element(
+  runner : @work.Runner,
   cursor : Cursor,
   table : @ion.SymbolTable,
-  depth : @ion.NestingDepth,
-) -> @ion.IonValue raise @ion.IonError {
+  depth : @ion.FuelState,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
+  runner.pause()
+  defer runner.pause()
   let descriptor = cursor.octet()
   let type_code = descriptor >> 4
   let nibble = descriptor & 0x0F
@@ -149,21 +158,22 @@ fn decode_element(
     raise @ion.IonError::Syntax("NOP padding is not allowed here")
   }
   if type_code == 14 {
-    decode_annotated(cursor, nibble, table, depth)
+    decode_annotated(runner, cursor, nibble, table, depth)
   } else {
-    decode_typed(cursor, type_code, nibble, table, depth)
+    decode_typed(runner, cursor, type_code, nibble, table, depth)
   }
 }
 
 ///|
 /// Decode a value whose type descriptor has already been read.
-fn decode_typed(
+async fn decode_typed(
+  runner : @work.Runner,
   cursor : Cursor,
   type_code : Int32,
   nibble : Int32,
   table : @ion.SymbolTable,
-  depth : @ion.NestingDepth,
-) -> @ion.IonValue raise @ion.IonError {
+  depth : @ion.FuelState,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   if nibble == 0x0F {
     return @ion.IonValue::typed_null(null_type(type_code))
   }
@@ -203,8 +213,22 @@ fn decode_typed(
     9 => @ion.IonValue::clob(cursor.take(length).to_owned())
     10 => @ion.IonValue::blob(cursor.take(length).to_owned())
     11 | 12 =>
-      decode_sequence(cursor, end, table, type_code == 11, depth.enter())
-    13 => decode_struct(cursor, end, table, depth.enter())
+      decode_sequence(
+        runner,
+        cursor,
+        end,
+        table,
+        type_code == 11,
+        depth.enter(BinaryRead, BinaryOffset(cursor.pos)),
+      )
+    13 =>
+      decode_struct(
+        runner,
+        cursor,
+        end,
+        table,
+        depth.enter(BinaryRead, BinaryOffset(cursor.pos)),
+      )
     _ => raise @ion.IonError::Syntax("reserved Ion binary type code")
   }
   if cursor.pos != end {
@@ -409,20 +433,21 @@ fn decode_string(
 ///|
 /// Decode a list or S-expression: its elements, in order. `depth` is the
 /// nesting depth inside it.
-fn decode_sequence(
+async fn decode_sequence(
+  runner : @work.Runner,
   cursor : Cursor,
   end : Int32,
   table : @ion.SymbolTable,
   is_list : Bool,
-  depth : @ion.NestingDepth,
-) -> @ion.IonValue raise @ion.IonError {
+  depth : @ion.FuelState,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   let inner = cursor.scoped(end)
   let items : Array[@ion.IonValue] = []
   while !inner.at_end() {
     if inner.skip_padding() {
       continue
     }
-    items.push(decode_element(inner, table, depth))
+    items.push(decode_element(runner, inner, table, depth))
   }
   cursor.seek(end)
   if is_list {
@@ -436,12 +461,13 @@ fn decode_sequence(
 /// Decode a struct: a `VarUInt` field-name symbol ID followed by its value, for
 /// each field. NOP padding is not allowed inside a struct. `depth` is the
 /// nesting depth inside it.
-fn decode_struct(
+async fn decode_struct(
+  runner : @work.Runner,
   cursor : Cursor,
   end : Int32,
   table : @ion.SymbolTable,
-  depth : @ion.NestingDepth,
-) -> @ion.IonValue raise @ion.IonError {
+  depth : @ion.FuelState,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   let inner = cursor.scoped(end)
   let fields : Array[@ion.Field] = []
   while !inner.at_end() {
@@ -451,7 +477,7 @@ fn decode_struct(
       continue
     }
     let name = table.lookup(sid)
-    let value = decode_element(inner, table, depth)
+    let value = decode_element(runner, inner, table, depth)
     fields.push(@ion.Field::from_token(name, value))
   }
   cursor.seek(end)
@@ -461,12 +487,13 @@ fn decode_struct(
 ///|
 /// Decode an annotation wrapper: a length-prefixed list of annotation symbol
 /// IDs followed by the annotated value. Annotations do not add `depth`.
-fn decode_annotated(
+async fn decode_annotated(
+  runner : @work.Runner,
   cursor : Cursor,
   nibble : Int32,
   table : @ion.SymbolTable,
-  depth : @ion.NestingDepth,
-) -> @ion.IonValue raise @ion.IonError {
+  depth : @ion.FuelState,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   let length = if nibble == 0x0E { cursor.var_uint() } else { nibble }
   let end = cursor.pos + length
   if end > cursor.limit {
@@ -496,7 +523,7 @@ fn decode_annotated(
       "NOP padding is not allowed in an annotation wrapper",
     )
   }
-  let value = decode_element(cursor, table, depth)
+  let value = decode_element(runner, cursor, table, depth)
   if cursor.pos != end {
     raise @ion.IonError::Syntax("an annotated value has trailing octets")
   }
@@ -549,6 +576,7 @@ pub fn accept_value(
 pub fn read_binary(
   bytes : BytesView,
   catalog~ : @ion.Catalog = @ion.Catalog::new(),
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> Array[@ion.IonValue] raise @ion.IonError {
   let table = @ion.SymbolTable::system(catalog~)
   let values : Array[@ion.IonValue] = []
@@ -559,7 +587,7 @@ pub fn read_binary(
       table.reset()
       continue
     }
-    match decode_value(bytes, offset, table) {
+    match decode_value(bytes, offset, table, fuel~) {
       Some((value, consumed)) => {
         offset += consumed
         match accept_value(table, value) {
@@ -583,8 +611,9 @@ pub fn read_binary(
 pub fn read_binary_value(
   bytes : BytesView,
   catalog~ : @ion.Catalog = @ion.Catalog::new(),
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> @ion.IonValue raise @ion.IonError {
-  let values = read_binary(bytes, catalog~)
+  let values = read_binary(bytes, catalog~, fuel~)
   match values {
     [value] => value
     [] =>
