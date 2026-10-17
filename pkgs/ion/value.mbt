@@ -211,7 +211,8 @@ pub fn IonValue::from_fields(fields : Array[Field]) -> IonValue {
 
 ///|
 /// Build a struct field from a name literal.
-#alias(new, deprecated="Use `Field(...)` instead")
+#as_free_fn(field)
+#alias(new, deprecated="Use `@ion.field(...)` instead")
 pub fn Field::Field(name : String, value : IonValue) -> Field {
   { name: SymbolToken::SymbolToken(name), value, }
 }

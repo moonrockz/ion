@@ -14,7 +14,8 @@ pub struct Decimal {
 
 ///|
 /// Build a decimal from an explicit coefficient and base-10 exponent.
-#alias(new, deprecated="Use `Decimal::Decimal(...)` instead")
+#as_free_fn(decimal)
+#alias(new, deprecated="Use `@ion.decimal(...)` instead")
 pub fn Decimal::Decimal(coefficient : BigInt, exponent : Int32) -> Decimal {
   { coefficient, exponent, negative_zero: false, }
 }

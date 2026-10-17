@@ -93,10 +93,10 @@ Build a value programmatically:
 
 ```moonbit skip nocheck
 let value = @ion.Ion::from_fields([
-  @ion.Field("name", @ion.Ion("ion")),
-  @ion.Field("tags", @ion.Ion([
-    @ion.IonValue::symbol("a"),
-    @ion.IonValue::symbol("b"),
+  @ion.field("name", @ion.Ion("ion")),
+  @ion.field("tags", @ion.Ion([
+    @ion.symbol("a"),
+    @ion.symbol("b"),
   ])),
 ])
 ```

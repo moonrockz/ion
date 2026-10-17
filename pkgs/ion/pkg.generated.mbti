@@ -60,6 +60,7 @@ pub struct Decimal {
   negative_zero : Bool
 } derive(@debug.Debug)
 #alias(new, deprecated)
+#as_free_fn(decimal)
 pub fn Decimal::Decimal(@bigint.BigInt, Int) -> Self
 pub fn Decimal::add(Self, Self) -> Self?
 pub fn Decimal::coefficient(Self) -> @bigint.BigInt
@@ -89,6 +90,7 @@ pub struct Field {
   value : Ion
 } derive(@debug.Debug)
 #alias(new, deprecated)
+#as_free_fn(field)
 pub fn Field::Field(String, Ion) -> Self
 pub fn Field::from_token(SymbolToken, Ion) -> Self
 pub fn Field::name(Self) -> SymbolToken
@@ -282,6 +284,7 @@ pub struct SymbolToken {
   import_version : Int?
 } derive(Eq, Hash, @debug.Debug)
 #alias(new, deprecated)
+#as_free_fn(symbol)
 pub fn SymbolToken::SymbolToken(String) -> Self
 pub fn SymbolToken::equal(Self, Self) -> Bool
 pub fn SymbolToken::equivalent(Self, Self) -> Bool
@@ -310,6 +313,7 @@ pub struct Timestamp {
   offset : TimestampOffset?
 } derive(@debug.Debug)
 #alias(new, deprecated)
+#as_free_fn(timestamp)
 pub fn Timestamp::Timestamp(year~ : Int, month? : Int?, day? : Int?, hour? : Int?, minute? : Int?, second? : Int?, fraction? : Decimal?, offset? : TimestampOffset?) -> Self
 #deprecated
 pub fn Timestamp::as_local(Self) -> Self

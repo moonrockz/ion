@@ -45,7 +45,8 @@ pub struct Timestamp {
 /// Build a timestamp from its components. Components left as `None` reduce the
 /// precision; `fraction` requires `second`, and `offset` is required for any
 /// value that carries a time.
-#alias(new, deprecated="Use `Timestamp::Timestamp(...)` instead")
+#as_free_fn(timestamp)
+#alias(new, deprecated="Use `@ion.timestamp(...)` instead")
 pub fn Timestamp::Timestamp(
   year~ : Int32,
   month~ : Int32? = None,
