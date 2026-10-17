@@ -65,6 +65,18 @@ finite successful `any_of` branch still proves validity; a cycle alone cannot
 become valid through `not` or count as a match for `one_of`. These checks run
 during validation, so loading a cyclic schema remains supported.
 
+Loading and validation keep a bounded machine stack. Their optional
+`fuel` defaults to `Unlimited`; `Limited(@ion.Budget(100))` bounds open
+schema operations. Loading counts inline type entries, nullable base-type
+resolution and imported documents. Validation counts nested constraint
+evaluations, including scalar constraints and logical branches. Regex
+parsing and compilation also inherit the caller's remaining fuel.
+Siblings reuse fuel. Cyclic reference detection remains independent.
+
+`validate`, `is_valid` and their document variants can raise
+`IonError::FuelExhausted`. Exhaustion is an incomplete validation, and is
+never returned as a validation violation or inverted into success by `not`.
+
 ## Schema documents
 
 An ISL 2.0 schema document has the version marker `$ion_schema_2_0`, an optional

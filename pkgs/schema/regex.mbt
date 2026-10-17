@@ -67,15 +67,27 @@ pub fn Regex::new(
   source : String,
   ignore_case~ : Bool = false,
   multiline~ : Bool = false,
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> Regex raise @ion.IonError {
-  let parser = { chars: source.iter().collect(), pos: 0, }
-  let node = parser.alternation()
+  make_regex(source, ignore_case, multiline, fuel.start())
+}
+
+///|
+fn make_regex(
+  source : String,
+  ignore_case : Bool,
+  multiline : Bool,
+  fuel : @ion.FuelState,
+) -> Regex raise @ion.IonError {
+  let runner = @work.Runner()
+  let parser = { chars: source.iter().collect(), pos: 0, runner, fuel, }
+  let node = runner.run(() => parser.alternation())
   if parser.pos < parser.chars.length() {
     // Only an unmatched `)` stops the top-level alternation early.
     raise regex_error("unmatched ')'")
   }
   let program : Array[Instruction] = []
-  compile(node, program)
+  runner.run(() => compile(node, program, runner, fuel))
   program.push(Accept)
   if program.length() > max_program {
     raise regex_error("the expression is too large")
@@ -144,6 +156,8 @@ let escapable : String = ".^$|?*+\\[](){}"
 priv struct Parser {
   chars : Array[Char]
   mut pos : Int32
+  runner : @work.Runner
+  mut fuel : @ion.FuelState
 }
 
 ///|
@@ -152,7 +166,9 @@ fn Parser::peek(self : Parser) -> Char? {
 }
 
 ///|
-fn Parser::alternation(self : Parser) -> Node raise @ion.IonError {
+async fn Parser::alternation(
+  self : Parser,
+) -> Node raise @ion.IonError + nocancel {
   let branches = [self.sequence()]
   while self.peek() == Some('|') {
     self.pos += 1
@@ -166,7 +182,7 @@ fn Parser::alternation(self : Parser) -> Node raise @ion.IonError {
 }
 
 ///|
-fn Parser::sequence(self : Parser) -> Node raise @ion.IonError {
+async fn Parser::sequence(self : Parser) -> Node raise @ion.IonError + nocancel {
   let items : Array[Node] = []
   while self.peek() is Some(c) && c != '|' && c != ')' {
     let atom = self.atom()
@@ -176,11 +192,18 @@ fn Parser::sequence(self : Parser) -> Node raise @ion.IonError {
 }
 
 ///|
-fn Parser::atom(self : Parser) -> Node raise @ion.IonError {
+async fn Parser::atom(self : Parser) -> Node raise @ion.IonError + nocancel {
   guard self.peek() is Some(c) else { raise regex_error("unexpected end") }
   self.pos += 1
   match c {
     '(' => {
+      self.runner.pause()
+      defer self.runner.pause()
+      let outer = self.fuel
+      defer {
+        self.fuel = outer
+      }
+      self.fuel = outer.enter(RegexParse, CharacterOffset(self.pos - 1))
       if self.peek() == Some('?') {
         raise regex_error("'(?' constructs are not allowed")
       }
@@ -382,7 +405,15 @@ let max_program : Int32 = 100_000
 
 ///|
 /// Append the instructions for `node` to `program`.
-fn compile(node : Node, program : Array[Instruction]) -> Unit {
+async fn compile(
+  node : Node,
+  program : Array[Instruction],
+  runner : @work.Runner,
+  fuel : @ion.FuelState,
+) -> Unit raise @ion.IonError + nocancel {
+  runner.pause()
+  defer runner.pause()
+  let fuel = fuel.enter(RegexCompile, RegexInstruction(program.length()))
   // Stop early when the program is too large; `Regex::new` reports it.
   if program.length() > max_program {
     return
@@ -392,7 +423,7 @@ fn compile(node : Node, program : Array[Instruction]) -> Unit {
     LineStart | LineEnd => program.push(Check(node))
     Sequence(items) =>
       for item in items {
-        compile(item, program)
+        compile(item, program, runner, fuel)
       }
     Alternation(branches) => {
       // Each branch but the last forks to itself or to the next branch, and
@@ -402,12 +433,12 @@ fn compile(node : Node, program : Array[Instruction]) -> Unit {
         if index < branches.length() - 1 {
           let fork = program.length()
           program.push(Fork(fork + 1, -1))
-          compile(branch, program)
+          compile(branch, program, runner, fuel)
           jumps.push(program.length())
           program.push(Jump(-1))
           program[fork] = Fork(fork + 1, program.length())
         } else {
-          compile(branch, program)
+          compile(branch, program, runner, fuel)
         }
       }
       for jump in jumps {
@@ -419,13 +450,13 @@ fn compile(node : Node, program : Array[Instruction]) -> Unit {
         if program.length() > max_program {
           return
         }
-        compile(inner, program)
+        compile(inner, program, runner, fuel)
       }
       match max {
         None => {
           let fork = program.length()
           program.push(Fork(fork + 1, -1))
-          compile(inner, program)
+          compile(inner, program, runner, fuel)
           program.push(Jump(fork))
           program[fork] = Fork(fork + 1, program.length())
         }
@@ -438,7 +469,7 @@ fn compile(node : Node, program : Array[Instruction]) -> Unit {
             }
             forks.push(program.length())
             program.push(Fork(program.length() + 1, -1))
-            compile(inner, program)
+            compile(inner, program, runner, fuel)
           }
           for fork in forks {
             program[fork] = Fork(fork + 1, program.length())

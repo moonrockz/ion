@@ -463,7 +463,7 @@ fn SymbolTable::resolve_token(
 /// Whether a value holds a symbol known only by a nonzero ID, in an
 /// annotation, a field name, or a symbol value at any depth.
 fn has_symbol_ids(value : IonValue) -> Bool {
-  has_symbol_ids_shallow(value, MAX_NESTING_DEPTH)
+  has_symbol_ids_shallow(value, @work.SHALLOW_DEPTH)
 }
 
 ///|

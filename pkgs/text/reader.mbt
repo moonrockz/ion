@@ -1,4 +1,4 @@
-// The Ion text reader: a hand-written recursive-descent parser over UTF-16
+// The Ion text reader: a stack-safe recursive-descent parser over UTF-16
 // code units. Ion text is UTF-8, but every structural character is ASCII, so
 // scanning code units is exact for the grammar while string content is copied
 // through unchanged (surrogate pairs included).
@@ -66,8 +66,9 @@ fn is_base64_char(c : UInt16) -> Bool {
 pub fn read_ion(
   text : StringView,
   catalog~ : @ion.Catalog = @ion.Catalog::new(),
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> @ion.IonValue raise @ion.IonError {
-  let parser = Parser::new(text)
+  let parser = Parser::new(text, fuel~)
   let symbols = @ion.SymbolTable::system(catalog~)
   let mut result : @ion.IonValue? = None
   parser.skip_ws()
@@ -92,8 +93,9 @@ pub fn read_ion(
 pub fn read_ion_datagram(
   text : StringView,
   catalog~ : @ion.Catalog = @ion.Catalog::new(),
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> Array[@ion.IonValue] raise @ion.IonError {
-  let parser = Parser::new(text)
+  let parser = Parser::new(text, fuel~)
   let symbols = @ion.SymbolTable::system(catalog~)
   let values : Array[@ion.IonValue] = []
   parser.skip_ws()
@@ -123,20 +125,20 @@ pub fn read_ion_datagram(
 /// where it ends. A value that fails to parse is taken to be cut short, so
 /// `None` asks for more text. Once `end_of_input` is true, `None` means only
 /// whitespace and comments remain, and a malformed value raises. A value that
-/// nests deeper than `@ion.MAX_NESTING_DEPTH` raises
-/// `IonError::LimitExceeded` at once, because more text cannot make it
-/// shallower.
+/// exceeds the caller's optional fuel raises `IonError::FuelExhausted` at
+/// once, because more text cannot reduce the open nesting.
 pub fn read_ion_prefix(
   text : StringView,
   symbols~ : @ion.SymbolTable,
   end_of_input~ : Bool,
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> (@ion.IonValue?, Int32)? raise @ion.IonError {
   let prefix = if end_of_input {
-    read_prefix(text, end_of_input=true)
+    read_prefix(text, fuel~, end_of_input=true)
   } else {
-    read_prefix(text, end_of_input=false) catch {
+    read_prefix(text, fuel~, end_of_input=false) catch {
       // More text cannot make a value shallower.
-      @ion.IonError::LimitExceeded(_) as error => raise error
+      @ion.IonError::FuelExhausted(..) as error => raise error
       _ => None
     }
   }
@@ -215,8 +217,9 @@ fn is_closing_delimiter(last : UInt16) -> Bool {
 fn read_prefix(
   text : StringView,
   end_of_input~ : Bool,
+  fuel~ : @ion.Fuel,
 ) -> (TopLevel, Int32)? raise @ion.IonError {
-  let parser = Parser::new(text)
+  let parser = Parser::new(text, fuel~)
   parser.skip_ws()
   if parser.at_end() {
     return None
@@ -237,8 +240,10 @@ priv struct Parser {
   mut pos : Int32
   /// Depth of nested S-expressions; operators are only recognized inside one.
   mut sexp_depth : Int32
-  /// Depth of nested containers of every kind, which the nesting limit caps.
-  mut depth : @ion.NestingDepth
+  /// Executor for suspended grammar operations.
+  runner : @work.Runner
+  mut recursive_levels : Int32
+  mut fuel : @ion.FuelState
   /// Whether the parser has read a symbol-ID literal that a symbol table must
   /// resolve, since the flag was last cleared.
   mut symbol_ids : Bool
@@ -246,12 +251,14 @@ priv struct Parser {
 
 ///|
 /// A parser positioned at the start of `input`.
-fn Parser::new(input : StringView) -> Parser {
+fn Parser::new(input : StringView, fuel~ : @ion.Fuel = Unlimited) -> Parser {
   {
     input,
     pos: 0,
     sexp_depth: 0,
-    depth: @ion.NestingDepth::top(),
+    runner: @work.Runner(),
+    recursive_levels: @work.SHALLOW_DEPTH,
+    fuel: fuel.start(),
     symbol_ids: false,
   }
 }
@@ -335,16 +342,6 @@ fn Parser::skip_lob_ws(self : Parser) -> Unit {
 }
 
 ///|
-/// Read a top-level value, and whether it is spelled as an unquoted `$ion_`
-/// identifier, the only spelling of a version marker.
-fn Parser::parse_top_level_value(self : Parser) -> TopLevel raise @ion.IonError {
-  let marker = self.starts_with("$ion_")
-  self.symbol_ids = false
-  let value = self.parse_value()
-  { value, marker, symbol_ids: self.symbol_ids, }
-}
-
-///|
 /// A top-level value as the parser read it, before a symbol table applies.
 priv struct TopLevel {
   value : @ion.IonValue
@@ -368,9 +365,11 @@ fn Parser::symbol_id(self : Parser, word : String) -> @ion.SymbolToken? {
 
 ///|
 /// Read a value, including any leading annotations.
-fn Parser::parse_value(self : Parser) -> @ion.IonValue raise @ion.IonError {
+async fn Parser::parse_value_deep(
+  self : Parser,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   let annotations = self.parse_annotations()
-  let value = self.parse_bare_value()
+  let value = self.parse_bare_value_deep()
   if annotations.is_empty() {
     value
   } else {
@@ -434,16 +433,18 @@ fn Parser::parse_annotations(
 
 ///|
 /// Read a value with no leading annotations.
-fn Parser::parse_bare_value(self : Parser) -> @ion.IonValue raise @ion.IonError {
+async fn Parser::parse_bare_value_deep(
+  self : Parser,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   self.skip_ws()
   if self.at_end() {
     raise @ion.IonError::Syntax("expected an Ion value, found end of input")
   }
   let c = self.input[self.pos]
   match c {
-    '[' => self.parse_container(Parser::parse_list)
-    '(' => self.parse_container(Parser::parse_sexp)
-    '{' => self.parse_braced()
+    '[' => self.parse_container_deep(Parser::parse_list_deep)
+    '(' => self.parse_container_deep(Parser::parse_sexp_deep)
+    '{' => self.parse_braced_deep()
     '"' => @ion.IonValue::string(self.parse_double_quoted_string())
     '\'' =>
       if self.peek_at(1) == Some('\'') && self.peek_at(2) == Some('\'') {
@@ -457,16 +458,19 @@ fn Parser::parse_bare_value(self : Parser) -> @ion.IonValue raise @ion.IonError 
 
 ///|
 /// Read a container with `parse`, one level deeper than the cursor is now.
-/// Raises before reading it when that passes the nesting limit.
-fn Parser::parse_container(
+/// Optional fuel is spent while this container is open.
+async fn Parser::parse_container_deep(
   self : Parser,
-  parse : (Parser) -> @ion.IonValue raise @ion.IonError,
-) -> @ion.IonValue raise @ion.IonError {
-  let outer = self.depth
-  self.depth = outer.enter()
-  let value = parse(self)
-  self.depth = outer
-  value
+  parse : async (Parser) -> @ion.IonValue raise @ion.IonError + nocancel,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
+  self.runner.pause()
+  defer self.runner.pause()
+  let outer = self.fuel
+  defer {
+    self.fuel = outer
+  }
+  self.fuel = outer.enter(TextRead, TextOffset(self.pos))
+  parse(self)
 }
 
 ///|
@@ -1066,11 +1070,13 @@ fn Parser::read_hex(self : Parser, count : Int32) -> Int32 raise @ion.IonError {
 
 ///|
 /// Dispatch between a struct and a blob/clob, both of which start with `{`.
-fn Parser::parse_braced(self : Parser) -> @ion.IonValue raise @ion.IonError {
+async fn Parser::parse_braced_deep(
+  self : Parser,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   if self.peek_at(1) == Some('{') {
     self.parse_lob()
   } else {
-    self.parse_container(Parser::parse_struct)
+    self.parse_container_deep(Parser::parse_struct_deep)
   }
 }
 
@@ -1263,7 +1269,9 @@ fn Parser::parse_one_long_clob(
 
 ///|
 /// Read a struct.
-fn Parser::parse_struct(self : Parser) -> @ion.IonValue raise @ion.IonError {
+async fn Parser::parse_struct_deep(
+  self : Parser,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   self.pos += 1
   let fields : Array[@ion.Field] = []
   self.skip_ws()
@@ -1279,7 +1287,7 @@ fn Parser::parse_struct(self : Parser) -> @ion.IonValue raise @ion.IonError {
       raise @ion.IonError::Syntax("expected ':' after a struct field name")
     }
     self.pos += 1
-    let value = self.parse_value()
+    let value = self.parse_value_deep()
     fields.push(@ion.Field::from_token(name, value))
     self.skip_ws()
     match self.peek_at(0) {
@@ -1332,7 +1340,9 @@ fn Parser::parse_field_name(
 
 ///|
 /// Read a list.
-fn Parser::parse_list(self : Parser) -> @ion.IonValue raise @ion.IonError {
+async fn Parser::parse_list_deep(
+  self : Parser,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   self.pos += 1
   let items : Array[@ion.IonValue] = []
   self.skip_ws()
@@ -1341,7 +1351,7 @@ fn Parser::parse_list(self : Parser) -> @ion.IonValue raise @ion.IonError {
     return @ion.IonValue::list(items)
   }
   while true {
-    items.push(self.parse_value())
+    items.push(self.parse_value_deep())
     self.skip_ws()
     match self.peek_at(0) {
       Some(',') => {
@@ -1365,13 +1375,15 @@ fn Parser::parse_list(self : Parser) -> @ion.IonValue raise @ion.IonError {
 ///|
 /// Read an S-expression, where whitespace separates elements and operators are
 /// valid symbols.
-fn Parser::parse_sexp(self : Parser) -> @ion.IonValue raise @ion.IonError {
+async fn Parser::parse_sexp_deep(
+  self : Parser,
+) -> @ion.IonValue raise @ion.IonError + nocancel {
   self.pos += 1
   self.sexp_depth += 1
   let items : Array[@ion.IonValue] = []
   self.skip_ws()
   while !self.at_end() && self.input[self.pos] != ')' {
-    items.push(self.parse_value())
+    items.push(self.parse_value_deep())
     self.skip_ws()
   }
   self.sexp_depth -= 1

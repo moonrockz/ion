@@ -1,6 +1,5 @@
-// The text readers accept containers nested up to @ion.MAX_NESTING_DEPTH and
-// raise IonError::LimitExceeded past it, however deep the input goes, instead
-// of overflowing the call stack.
+// Optional text fuel bounds active container nesting independently of the
+// machine stack. The default accepts any finite nesting depth.
 
 ///|
 /// Text for `depth` containers nested inside each other around `1`, each one
@@ -20,10 +19,10 @@ let spellings : Array[(String, String)] = [
 ]
 
 ///|
-/// Whether `read` raises `IonError::LimitExceeded`.
+/// Whether `read` raises `IonError::FuelExhausted`.
 fn exceeds_limit(read : () -> Unit raise @ion.IonError) -> Bool {
   try read() catch {
-    @ion.IonError::LimitExceeded(_) => true
+    @ion.IonError::FuelExhausted(..) => true
     _ => false
   } noraise {
     _ => false
@@ -31,45 +30,61 @@ fn exceeds_limit(read : () -> Unit raise @ion.IonError) -> Bool {
 }
 
 ///|
-test "read_ion accepts containers nested to MAX_NESTING_DEPTH" {
+test "read_ion accepts containers nested to the finite fuel budget" {
   for spelling in spellings {
     let (open, close) = spelling
-    let text = nested(open, close, @ion.MAX_NESTING_DEPTH)
-    let value = @text.read_ion(text)
+    let text = nested(open, close, 128)
+    let value = @text.read_ion(text, fuel=Limited(@ion.Budget(128)))
     assert_true(value.equals(@text.read_ion(@text.write_ion(value))))
   }
 }
 
 ///|
-test "read_ion rejects containers nested one level past MAX_NESTING_DEPTH" {
+test "finite text fuel refuses containers one level past the budget" {
   for spelling in spellings {
     let (open, close) = spelling
-    let text = nested(open, close, @ion.MAX_NESTING_DEPTH + 1)
-    assert_true(exceeds_limit(() => ignore(@text.read_ion(text))))
+    let text = nested(open, close, 128 + 1)
+    assert_true(
+      exceeds_limit(() => {
+        ignore(@text.read_ion(text, fuel=Limited(@ion.Budget(128))))
+      }),
+    )
   }
 }
 
 ///|
-test "read_ion rejects 100,000 nested containers without overflowing the stack" {
+test "finite text fuel refuses 100000 nested containers without stack overflow" {
   for spelling in spellings {
     let (open, close) = spelling
     let text = nested(open, close, 100_000)
-    assert_true(exceeds_limit(() => ignore(@text.read_ion(text))))
+    assert_true(
+      exceeds_limit(() => {
+        ignore(@text.read_ion(text, fuel=Limited(@ion.Budget(128))))
+      }),
+    )
   }
 }
 
 ///|
 test "read_ion counts depth across mixed container kinds" {
   let text = nested("[({a:", "})]", 43)
-  assert_true(exceeds_limit(() => ignore(@text.read_ion(text))))
+  assert_true(
+    exceeds_limit(() => {
+      ignore(@text.read_ion(text, fuel=Limited(@ion.Budget(128))))
+    }),
+  )
   ignore(@text.read_ion(nested("[({a:", "})]", 42)))
 }
 
 ///|
 test "read_ion_datagram applies the limit to every top-level value" {
-  let deep = nested("[", "]", @ion.MAX_NESTING_DEPTH + 1)
+  let deep = nested("[", "]", 128 + 1)
   assert_true(
-    exceeds_limit(() => ignore(@text.read_ion_datagram("1 [2] " + deep))),
+    exceeds_limit(() => {
+      ignore(
+        @text.read_ion_datagram("1 [2] " + deep, fuel=Limited(@ion.Budget(128))),
+      )
+    }),
   )
 }
 
@@ -77,21 +92,32 @@ test "read_ion_datagram applies the limit to every top-level value" {
 test "read_ion_prefix raises past the limit before the input ends" {
   // More text cannot make a value shallower, so a streaming reader learns
   // at once that the value is too deep instead of waiting for more input.
-  let text = "[".repeat(@ion.MAX_NESTING_DEPTH + 1)
+  let text = "[".repeat(128 + 1)
   let symbols = @ion.SymbolTable::system()
   assert_true(
     exceeds_limit(() => {
-      ignore(@text.read_ion_prefix(text, symbols~, end_of_input=false))
+      ignore(
+        @text.read_ion_prefix(
+          text,
+          symbols~,
+          end_of_input=false,
+          fuel=Limited(@ion.Budget(128)),
+        ),
+      )
     }),
   )
 }
 
 ///|
-test "parse_cst rejects containers nested past MAX_NESTING_DEPTH" {
+test "parse_cst rejects containers nested past the finite fuel budget" {
   for spelling in spellings {
     let (open, close) = spelling
-    ignore(@text.parse_cst(nested(open, close, @ion.MAX_NESTING_DEPTH)))
+    ignore(@text.parse_cst(nested(open, close, 128)))
     let text = nested(open, close, 100_000)
-    assert_true(exceeds_limit(() => ignore(@text.parse_cst(text))))
+    assert_true(
+      exceeds_limit(() => {
+        ignore(@text.parse_cst(text, fuel=Limited(@ion.Budget(128))))
+      }),
+    )
   }
 }

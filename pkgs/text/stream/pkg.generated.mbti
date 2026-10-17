@@ -27,11 +27,11 @@ pub async fn IncrementalWriter::write_null(Self, kind? : @ion.IonType) -> Unit
 pub async fn IncrementalWriter::write_string(Self, String) -> Unit
 
 type TextEventReader
-pub fn TextEventReader::new(&@io.Reader, catalog? : @ion.Catalog) -> Self
+pub fn TextEventReader::new(&@io.Reader, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> Self
 pub async fn TextEventReader::next(Self) -> @text.IonEvent?
 
 type TextReader
-pub fn TextReader::new(&@io.Reader, prefix? : Bytes, catalog? : @ion.Catalog) -> Self
+pub fn TextReader::new(&@io.Reader, prefix? : Bytes, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> Self
 pub async fn TextReader::next(Self) -> @ion.IonValue?
 
 type TextWriter

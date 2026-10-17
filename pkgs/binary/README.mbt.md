@@ -126,9 +126,12 @@ test "a truncated value" {
 }
 ```
 
-Like the text reader, the binary reader raises `@ion.IonError::LimitExceeded`
-for containers nested deeper than `@ion.MAX_NESTING_DEPTH` (128) levels.
-The writer has no such limit: it writes a value built in code at any depth.
+The binary reader and writer handle unrestricted container nesting with a
+bounded machine stack. Pass `fuel=Limited(@ion.Budget(128))` to a reader to
+bound simultaneously open containers. Annotations and scalar values spend
+no binary-reader fuel. Exhaustion raises `@ion.IonError::FuelExhausted` with
+the budget, operation and byte offset. Event and asynchronous reader
+constructors accept the same option.
 
 ## One value at a time
 

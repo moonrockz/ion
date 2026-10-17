@@ -1,4 +1,5 @@
 import {
+  "moonrockz/ion/internal/work",
   "moonbitlang/core/debug",
   "moonbitlang/core/bigint",
   "moonbitlang/core/cmp",

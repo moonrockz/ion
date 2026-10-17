@@ -1,5 +1,5 @@
 // The walkers recurse while values are shallow and switch to an explicit
-// stack below the readers' nesting limit. These tests cross that boundary and
+// stack below the shallow recursion threshold. These tests cross that boundary and
 // check that both paths give the same, document-order results.
 
 ///|
@@ -80,7 +80,7 @@ impl @ion.IonVisitor for TraceAll with fn visit_field_name(self, token) {
 }
 
 ///|
-test "accept visits every value in document order past the nesting limit" {
+test "accept visits every value in document order past the shallow recursion threshold" {
   for levels in crossing_levels {
     let value = layered(levels)
     let visitor : TraceAll = { trace: [], }
@@ -109,7 +109,7 @@ fn trace_folder() -> @ion.IonFold[Array[String]] {
 }
 
 ///|
-test "fold visits every value in document order past the nesting limit" {
+test "fold visits every value in document order past the shallow recursion threshold" {
   for levels in crossing_levels {
     let value = layered(levels)
     assert_eq(value.fold([], trace_folder()), walk_trace(value))
@@ -117,7 +117,7 @@ test "fold visits every value in document order past the nesting limit" {
 }
 
 ///|
-test "fold stops at once when a callback stops past the nesting limit" {
+test "fold stops at once when a callback stops past the shallow recursion threshold" {
   let value = layered(100)
   let expected = walk_trace(value)
   // Stop at the integer of each level, on both sides of the boundary.
@@ -141,7 +141,7 @@ test "fold stops at once when a callback stops past the nesting limit" {
 }
 
 ///|
-test "fold skips the children of a container past the nesting limit" {
+test "fold skips the children of a container past the shallow recursion threshold" {
   let value = layered(100)
   // Skip the list of level 70: its integer and everything deeper are left
   // out, and the walk goes on with that level's field `b`.
@@ -170,7 +170,7 @@ test "fold skips the children of a container past the nesting limit" {
 }
 
 ///|
-test "equals compares every level past the nesting limit" {
+test "equals compares every level past the shallow recursion threshold" {
   for levels in crossing_levels {
     let value = layered(levels)
     assert_true(value.equals(layered(levels)))
@@ -186,7 +186,7 @@ test "equals compares every level past the nesting limit" {
 }
 
 ///|
-test "equals pairs repeated field names past the nesting limit" {
+test "equals pairs repeated field names past the shallow recursion threshold" {
   // `{a: 1, a: 2}` against `{a: 2, a: 1}`: the first pairing by position
   // fails, and only another pairing shows that the structs are equal.
   let left = @ion.IonValue::from_fields([
@@ -228,7 +228,7 @@ fn under_lists(value : @ion.IonValue, depth : Int32) -> @ion.IonValue {
 }
 
 ///|
-test "symbol walks find and resolve IDs past the nesting limit" {
+test "symbol walks find and resolve IDs past the shallow recursion threshold" {
   let sid = @ion.SymbolToken::from_sid
   // `imports::{name: version}` with every token known only by its ID.
   let leaf = @ion.IonValue::from_fields([
@@ -243,7 +243,7 @@ test "symbol walks find and resolve IDs past the nesting limit" {
 }
 
 ///|
-test "resolve names the first failing ID in document order across the nesting limit" {
+test "resolve names the first failing ID in document order across the shallow recursion threshold" {
   let sid = @ion.SymbolToken::from_sid
   let symbol = (id : Int32) => @ion.IonValue::symbol_token(sid(id))
   // The first failing ID is deep, and a later one is shallow.
@@ -267,7 +267,7 @@ test "resolve names the first failing ID in document order across the nesting li
 }
 
 ///|
-test "for_values interns symbols in document order past the nesting limit" {
+test "for_values interns symbols in document order past the shallow recursion threshold" {
   // Level i is `{f<i>: t<i>::[s<i>, <level i + 1>]}`: two containers a level.
   let levels = 100
   let mut value = @ion.IonValue::symbol("leaf")
@@ -287,7 +287,7 @@ test "for_values interns symbols in document order past the nesting limit" {
 }
 
 ///|
-test "localize_for_text rewrites imported symbols past the nesting limit" {
+test "localize_for_text rewrites imported symbols past the shallow recursion threshold" {
   let shared = @ion.SymbolToken::from_import(10, "shared", 1, 1)
   let leaf = @ion.IonValue::from_fields([
     @ion.Field::from_token(shared, @ion.IonValue::symbol_token(shared)),

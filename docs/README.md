@@ -27,3 +27,6 @@ commands pipe, and its library examples and schemas have blackbox tests in
 For the format's authoritative definitions, see the
 [Ion specification](https://amazon-ion.github.io/ion-docs/docs/spec.html) and
 [Ion Schema 2.0 specification](https://amazon-ion.github.io/ion-schema/docs/isl-2-0/spec.html).
+
+Implementation decisions are recorded in [architecture decisions](adr/),
+including [stack-safe nesting and optional fuel](adr/0001-stack-safe-nesting.md).

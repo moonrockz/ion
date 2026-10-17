@@ -221,8 +221,8 @@ fn positive_int(text : String) -> Int32 raise @ion.IonError {
 }
 
 ///|
-/// One value nested 100 levels deep (list, struct and sexp in turn), below
-/// the reader limit so every mode can read it back.
+/// One value nested 100 levels deep (list, struct and sexp in turn), which
+/// exercises every mode's shallow recursive fast path.
 fn deep_fixture_value(index : Int32) -> @ion.IonValue {
   let mut value = @ion.IonValue::int(index)
   for level = 99; level >= 0; level = level - 1 {

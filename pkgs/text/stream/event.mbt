@@ -20,9 +20,10 @@ struct TextEventReader {
 pub fn TextEventReader::new(
   source : &@io.Reader,
   catalog~ : @ion.Catalog = @ion.Catalog::new(),
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> TextEventReader {
   {
-    values: TextReader::new(source, catalog~),
+    values: TextReader::new(source, catalog~, fuel~),
     events: [],
     index: 0,
     started: false,

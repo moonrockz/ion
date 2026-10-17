@@ -15,6 +15,7 @@
 struct BinaryReader {
   source : &@io.Reader
   table : @ion.SymbolTable
+  fuel : @ion.Fuel
   /// Octets not yet decoded, from `start` on, and then `arrived`.
   mut buffer : Bytes
   mut start : Int32
@@ -35,12 +36,14 @@ pub fn BinaryReader::new(
   source : &@io.Reader,
   prefix~ : Bytes = b"",
   catalog~ : @ion.Catalog = @ion.Catalog::new(),
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> BinaryReader {
   let arrived = @buffer.Buffer()
   arrived.write_bytes(prefix)
   {
     source,
     table: @ion.SymbolTable::system(catalog~),
+    fuel,
     buffer: Bytes::new(0),
     start: 0,
     arrived,
@@ -76,7 +79,7 @@ pub async fn BinaryReader::next(self : BinaryReader) -> @ion.IonValue? {
       self.table.reset()
       continue
     }
-    match @binary.decode_value(bytes, 0, self.table) {
+    match @binary.decode_value(bytes, 0, self.table, fuel=self.fuel) {
       Some((value, consumed)) => {
         self.start += consumed
         self.needed = 0

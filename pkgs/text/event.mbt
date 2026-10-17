@@ -58,7 +58,7 @@ fn container_events(value : @ion.IonValue) -> (IonEvent, IonEvent) {
 ///|
 /// Emit `value`'s events into `events`, at any depth.
 fn emit_value(value : @ion.IonValue, events : Array[IonEvent]) -> Unit {
-  emit_shallow(value, events, @ion.MAX_NESTING_DEPTH)
+  emit_shallow(value, events, @work.SHALLOW_DEPTH)
 }
 
 ///|
@@ -161,8 +161,11 @@ pub fn IonReader::from_value(value : @ion.IonValue) -> IonReader {
 
 ///|
 /// An event reader over Ion text.
-pub fn IonReader::from_text(text : StringView) -> IonReader raise @ion.IonError {
-  IonReader::from_values(read_ion_datagram(text))
+pub fn IonReader::from_text(
+  text : StringView,
+  fuel~ : @ion.Fuel = Unlimited,
+) -> IonReader raise @ion.IonError {
+  IonReader::from_values(read_ion_datagram(text, fuel~))
 }
 
 ///|

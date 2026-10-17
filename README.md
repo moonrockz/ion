@@ -308,13 +308,13 @@ and prints JSON, and `ion fromjson [file]` reads JSON and prints Ion text.
   Equality uses that location, independently of stream IDs and table versions.
   Writers preserve shared imports and reserve local unknown IDs as null slots.
   A shared table's `imports` field is informational metadata and is ignored.
-- **Bounded nesting.** The text, binary and JSON readers accept containers
-  nested at most `@ion.MAX_NESTING_DEPTH` (128) levels deep and raise
-  `IonError::LimitExceeded` past it, so deeply nested hostile input cannot
-  exhaust the readers' call stack. The limit does not bound the size of a
-  value. Every walker (equality, fold, visitor, writers, events, Ion Hash and
-  JSON conversion) keeps its call stack bounded, so a value built in code
-  works at any depth.
+- **Unrestricted nesting with optional fuel.** Readers and schema operations
+  keep a bounded machine stack. Omitting `fuel` accepts any finite nesting
+  depth that fits in memory. Supply `fuel=Limited(@ion.Budget(128))` to bound
+  open nested operations defensively. Siblings reuse fuel; exhaustion raises
+  `IonError::FuelExhausted` with the budget, operation and location. Fuel
+  does not bound total work, input size, or elapsed time. Existing value
+  walkers and writers also work at any depth.
 - **Unsupported is an error.** The schema loader raises
   `IonError::Unsupported` for what it does not implement (imports when no
   resolver is given), rather than silently ignoring it.

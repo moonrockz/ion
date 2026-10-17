@@ -29,8 +29,9 @@ fn reject_unknown_annotations(
 pub fn Schema::load_from_text(
   text : StringView,
   resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError,
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> Schema raise @ion.IonError {
-  Schema::load(@text.read_ion_datagram(text), resolver?)
+  Schema::load(@text.read_ion_datagram(text, fuel~), resolver?, fuel~)
 }
 
 ///|
@@ -66,10 +67,10 @@ fn int_of(value : @ion.IonValue) -> Int32 raise @ion.IonError {
 
 ///|
 /// Load a `type::{ ... }` definition in the scope of `ctx`.
-fn load_type_definition(
+async fn load_type_definition(
   fields : Array[@ion.Field],
   ctx : Context,
-) -> TypeDefinition raise @ion.IonError {
+) -> TypeDefinition raise @ion.IonError + nocancel {
   { name: type_name(fields), constraints: load_type_fields(fields, ctx), }
 }
 
@@ -82,13 +83,13 @@ fn load_type_definition(
 /// In ISL 1.0, a type with no `type` constraint has `type: any`, and a field
 /// that is not an ISL 1.0 keyword is open content. `content: closed` loads as
 /// the names of the type's `fields`, which are the only fields allowed.
-fn load_type_fields(
+async fn load_type_fields(
   fields : Array[@ion.Field],
   ctx : Context,
   inline~ : Bool = false,
   variably_occurring~ : Bool = false,
   nullable~ : Bool = false,
-) -> Array[Constraint] raise @ion.IonError {
+) -> Array[Constraint] raise @ion.IonError + nocancel {
   let constraints : Array[Constraint] = []
   let mut closed = false
   for field in fields {
@@ -202,11 +203,11 @@ let all_ion_types : Array[@ion.IonType] = [
 
 ///|
 /// Load one constraint by its field name.
-fn load_constraint(
+async fn load_constraint(
   key : String,
   value : @ion.IonValue,
   ctx : Context,
-) -> Constraint raise @ion.IonError {
+) -> Constraint raise @ion.IonError + nocancel {
   if ctx.version == Isl20 && !implemented_constraints.contains(key) {
     if isl_keywords.contains(key) {
       raise @ion.IonError::Unsupported(
@@ -309,7 +310,7 @@ fn load_constraint(
     "all_of" => AllOf(load_constraint_list(value, ctx))
     "not" => Not(load_inline_type(value, ctx))
     "contains" => Contains(as_list(value))
-    "regex" => Matches(load_regex(value))
+    "regex" => Matches(load_regex(value, ctx))
     "byte_length" => {
       let (lower, upper) = load_range(value)
       ByteLength(lower, upper)
@@ -379,10 +380,10 @@ fn take_modifier(
 /// form is a list of symbols annotated with `required::`, `closed::`, or
 /// both: `required` means each symbol is an annotation of the value, and
 /// `closed` means the value has no other annotation.
-fn load_annotations(
+async fn load_annotations(
   value : @ion.IonValue,
   ctx : Context,
-) -> Constraint raise @ion.IonError {
+) -> Constraint raise @ion.IonError + nocancel {
   guard value.kind() is @ion.IonValueKind::List(items) else {
     return load_inline_type(value, ctx)
   }
@@ -613,10 +614,10 @@ fn load_float_format(value : @ion.IonValue) -> FloatFormat raise @ion.IonError {
 ///|
 /// Load a `type:` constraint: a type name, or an inline
 /// type or import, with `$null_or::` if nullable.
-fn load_type_constraint(
+async fn load_type_constraint(
   value : @ion.IonValue,
   ctx : Context,
-) -> Constraint raise @ion.IonError {
+) -> Constraint raise @ion.IonError + nocancel {
   load_inline_type(value, ctx)
 }
 
@@ -731,11 +732,18 @@ fn load_valid_values(
 
 ///|
 /// Load a nested type, which is either a symbol or an inline `{ ... }` type.
-fn load_inline_type(
+async fn load_inline_type(
   value : @ion.IonValue,
   ctx : Context,
   variably_occurring~ : Bool = false,
-) -> Constraint raise @ion.IonError {
+) -> Constraint raise @ion.IonError + nocancel {
+  ctx.loader.runner.pause()
+  defer ctx.loader.runner.pause()
+  let outer = ctx.loader.fuel
+  defer {
+    ctx.loader.fuel = outer
+  }
+  ctx.loader.fuel = outer.enter(SchemaLoad, ValuePath("$"))
   reject_unknown_annotations(value, "inline type", ctx)
   let nullable = has_annotation(
     value,
@@ -870,10 +878,10 @@ fn load_ordered_range(
 
 ///|
 /// Load a `fields: { ... }` constraint.
-fn load_fields(
+async fn load_fields(
   value : @ion.IonValue,
   ctx : Context,
-) -> Array[FieldConstraint] raise @ion.IonError {
+) -> Array[FieldConstraint] raise @ion.IonError + nocancel {
   match value.kind() {
     @ion.IonValueKind::Struct(fields) => {
       if fields.is_empty() {
@@ -917,10 +925,10 @@ fn as_list(value : @ion.IonValue) -> Array[@ion.IonValue] raise @ion.IonError {
 
 ///|
 /// Load a list of nested constraints.
-fn load_constraint_list(
+async fn load_constraint_list(
   value : @ion.IonValue,
   ctx : Context,
-) -> Array[Constraint] raise @ion.IonError {
+) -> Array[Constraint] raise @ion.IonError + nocancel {
   let items = as_list(value)
   let result : Array[Constraint] = []
   for item in items {
@@ -932,7 +940,10 @@ fn load_constraint_list(
 ///|
 /// Load a `regex`: a non-empty string, annotated with the flags `i` and `m`
 /// at most once each.
-fn load_regex(value : @ion.IonValue) -> Regex raise @ion.IonError {
+fn load_regex(
+  value : @ion.IonValue,
+  ctx : Context,
+) -> Regex raise @ion.IonError {
   let mut ignore_case = false
   let mut multiline = false
   for token in value.annotations() {
@@ -947,7 +958,7 @@ fn load_regex(value : @ion.IonValue) -> Regex raise @ion.IonError {
   }
   match value.kind() {
     @ion.IonValueKind::String(source) if source != "" =>
-      Regex::new(source, ignore_case~, multiline~)
+      make_regex(source, ignore_case, multiline, ctx.loader.fuel)
     _ => raise @ion.IonError::DataModel("a regex must be a non-empty string")
   }
 }
@@ -957,11 +968,18 @@ fn load_regex(value : @ion.IonValue) -> Regex raise @ion.IonError {
 /// reference allows: those of the type's base type, which is the type its
 /// `type` constraint names, or `any` without one. `visiting` holds the type
 /// keys on the path, so that a cycle of references ends.
-fn Context::base_types(
+async fn Context::base_types(
   self : Context,
   reference : @ion.IonValue,
   visiting : Set[String],
-) -> Array[@ion.IonType] raise @ion.IonError {
+) -> Array[@ion.IonType] raise @ion.IonError + nocancel {
+  self.loader.runner.pause()
+  defer self.loader.runner.pause()
+  let outer = self.loader.fuel
+  defer {
+    self.loader.fuel = outer
+  }
+  self.loader.fuel = outer.enter(SchemaLoad, ValuePath("$"))
   let definition = match reference.kind() {
     @ion.IonValueKind::Symbol(token) => {
       let name = token.require_text()

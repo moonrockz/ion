@@ -14,11 +14,11 @@ pub async fn write_all(&@io.Writer, Array[@ion.IonValue]) -> Unit
 
 // Types and methods
 type BinaryEventReader
-pub fn BinaryEventReader::new(&@io.Reader, prefix? : Bytes, catalog? : @ion.Catalog) -> Self
+pub fn BinaryEventReader::new(&@io.Reader, prefix? : Bytes, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> Self
 pub async fn BinaryEventReader::next(Self) -> @text.IonEvent?
 
 type BinaryReader
-pub fn BinaryReader::new(&@io.Reader, prefix? : Bytes, catalog? : @ion.Catalog) -> Self
+pub fn BinaryReader::new(&@io.Reader, prefix? : Bytes, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> Self
 pub async fn BinaryReader::next(Self) -> @ion.IonValue?
 
 type BinaryWriter

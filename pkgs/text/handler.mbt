@@ -82,8 +82,9 @@ impl IonHandler with fn on_scalar(_self, _value) {
 pub fn parse_with_handler(
   text : StringView,
   handler : &IonHandler,
+  fuel~ : @ion.Fuel = Unlimited,
 ) -> Unit raise @ion.IonError {
-  dispatch_values(read_ion_datagram(text), handler)
+  dispatch_values(read_ion_datagram(text, fuel~), handler)
 }
 
 ///|
@@ -102,7 +103,7 @@ pub fn dispatch_values(
 ///|
 /// Push the events of a single value to `handler`, at any depth.
 pub fn dispatch_value(value : @ion.IonValue, handler : &IonHandler) -> Unit {
-  dispatch_shallow(value, handler, @ion.MAX_NESTING_DEPTH)
+  dispatch_shallow(value, handler, @work.SHALLOW_DEPTH)
 }
 
 ///|

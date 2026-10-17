@@ -3,6 +3,7 @@
 // `@ion.SymbolTable`.
 
 import {
+  "moonrockz/ion/internal/work",
   "moonrockz/ion/ion",
   "moonrockz/ion/text",
   "moonbitlang/core/debug",

@@ -1,7 +1,7 @@
 // Structural equality of Ion values at any depth.
 //
 // Two values are compared in lockstep: with recursion down to
-// MAX_NESTING_DEPTH levels, and below that on a stack of frames, one frame
+// @work.SHALLOW_DEPTH levels, and below that on a stack of frames, one frame
 // for each pair of containers being compared. Each pair of containers
 // compares its children as pairs: list and S-expression items by position,
 // struct fields by name. Struct fields are an unordered multiset. When the
@@ -20,7 +20,7 @@
 /// and sexp elements are compared pairwise, and struct fields are compared as
 /// an unordered multiset. It works at any nesting depth.
 pub fn IonValue::equals(self : IonValue, other : IonValue) -> Bool {
-  match pair_shallow(self, other, MAX_NESTING_DEPTH) {
+  match pair_shallow(self, other, @work.SHALLOW_DEPTH) {
     Equal => true
     // `pair_shallow` decides every pair, so the outcome is not `Pending`.
     Unequal | Pending => false
