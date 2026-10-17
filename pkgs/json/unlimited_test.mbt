@@ -30,9 +30,7 @@ test "JSON container parsing agrees with core on generated documents" {
       size=8,
     ) {
     let source = value.stringify()
-    assert_true(
-      @json.read_json(source).equals(@json.to_ion(@cjson.parse(source))),
-    )
+    assert_true(@json.read_json(source).equals(@json.Ion(@cjson.parse(source))))
   }
   assert_eq(
     @text.write_ion(@json.read_json("{\"a\":1,\"b\":2,\"a\":3}")),

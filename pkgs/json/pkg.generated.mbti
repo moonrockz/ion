@@ -6,18 +6,22 @@ import {
 }
 
 // Values
-pub fn read_json(StringView, fuel? : @ion.Fuel) -> @ion.IonValue raise @ion.IonError
+pub fn read_json(StringView, fuel? : @ion.Fuel) -> @ion.Ion raise @ion.IonError
 
-pub fn to_ion(Json) -> @ion.IonValue
+#deprecated
+pub fn to_ion(Json) -> @ion.Ion
 
-pub fn to_json(@ion.IonValue) -> Json raise @ion.IonError
+pub fn to_json(@ion.Ion) -> Json raise @ion.IonError
 
-pub fn write_json(@ion.IonValue, indent? : Int) -> String raise @ion.IonError
+pub fn write_json(@ion.Ion, indent? : Int) -> String raise @ion.IonError
 
 // Errors
 
 // Types and methods
 
 // Type aliases
+pub using @ion {type Ion}
+
+pub using @ion {trait ToIon}
 
 // Traits

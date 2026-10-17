@@ -25,7 +25,7 @@ test "conversion preserves the value but not the scale or signed zero" {
 
 ///|
 test "conversion fails outside the moonbitlang/x decimal range" {
-  let far = @ion.Decimal::new(@ion.Decimal::parse("1").coefficient(), -40)
+  let far = @ion.Decimal::Decimal(@ion.Decimal::parse("1").coefficient(), -40)
   assert_true(far.to_x() is None)
   assert_true(far.to_double() is None)
 }

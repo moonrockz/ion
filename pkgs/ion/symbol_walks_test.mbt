@@ -92,7 +92,7 @@ test "resolve gives text to IDs at every depth and keeps other tokens" {
       sid(4),
       @ion.IonValue::list([@ion.IonValue::symbol_token(sid(5))]),
     ),
-    @ion.Field::new("plain", @ion.IonValue::symbol_token(sid(0))),
+    @ion.Field::Field("plain", @ion.IonValue::symbol_token(sid(0))),
   ])
   inspect(
     @text.write_ion(@ion.SymbolTable::system().resolve(value)),

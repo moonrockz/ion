@@ -86,15 +86,15 @@ Convert between Ion and JSON:
 ```moonbit skip nocheck
 let value = @text.read_ion("{ name: \"ion\", tags: [a, b] }")
 let json = @json.to_json(value) // {"name":"ion","tags":["a","b"]}
-let ion = @json.to_ion(json)     // back to the Ion data model
+let ion = @ion.Ion(json)       // back to the Ion data model
 ```
 
 Build a value programmatically:
 
 ```moonbit skip nocheck
-let value = @ion.IonValue::from_fields([
-  @ion.Field::new("name", @ion.IonValue::string("ion")),
-  @ion.Field::new("tags", @ion.IonValue::list([
+let value = @ion.Ion::from_fields([
+  @ion.Field("name", @ion.Ion("ion")),
+  @ion.Field("tags", @ion.Ion([
     @ion.IonValue::symbol("a"),
     @ion.IonValue::symbol("b"),
   ])),
@@ -246,7 +246,7 @@ inverses:
 ```moonbit skip nocheck
 let value = @text.read_ion("{ data: annot::{time: 1969-07-20T20:18Z}, n: 1.50 }")
 let json = @json.to_json(value) // {"data":{"time":"1969-07-20T20:18Z"},"n":1.50}
-let ion = @json.to_ion(json)     // back into the Ion data model
+let ion = @ion.Ion(json)       // back into the Ion data model
 ```
 
 - **JSON to Ion** is faithful in the sense that a JSON value converted to Ion

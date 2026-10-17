@@ -48,7 +48,7 @@ test "values compare structurally and keep annotations" {
   ])
   assert_true(a.equals(b))
   let annotated = @ion.IonValue::int(1).with_annotation(
-    @ion.SymbolToken::new("int32"),
+    @ion.SymbolToken::SymbolToken("int32"),
   )
   assert_true(annotated.has_annotations())
   assert_true(!annotated.equals(@ion.IonValue::int(1)))
@@ -66,12 +66,12 @@ test "typed nulls report their own type" {
 ///|
 test "struct equality ignores field order" {
   let a = @ion.IonValue::from_fields([
-    @ion.Field::new("a", @ion.IonValue::int(1)),
-    @ion.Field::new("b", @ion.IonValue::int(2)),
+    @ion.Field::Field("a", @ion.IonValue::int(1)),
+    @ion.Field::Field("b", @ion.IonValue::int(2)),
   ])
   let b = @ion.IonValue::from_fields([
-    @ion.Field::new("b", @ion.IonValue::int(2)),
-    @ion.Field::new("a", @ion.IonValue::int(1)),
+    @ion.Field::Field("b", @ion.IonValue::int(2)),
+    @ion.Field::Field("a", @ion.IonValue::int(1)),
   ])
   assert_true(a.equals(b))
 }
@@ -89,28 +89,33 @@ fn invalid(timestamp : @ion.Timestamp) -> Bool {
 ///|
 test "a timestamp's day must exist in its month" {
   assert_true(
-    invalid(@ion.Timestamp::new(year=2001, month=Some(2), day=Some(29))),
+    invalid(@ion.Timestamp::Timestamp(year=2001, month=Some(2), day=Some(29))),
   )
   assert_true(
-    invalid(@ion.Timestamp::new(year=2000, month=Some(4), day=Some(31))),
+    invalid(@ion.Timestamp::Timestamp(year=2000, month=Some(4), day=Some(31))),
   )
   assert_false(
-    invalid(@ion.Timestamp::new(year=2000, month=Some(2), day=Some(29))),
+    invalid(@ion.Timestamp::Timestamp(year=2000, month=Some(2), day=Some(29))),
   )
 }
 
 ///|
 test "a timestamp's components must be in range and complete" {
-  assert_true(invalid(@ion.Timestamp::new(year=0)))
-  assert_true(invalid(@ion.Timestamp::new(year=2000, month=Some(13))))
+  assert_true(invalid(@ion.Timestamp::Timestamp(year=0)))
+  assert_true(invalid(@ion.Timestamp::Timestamp(year=2000, month=Some(13))))
   assert_true(
     invalid(
-      @ion.Timestamp::new(year=2000, month=Some(1), day=Some(1), hour=Some(1)),
+      @ion.Timestamp::Timestamp(
+        year=2000,
+        month=Some(1),
+        day=Some(1),
+        hour=Some(1),
+      ),
     ),
   )
   assert_true(
     invalid(
-      @ion.Timestamp::new(
+      @ion.Timestamp::Timestamp(
         year=2000,
         month=Some(1),
         day=Some(1),
@@ -121,7 +126,7 @@ test "a timestamp's components must be in range and complete" {
     ),
   )
   let fraction = (text : String) => {
-    @ion.Timestamp::new(
+    @ion.Timestamp::Timestamp(
       year=2000,
       month=Some(1),
       day=Some(1),

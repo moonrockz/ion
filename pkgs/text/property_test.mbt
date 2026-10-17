@@ -299,7 +299,7 @@ test "the event rebuilder rejects unbalanced or unfinished events" {
   let unbalanced : Array[@text.IonEvent] = [ListEnd]
   let unclosed : Array[@text.IonEvent] = [ListStart]
   let dangling : Array[@text.IonEvent] = [
-    Annotation(@ion.SymbolToken::new("a")),
+    Annotation(@ion.SymbolToken::SymbolToken("a")),
   ]
   for events in [unbalanced, unclosed, dangling] {
     let rejected = try values_from_events(events) catch {

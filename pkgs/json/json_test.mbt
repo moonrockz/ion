@@ -13,15 +13,15 @@ fn to_json_error(value : @core.IonValue) -> @core.IonError? {
 
 ///|
 test "JSON scalars become the matching Ion values" {
-  assert_eq(@json.write_json(@json.to_ion(@cjson.parse("null"))), "null")
-  assert_eq(@json.write_json(@json.to_ion(@cjson.parse("true"))), "true")
-  assert_eq(@json.write_json(@json.to_ion(@cjson.parse("false"))), "false")
-  assert_eq(@json.write_json(@json.to_ion(@cjson.parse("\"hi\""))), "\"hi\"")
+  assert_eq(@json.write_json(@json.Ion(@cjson.parse("null"))), "null")
+  assert_eq(@json.write_json(@json.Ion(@cjson.parse("true"))), "true")
+  assert_eq(@json.write_json(@json.Ion(@cjson.parse("false"))), "false")
+  assert_eq(@json.write_json(@json.Ion(@cjson.parse("\"hi\""))), "\"hi\"")
 }
 
 ///|
 test "JSON objects and arrays become Ion structs and lists" {
-  let value = @json.to_ion(@cjson.parse("{\"a\":1,\"b\":[true,null]}"))
+  let value = @json.Ion(@cjson.parse("{\"a\":1,\"b\":[true,null]}"))
   assert_eq(@text.write_ion(value), "{a: 1, b: [true, null]}")
   guard value.kind() is @core.IonValueKind::Struct(fields) else {
     fail("expected an Ion struct")
@@ -36,9 +36,9 @@ test "JSON objects and arrays become Ion structs and lists" {
 
 ///|
 test "JSON integers keep every digit" {
-  assert_eq(@json.write_json(@json.to_ion(@cjson.parse("42"))), "42")
+  assert_eq(@json.write_json(@json.Ion(@cjson.parse("42"))), "42")
   let big = "123456789012345678901234567890"
-  let value = @json.to_ion(@cjson.parse(big))
+  let value = @json.Ion(@cjson.parse(big))
   assert_eq(@json.write_json(value), big)
   guard value.kind() is @core.IonValueKind::Int(number) else {
     fail("expected an Ion int")
@@ -50,17 +50,17 @@ test "JSON integers keep every digit" {
 test "a JSON number's spelling decides its Ion type" {
   // Core drops the spelling of a fractional literal that fits a `Double`, so
   // the number's shortest spelling decides: `1.50` is the Ion decimal `1.5`.
-  assert_eq(@text.write_ion(@json.to_ion(@cjson.parse("1.50"))), "1.5")
-  assert_eq(@text.write_ion(@json.to_ion(@cjson.parse("2.5e-3"))), "0.0025")
+  assert_eq(@text.write_ion(@json.Ion(@cjson.parse("1.50"))), "1.5")
+  assert_eq(@text.write_ion(@json.Ion(@cjson.parse("2.5e-3"))), "0.0025")
   // An integral spelling is an Ion int.
-  assert_eq(@text.write_ion(@json.to_ion(@cjson.parse("1e2"))), "100")
+  assert_eq(@text.write_ion(@json.Ion(@cjson.parse("1e2"))), "100")
   // A spelling whose shortest form carries an exponent is an Ion float.
-  let tiny = @json.to_ion(@cjson.parse("1e-7"))
+  let tiny = @json.Ion(@cjson.parse("1e-7"))
   assert_true(tiny.kind() is @core.IonValueKind::Float(_))
   // A number that overflows the double keeps its spelling and is a float,
   // which JSON down-converts back to `null`.
-  assert_eq(@text.write_ion(@json.to_ion(@cjson.parse("1e400"))), "+inf")
-  assert_eq(@json.write_json(@json.to_ion(@cjson.parse("1e400"))), "null")
+  assert_eq(@text.write_ion(@json.Ion(@cjson.parse("1e400"))), "+inf")
+  assert_eq(@json.write_json(@json.Ion(@cjson.parse("1e400"))), "null")
 }
 
 ///|
@@ -72,7 +72,7 @@ test "Ion scalars down-convert following the cookbook" {
   assert_eq(@json.write_json(@core.IonValue::bool(true)), "true")
   assert_eq(@json.write_json(@core.IonValue::int(7)), "7")
   assert_eq(
-    @json.write_json(@json.to_ion(@cjson.parse("12345678901234567890"))),
+    @json.write_json(@json.Ion(@cjson.parse("12345678901234567890"))),
     "12345678901234567890",
   )
   assert_eq(@json.write_json(@text.read_ion("1.5e0")), "1.5")
@@ -162,7 +162,7 @@ test "JSON survives a trip through Ion" {
       "[1,2,3]", "{\"a\":1,\"b\":[true,null,\"x\"]}", "\"a\\\"b\"",
     ] {
     let original = @cjson.parse(text)
-    assert_eq(@json.write_json(@json.to_ion(original)), original.stringify())
+    assert_eq(@json.write_json(@json.Ion(original)), original.stringify())
   }
 }
 

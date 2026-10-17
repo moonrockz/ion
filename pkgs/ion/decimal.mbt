@@ -14,14 +14,15 @@ pub struct Decimal {
 
 ///|
 /// Build a decimal from an explicit coefficient and base-10 exponent.
-pub fn Decimal::new(coefficient : BigInt, exponent : Int32) -> Decimal {
+#alias(new, deprecated="Use `Decimal::Decimal(...)` instead")
+pub fn Decimal::Decimal(coefficient : BigInt, exponent : Int32) -> Decimal {
   { coefficient, exponent, negative_zero: false, }
 }
 
 ///|
 /// Build a decimal from an `Int`, with exponent `0`.
 pub fn Decimal::from_int(value : Int32) -> Decimal {
-  Decimal::new(BigInt::from_int(value), 0)
+  Decimal::Decimal(BigInt::from_int(value), 0)
 }
 
 ///|

@@ -35,16 +35,10 @@ pub struct Field {
 
 ///|
 /// An Ion value: zero or more annotations followed by the core value.
-pub struct IonValue {
+pub struct Ion {
   annotations : Array[SymbolToken]
   kind : IonValueKind
 } derive(Debug)
-
-///|
-/// Build a value from a kind, with no annotations.
-pub fn IonValue::new(kind : IonValueKind) -> IonValue {
-  { annotations: [], kind, }
-}
 
 ///|
 /// The core kind of this value.
@@ -122,103 +116,104 @@ pub fn IonValue::is_untyped_null(self : IonValue) -> Bool {
 ///|
 /// The untyped `null` value.
 pub fn IonValue::untyped_null() -> IonValue {
-  IonValue::new(IonValueKind::Null(IonType::Null))
+  Ion(IonValueKind::Null(IonType::Null))
 }
 
 ///|
 /// A typed null such as `null.int`.
 pub fn IonValue::typed_null(t : IonType) -> IonValue {
-  IonValue::new(IonValueKind::Null(t))
+  Ion(IonValueKind::Null(t))
 }
 
 ///|
 /// A `Bool` value.
 pub fn IonValue::bool(value : Bool) -> IonValue {
-  IonValue::new(IonValueKind::Bool(value))
+  Ion(IonValueKind::Bool(value))
 }
 
 ///|
 /// An `int` value from an `Int`.
 pub fn IonValue::int(value : Int32) -> IonValue {
-  IonValue::new(IonValueKind::Int(BigInt::from_int(value)))
+  Ion(IonValueKind::Int(BigInt::from_int(value)))
 }
 
 ///|
 /// An `int` value from an arbitrary-precision `BigInt`.
 pub fn IonValue::big_int(value : BigInt) -> IonValue {
-  IonValue::new(IonValueKind::Int(value))
+  Ion(IonValueKind::Int(value))
 }
 
 ///|
 /// A `float` value.
 pub fn IonValue::float(value : Double) -> IonValue {
-  IonValue::new(IonValueKind::Float(value))
+  Ion(IonValueKind::Float(value))
 }
 
 ///|
 /// A `decimal` value.
 pub fn IonValue::decimal(value : Decimal) -> IonValue {
-  IonValue::new(IonValueKind::Decimal(value))
+  Ion(IonValueKind::Decimal(value))
 }
 
 ///|
 /// A `timestamp` value.
 pub fn IonValue::timestamp(value : Timestamp) -> IonValue {
-  IonValue::new(IonValueKind::Timestamp(value))
+  Ion(IonValueKind::Timestamp(value))
 }
 
 ///|
 /// A `symbol` value with known text.
 pub fn IonValue::symbol(value : String) -> IonValue {
-  IonValue::new(IonValueKind::Symbol(SymbolToken::new(value)))
+  Ion(IonValueKind::Symbol(SymbolToken::SymbolToken(value)))
 }
 
 ///|
 /// A `symbol` value from a symbol token.
 pub fn IonValue::symbol_token(value : SymbolToken) -> IonValue {
-  IonValue::new(IonValueKind::Symbol(value))
+  Ion(IonValueKind::Symbol(value))
 }
 
 ///|
 /// A `string` value.
 pub fn IonValue::string(value : String) -> IonValue {
-  IonValue::new(IonValueKind::String(value))
+  Ion(IonValueKind::String(value))
 }
 
 ///|
 /// A `clob` value.
 pub fn IonValue::clob(value : Bytes) -> IonValue {
-  IonValue::new(IonValueKind::Clob(value))
+  Ion(IonValueKind::Clob(value))
 }
 
 ///|
 /// A `blob` value.
 pub fn IonValue::blob(value : Bytes) -> IonValue {
-  IonValue::new(IonValueKind::Blob(value))
+  Ion(IonValueKind::Blob(value))
 }
 
 ///|
 /// A `list` value.
 pub fn IonValue::list(values : Array[IonValue]) -> IonValue {
-  IonValue::new(IonValueKind::List(values))
+  Ion(IonValueKind::List(values))
 }
 
 ///|
 /// An `sexp` value.
 pub fn IonValue::sexp(values : Array[IonValue]) -> IonValue {
-  IonValue::new(IonValueKind::Sexp(values))
+  Ion(IonValueKind::Sexp(values))
 }
 
 ///|
 /// A `struct` value.
 pub fn IonValue::from_fields(fields : Array[Field]) -> IonValue {
-  IonValue::new(IonValueKind::Struct(fields))
+  Ion(IonValueKind::Struct(fields))
 }
 
 ///|
 /// Build a struct field from a name literal.
-pub fn Field::new(name : String, value : IonValue) -> Field {
-  { name: SymbolToken::new(name), value, }
+#alias(new, deprecated="Use `Field(...)` instead")
+pub fn Field::Field(name : String, value : IonValue) -> Field {
+  { name: SymbolToken::SymbolToken(name), value, }
 }
 
 ///|

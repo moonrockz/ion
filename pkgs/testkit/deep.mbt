@@ -47,7 +47,7 @@ pub fn deep_value(
   depth : Int32,
   leaf~ : @ion.IonValue = @ion.IonValue::int(1),
 ) -> @ion.IonValue {
-  let name = @ion.SymbolToken::new("name")
+  let name = @ion.SymbolToken::SymbolToken("name")
   let mut value = leaf
   for level = depth - 1; level >= 0; level = level - 1 {
     value = match shape.at(level) {

@@ -7,15 +7,28 @@ say.
 
 | Direction | Values | Text |
 | --- | --- | --- |
-| JSON to Ion | `to_ion` | `read_json` |
+| JSON to Ion | `Ion(json)` | `read_json` |
 | Ion to JSON | `to_json` | `write_json` |
 
 ## JSON to Ion
 
-`to_ion` follows the Ion cookbook's
+`Ion(json)` follows the Ion cookbook's
 [JSON-to-Ion rules](https://amazon-ion.github.io/ion-docs/guides/cookbook.html#migrating-json-data-to-ion).
 A number becomes an Ion `int`, `decimal`, or `float` by its spelling, and a
 large integer keeps every digit.
+
+`@json.Ion` and `@json.ToIon` re-export the core data model's constructor and
+conversion trait. `@ion.Ion(json)` constructs the same value without importing
+this package. The old `@json.to_ion(json)` function remains available with a
+deprecation warning.
+
+```mbt check
+///|
+test "construct Ion from JSON" {
+  let value = @json.Ion(Json({ "ready": true }))
+  inspect(@text.write_ion(value), content="{ready: true}")
+}
+```
 
 ```mbt check
 ///|

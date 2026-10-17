@@ -22,8 +22,8 @@ impl @ion.IonVisitor for Collector with fn visit_field_name(self, token) {
 ///|
 test "visitor traverses depth-first" {
   let value = @ion.IonValue::from_fields([
-    @ion.Field::new("a", @ion.IonValue::int(1)),
-    @ion.Field::new("b", @ion.IonValue::list([@ion.IonValue::int(2)])),
+    @ion.Field::Field("a", @ion.IonValue::int(1)),
+    @ion.Field::Field("b", @ion.IonValue::list([@ion.IonValue::int(2)])),
   ])
   let collector : Collector = { values: 0, field_names: [], }
   value.accept(collector)

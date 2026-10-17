@@ -312,9 +312,9 @@ fn signed_decimal(
   if negative && magnitude.is_zero() {
     @ion.Decimal::negative_zero_at(exponent)
   } else if negative {
-    @ion.Decimal::new(magnitude.neg(), exponent)
+    @ion.Decimal::Decimal(magnitude.neg(), exponent)
   } else {
-    @ion.Decimal::new(magnitude, exponent)
+    @ion.Decimal::Decimal(magnitude, exponent)
   }
 }
 
@@ -391,7 +391,7 @@ fn decode_timestamp(
   // The components are in UTC. A timestamp with no time of day has no offset
   // to apply; the model leaves it out, matching Ion text.
   let has_time = hour is Some(_) && minute is Some(_)
-  let utc = @ion.Timestamp::new(
+  let utc = @ion.Timestamp::Timestamp(
     year~,
     month~,
     day~,

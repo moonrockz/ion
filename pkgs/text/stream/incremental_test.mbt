@@ -92,7 +92,7 @@ async test "incremental writer sequence errors are recoverable before output" {
   writer.step_in(Int) catch {
     _ => errors += 1
   }
-  writer.set_field_name(@ion.SymbolToken::new("outside")) catch {
+  writer.set_field_name(@ion.SymbolToken::SymbolToken("outside")) catch {
     _ => errors += 1
   }
   writer.step_in(Struct)
@@ -102,8 +102,8 @@ async test "incremental writer sequence errors are recoverable before output" {
   writer.write_int(1) catch {
     _ => errors += 1
   }
-  writer.set_field_name(@ion.SymbolToken::new("a"))
-  writer.set_field_name(@ion.SymbolToken::new("b")) catch {
+  writer.set_field_name(@ion.SymbolToken::SymbolToken("a"))
+  writer.set_field_name(@ion.SymbolToken::SymbolToken("b")) catch {
     _ => errors += 1
   }
   writer.step_out() catch {

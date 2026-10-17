@@ -8,23 +8,23 @@ import {
 }
 
 // Values
-pub fn change_one_leaf(@ion.IonValue, Int) -> @ion.IonValue
+pub fn change_one_leaf(@ion.Ion, Int) -> @ion.Ion
 
-pub fn count_values(@ion.IonValue) -> Int
+pub fn count_values(@ion.Ion) -> Int
 
-pub fn deep_value(DeepShape, Int, leaf? : @ion.IonValue) -> @ion.IonValue
+pub fn deep_value(DeepShape, Int, leaf? : @ion.Ion) -> @ion.Ion
 
 pub fn gen_json(max_depth~ : Int, max_width~ : Int) -> @quickcheck.Generator[Json]
 
-pub fn gen_value(max_depth~ : Int, max_width~ : Int, unknown_symbols? : Bool, imported_symbols? : Bool) -> @quickcheck.Generator[@ion.IonValue]
+pub fn gen_value(max_depth~ : Int, max_width~ : Int, unknown_symbols? : Bool, imported_symbols? : Bool) -> @quickcheck.Generator[@ion.Ion]
 
-pub fn innermost(@ion.IonValue) -> (@ion.IonValue, Int)
+pub fn innermost(@ion.Ion) -> (@ion.Ion, Int)
 
-pub fn near_misses(@ion.IonValue) -> Array[@ion.IonValue]
+pub fn near_misses(@ion.Ion) -> Array[@ion.Ion]
 
-pub fn reference_equals(@ion.IonValue, @ion.IonValue) -> Bool
+pub fn reference_equals(@ion.Ion, @ion.Ion) -> Bool
 
-pub fn reverse_fields(@ion.IonValue) -> @ion.IonValue
+pub fn reverse_fields(@ion.Ion) -> @ion.Ion
 
 // Errors
 

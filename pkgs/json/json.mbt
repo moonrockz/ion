@@ -3,7 +3,7 @@
 // This package converts between the Ion data model (`@core.IonValue`) and
 // MoonBit's core JSON type (`Json`), in both directions:
 //
-//   * [`to_ion`] maps JSON to Ion. JSON is a strict subset of Ion, so this
+//   * [`Ion`] maps JSON to Ion. JSON is a strict subset of Ion, so this
 //     direction is faithful: a JSON value converted to Ion and back is the
 //     same JSON value.
 //   * [`to_json`] maps Ion to JSON. Ion is richer than JSON, so this direction
@@ -17,7 +17,11 @@
 // trip back cannot tell them apart; that is inherent to JSON, not a shortcut.
 
 ///|
-/// Parse JSON text into an Ion value, following the same rules as [`to_ion`].
+/// An Ion value, shared with the core data model.
+pub using @core {type Ion, trait ToIon}
+
+///|
+/// Parse JSON text into an Ion value, following the same rules as [`Ion`].
 ///
 /// The result is a single Ion value. Container nesting is unrestricted by
 /// default. Optional fuel counts open arrays and objects.
@@ -36,7 +40,7 @@ pub fn read_json(
   if parser.pos != text.length() {
     raise parser.error("unexpected trailing input")
   }
-  to_ion(json)
+  Ion(json)
 }
 
 ///|

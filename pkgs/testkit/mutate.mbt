@@ -9,7 +9,7 @@
 pub fn change_one_leaf(value : @ion.IonValue, index : Int32) -> @ion.IonValue {
   let count = count_scalars(value)
   if count == 0 {
-    return value.with_annotation(@ion.SymbolToken::new("changed"))
+    return value.with_annotation(@ion.SymbolToken::SymbolToken("changed"))
   }
   let seen = Ref(0)
   rebuild(value, (index % count + count) % count, seen)
@@ -190,7 +190,7 @@ fn rename_field(value : @ion.IonValue) -> @ion.IonValue? {
       let name = first.name().text().unwrap_or("") + "_"
       Some(
         @ion.IonValue::from_fields(
-          [@ion.Field::new(name, first.value()), ..rest],
+          [@ion.Field::Field(name, first.value()), ..rest],
         ).with_annotations(value.annotations()),
       )
     }

@@ -60,7 +60,9 @@ test "write_fragment writes an operator bare only inside an S-expression" {
   )
   inspect(
     @text.write_fragment(
-      @ion.IonValue::sexp([plus]).with_annotation(@ion.SymbolToken::new("+")),
+      @ion.IonValue::sexp([plus]).with_annotation(
+        @ion.SymbolToken::SymbolToken("+"),
+      ),
     ),
     content="'+'::(+)",
   )

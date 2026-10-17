@@ -87,7 +87,7 @@ fn shift_minutes(
         day,
         day_shift,
       )
-      Timestamp::new(
+      Timestamp::Timestamp(
         year~,
         month=Some(month),
         day=Some(day),

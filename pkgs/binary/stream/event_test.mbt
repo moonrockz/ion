@@ -71,16 +71,16 @@ async test "binary stream events resolve catalog imports across resets" {
     @ion.SharedSymbolTable::new("example", 1, [Some("tag"), Some("value")]),
   )
   let table = @ion.IonValue::from_fields([
-    @ion.Field::new(
+    @ion.Field::Field(
       "imports",
       @ion.IonValue::list([
         @ion.IonValue::from_fields([
-          @ion.Field::new("name", @ion.IonValue::string("example")),
-          @ion.Field::new("max_id", @ion.IonValue::int(2)),
+          @ion.Field::Field("name", @ion.IonValue::string("example")),
+          @ion.Field::Field("max_id", @ion.IonValue::int(2)),
         ]),
       ]),
     ),
-  ]).with_annotations([@ion.SymbolToken::new("$ion_symbol_table")])
+  ]).with_annotations([@ion.SymbolToken::SymbolToken("$ion_symbol_table")])
   let value = @ion.IonValue::symbol_token(@ion.SymbolToken::from_sid(11)).with_annotations([
       @ion.SymbolToken::from_sid(10),
     ],

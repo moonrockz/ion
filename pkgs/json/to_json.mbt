@@ -27,7 +27,7 @@
 // object cannot carry the duplicates.
 
 ///|
-/// How many levels of containers `to_json` and `to_ion` convert with
+/// How many levels of containers `to_json` converts with
 /// recursion before switching to an explicit stack. Recursion is the
 /// fastest way to convert a value; below this depth the conversions switch to
 /// a stack of open containers, so the call stack stays small at any depth.

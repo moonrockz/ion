@@ -24,7 +24,8 @@ pub struct SymbolToken {
 
 ///|
 /// A symbol token with known text.
-pub fn SymbolToken::new(text : String) -> SymbolToken {
+#alias(new, deprecated="Use `SymbolToken(...)` instead")
+pub fn SymbolToken::SymbolToken(text : String) -> SymbolToken {
   { text: Some(text), sid: None, import_location: None, import_version: None, }
 }
 

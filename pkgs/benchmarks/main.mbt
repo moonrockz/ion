@@ -130,7 +130,7 @@ async fn operation(mode : String, fixture : Fixture) -> Int32 {
     "to-ion" => {
       let mut count = 0
       for json in fixture.json {
-        ignore(@json.to_ion(json))
+        ignore(@json.Ion(json))
         count += 1
       }
       count
@@ -228,7 +228,7 @@ fn deep_fixture_value(index : Int32) -> @ion.IonValue {
   for level = 99; level >= 0; level = level - 1 {
     value = match level % 3 {
       0 => @ion.IonValue::list([value])
-      1 => @ion.IonValue::from_fields([@ion.Field::new("name", value)])
+      1 => @ion.IonValue::from_fields([@ion.Field::Field("name", value)])
       _ => @ion.IonValue::sexp([value])
     }
   }
@@ -241,36 +241,36 @@ fn deep_fixture_value(index : Int32) -> @ion.IonValue {
 fn mixed_fixture_value(index : Int32) -> @ion.IonValue {
   let sid = @ion.SymbolToken::from_sid
   @ion.IonValue::from_fields([
-    @ion.Field::new("int", @ion.IonValue::int(index)),
-    @ion.Field::new(
+    @ion.Field::Field("int", @ion.IonValue::int(index)),
+    @ion.Field::Field(
       "big",
       @ion.IonValue::big_int(
         BigInt::from_int(index) * BigInt::from_int64(1_000_000_000_000L),
       ),
     ),
-    @ion.Field::new("float", @ion.IonValue::float(index.to_double() / 3.0)),
-    @ion.Field::new(
+    @ion.Field::Field("float", @ion.IonValue::float(index.to_double() / 3.0)),
+    @ion.Field::Field(
       "decimal",
-      @ion.IonValue::decimal(@ion.Decimal::new(BigInt::from_int(index), -2)),
+      @ion.IonValue::decimal(@ion.Decimal::Decimal(BigInt::from_int(index), -2)),
     ),
-    @ion.Field::new(
+    @ion.Field::Field(
       "timestamp",
       @ion.IonValue::timestamp(
-        @ion.Timestamp::new(year=2026, month=Some(10), day=Some(8)),
+        @ion.Timestamp::Timestamp(year=2026, month=Some(10), day=Some(8)),
       ),
     ),
     @ion.Field::from_token(sid(5), @ion.IonValue::symbol_token(sid(7))),
-    @ion.Field::new("string", @ion.IonValue::string("value \{index}")),
-    @ion.Field::new("clob", @ion.IonValue::clob(b"clob")),
-    @ion.Field::new("blob", @ion.IonValue::blob(b"\x00\x01\x02")),
-    @ion.Field::new(
+    @ion.Field::Field("string", @ion.IonValue::string("value \{index}")),
+    @ion.Field::Field("clob", @ion.IonValue::clob(b"clob")),
+    @ion.Field::Field("blob", @ion.IonValue::blob(b"\x00\x01\x02")),
+    @ion.Field::Field(
       "nulls",
       @ion.IonValue::list([
         @ion.IonValue::untyped_null(),
         @ion.IonValue::typed_null(Struct),
       ]),
     ),
-    @ion.Field::new(
+    @ion.Field::Field(
       "sexp",
       @ion.IonValue::sexp([
         @ion.IonValue::symbol("+"),
@@ -278,10 +278,10 @@ fn mixed_fixture_value(index : Int32) -> @ion.IonValue {
         @ion.IonValue::symbol("x"),
       ]),
     ),
-    @ion.Field::new(
+    @ion.Field::Field(
       "annotated",
       @ion.IonValue::list([@ion.IonValue::bool(true)]).with_annotations([
-        @ion.SymbolToken::new("tag"),
+        @ion.SymbolToken::SymbolToken("tag"),
         sid(4),
       ]),
     ),

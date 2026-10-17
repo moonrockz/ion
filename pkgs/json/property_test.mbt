@@ -70,7 +70,7 @@ test "every Ion integer converts to its exact JSON spelling" {
 test "JSON survives a trip through Ion" {
   @quickcheck.check((seed : (Int32, Int32, String, Bool)) => {
     let original = sample_json(seed)
-    let back = @json.to_json(@json.to_ion(original)) catch { _ => return false }
+    let back = @json.to_json(@json.Ion(original)) catch { _ => return false }
     json_equal(back, original)
   })
 }
@@ -112,7 +112,7 @@ test "a clob's bytes become the matching Latin-1 code points" {
 ///|
 test "a decimal renders as a valid JSON number" {
   @quickcheck.check((pair : (BigInt, Int32)) => {
-    let decimal = @core.Decimal::new(pair.0, pair.1 % 50)
+    let decimal = @core.Decimal::Decimal(pair.0, pair.1 % 50)
     let json = @json.to_json(@core.IonValue::decimal(decimal)) catch {
       _ => return false
     }
@@ -134,7 +134,7 @@ test "generated JSON survives a trip through Ion" {
       count=300,
       size=8,
     ) {
-    let back = @json.to_json(@json.to_ion(json))
+    let back = @json.to_json(@json.Ion(json))
     if !json_equal(back, json) {
       fail("JSON \{json.stringify()} came back as \{back.stringify()}")
     }
