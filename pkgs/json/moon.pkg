@@ -1,7 +1,7 @@
 // JSON interoperability: converting between Ion values and core `Json`.
 //
-// The two directions are deliberately asymmetric; see `to_ion.mbt` and
-// `to_json.mbt` for the rules each one follows.
+// The two directions are deliberately asymmetric; see the `Ion` constructor
+// and `to_json.mbt` for the rules each one follows.
 
 import {
   "moonrockz/ion/internal/work",

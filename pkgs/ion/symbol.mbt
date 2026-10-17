@@ -24,7 +24,9 @@ pub struct SymbolToken {
 
 ///|
 /// A symbol token with known text.
-pub fn SymbolToken::new(text : String) -> SymbolToken {
+#as_free_fn(symbol)
+#alias(new, deprecated="Use `@ion.symbol(...)` instead")
+pub fn SymbolToken::SymbolToken(text : String) -> SymbolToken {
   { text: Some(text), sid: None, import_location: None, import_version: None, }
 }
 

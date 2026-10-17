@@ -400,7 +400,7 @@ fn Parser::parse_annotations(
       Some(
         match self.symbol_id(word) {
           Some(token) => token
-          None => @ion.SymbolToken::new(word)
+          None => @ion.SymbolToken::SymbolToken(word)
         },
       )
     } else {
@@ -976,7 +976,7 @@ fn Parser::parse_quoted_symbol(
       self.copy_code_point(sb)
     }
   }
-  @ion.SymbolToken::new(sb.to_string())
+  @ion.SymbolToken::SymbolToken(sb.to_string())
 }
 
 ///|
@@ -1319,9 +1319,9 @@ fn Parser::parse_field_name(
   }
   let c = self.input[self.pos]
   if c == '"' {
-    @ion.SymbolToken::new(self.parse_double_quoted_string())
+    @ion.SymbolToken::SymbolToken(self.parse_double_quoted_string())
   } else if self.at_triple_quote() {
-    @ion.SymbolToken::new(self.parse_long_string())
+    @ion.SymbolToken::SymbolToken(self.parse_long_string())
   } else if c == '\'' {
     self.parse_quoted_symbol()
   } else if is_identifier_start(c) {
@@ -1331,7 +1331,7 @@ fn Parser::parse_field_name(
     }
     match self.symbol_id(word) {
       Some(token) => token
-      None => @ion.SymbolToken::new(word)
+      None => @ion.SymbolToken::SymbolToken(word)
     }
   } else {
     raise @ion.IonError::Syntax("invalid struct field name")
@@ -1412,7 +1412,7 @@ fn resolve_symbol_id(word : String) -> @ion.SymbolToken? {
 /// table to resolve later.
 fn system_symbol_token(sid : Int32) -> @ion.SymbolToken {
   match @ion.system_symbol_text(sid) {
-    Some(text) => @ion.SymbolToken::new(text)
+    Some(text) => @ion.SymbolToken::SymbolToken(text)
     None => @ion.SymbolToken::from_sid(sid)
   }
 }

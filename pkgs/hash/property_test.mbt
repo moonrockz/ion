@@ -32,7 +32,7 @@ test "an integer keeps its hash across a text round-trip" {
 test "struct hashing ignores field order" {
   @quickcheck.check((pairs : Array[(String, BigInt)]) => {
     let fields = pairs.map(pair => {
-      @ion.Field::new(pair.0, @ion.IonValue::big_int(pair.1))
+      @ion.Field::Field(pair.0, @ion.IonValue::big_int(pair.1))
     })
     @hash.ion_hash_hex(@ion.IonValue::from_fields(fields)) ==
     @hash.ion_hash_hex(@ion.IonValue::from_fields(fields.rev()))

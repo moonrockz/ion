@@ -90,8 +90,8 @@ async fn IncrementalWriter::output(
     let locals = self.symbols.locals()
     let count = self.symbols.max_id() - self.emitted_max
     let table = @ion.IonValue::from_fields([
-      @ion.Field::new("imports", @ion.IonValue::symbol("$ion_symbol_table")),
-      @ion.Field::new(
+      @ion.Field::Field("imports", @ion.IonValue::symbol("$ion_symbol_table")),
+      @ion.Field::Field(
         "symbols",
         @ion.IonValue::list(
           locals[locals.length() - count:].map(text => {
@@ -102,7 +102,7 @@ async fn IncrementalWriter::output(
           }),
         ),
       ),
-    ]).with_annotation(@ion.SymbolToken::new("$ion_symbol_table"))
+    ]).with_annotation(@ion.SymbolToken::SymbolToken("$ion_symbol_table"))
     out.append(@binary.encode_value(table, self.symbols).to_array())
   }
   out.append(bytes.to_array())

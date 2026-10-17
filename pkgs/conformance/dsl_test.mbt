@@ -408,7 +408,7 @@ fn write_toplevel(values : Array[@ion.IonValue]) -> String? raise {
       match token.text() {
         Some(text) if text.has_prefix("#$") =>
           match reserved_sid(text) {
-            Some(sid) => @ion.SymbolToken::new("$__sid\{sid}__")
+            Some(sid) => @ion.SymbolToken::SymbolToken("$__sid\{sid}__")
             None => {
               unsupported = true
               token
@@ -613,7 +613,7 @@ fn produced_value(value : @ion.IonValue) -> @ion.IonValue raise {
 /// `(text codepoint...)`.
 fn model_token(value : @ion.IonValue) -> @ion.SymbolToken raise {
   match value.kind() {
-    String(text) => @ion.SymbolToken::new(text)
+    String(text) => @ion.SymbolToken::SymbolToken(text)
     // A symbol ID: its text when it is a system symbol, unknown otherwise.
     Int(sid) => @ion.SymbolTable::system().token(sid.to_int())
     Sexp([first, second]) | List([first, second]) if first.kind()
@@ -626,7 +626,8 @@ fn model_token(value : @ion.IonValue) -> @ion.SymbolToken raise {
     }
     _ =>
       match keyword(value) {
-        Some("text") => @ion.SymbolToken::new(codepoints(arguments(value)))
+        Some("text") =>
+          @ion.SymbolToken::SymbolToken(codepoints(arguments(value)))
         // A symbol with unknown text at a place in a shared table, as
         // `(absent name offset)` or `(name offset)`.
         Some(keyword) => {
@@ -710,7 +711,7 @@ fn model_value(value : @ion.IonValue) -> @ion.IonValue raise {
           )
         Int(coefficient) =>
           @ion.IonValue::decimal(
-            @ion.Decimal::new(coefficient, int_of(args[1])),
+            @ion.Decimal::Decimal(coefficient, int_of(args[1])),
           )
         _ => fail("invalid decimal model: \{show(args)}")
       }

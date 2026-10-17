@@ -115,7 +115,7 @@ pub fn SymbolTable::text(self : SymbolTable, sid : Int32) -> String? {
 /// imported table name and slot when applicable.
 pub fn SymbolTable::token(self : SymbolTable, sid : Int32) -> SymbolToken {
   match self.text(sid) {
-    Some(text) => SymbolToken::new(text)
+    Some(text) => SymbolToken::SymbolToken(text)
     None => {
       let mut index = sid - 10
       if index >= 0 {
@@ -175,12 +175,12 @@ pub fn SymbolTable::to_local_symbol_table(self : SymbolTable) -> IonValue? {
   if !self.imports.is_empty() {
     let imports = self.imports.map(import_ => {
       IonValue::from_fields([
-        Field::new("name", IonValue::string(import_.name)),
-        Field::new("version", IonValue::int(import_.version)),
-        Field::new("max_id", IonValue::int(import_.count)),
+        Field::Field("name", IonValue::string(import_.name)),
+        Field::Field("version", IonValue::int(import_.version)),
+        Field::Field("max_id", IonValue::int(import_.count)),
       ])
     })
-    fields.push(Field::new("imports", IonValue::list(imports)))
+    fields.push(Field::Field("imports", IonValue::list(imports)))
   }
   if self.reserved > 0 || !self.locals.is_empty() {
     let symbols = self
@@ -191,11 +191,11 @@ pub fn SymbolTable::to_local_symbol_table(self : SymbolTable) -> IonValue? {
           None => IonValue::untyped_null()
         }
       })
-    fields.push(Field::new("symbols", IonValue::list(symbols)))
+    fields.push(Field::Field("symbols", IonValue::list(symbols)))
   }
   Some(
     IonValue::from_fields(fields).with_annotations([
-      SymbolToken::new("$ion_symbol_table"),
+      SymbolToken::SymbolToken("$ion_symbol_table"),
     ]),
   )
 }

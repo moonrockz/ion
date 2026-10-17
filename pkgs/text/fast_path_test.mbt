@@ -11,13 +11,13 @@ fn layered(levels : Int32) -> @ion.IonValue {
   let mut value = @ion.IonValue::symbol("leaf")
   for level = levels - 1; level >= 0; level = level - 1 {
     value = @ion.IonValue::from_fields([
-      @ion.Field::new(
+      @ion.Field::Field(
         "a",
         @ion.IonValue::list([@ion.IonValue::int(level), value]).with_annotation(
-          @ion.SymbolToken::new("tag"),
+          @ion.SymbolToken::SymbolToken("tag"),
         ),
       ),
-      @ion.Field::new("b", @ion.IonValue::string("s")),
+      @ion.Field::Field("b", @ion.IonValue::string("s")),
     ])
   }
   value
@@ -190,7 +190,9 @@ impl @text.IonHandler for ScalarAnnotations with fn on_scalar(self, value) {
 ///|
 test "a scalar event carries no annotations, on both sides of the shallow recursion threshold" {
   for depth in [0, 127, 128, 129, 300] {
-    let leaf = @ion.IonValue::int(1).with_annotation(@ion.SymbolToken::new("a"))
+    let leaf = @ion.IonValue::int(1).with_annotation(
+      @ion.SymbolToken::SymbolToken("a"),
+    )
     let value = @testkit.deep_value(List, depth, leaf~)
     let handler : ScalarAnnotations = { counts: [], }
     @text.dispatch_value(value, handler)

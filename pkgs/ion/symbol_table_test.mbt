@@ -5,7 +5,7 @@
 /// A local symbol table value: `$ion_symbol_table::{...}` with `fields`.
 fn local_table(fields : Array[@ion.Field]) -> @ion.IonValue {
   @ion.IonValue::from_fields(fields).with_annotations([
-    @ion.SymbolToken::new("$ion_symbol_table"),
+    @ion.SymbolToken::SymbolToken("$ion_symbol_table"),
   ])
 }
 
@@ -35,7 +35,7 @@ test "the system table resolves the system symbols only" {
 ///|
 test "a local symbol table declares symbols from ID 10" {
   let table = @ion.SymbolTable::system()
-  let value = local_table([@ion.Field::new("symbols", texts(["a", "b"]))])
+  let value = local_table([@ion.Field::Field("symbols", texts(["a", "b"]))])
   assert_true(table.apply_local_symbol_table(value))
   assert_eq(table.text(10), Some("a"))
   assert_eq(table.text(11), Some("b"))
@@ -47,12 +47,12 @@ test "a new local symbol table replaces the local symbols" {
   let table = @ion.SymbolTable::system()
   ignore(
     table.apply_local_symbol_table(
-      local_table([@ion.Field::new("symbols", texts(["a"]))]),
+      local_table([@ion.Field::Field("symbols", texts(["a"]))]),
     ),
   )
   ignore(
     table.apply_local_symbol_table(
-      local_table([@ion.Field::new("symbols", texts(["b"]))]),
+      local_table([@ion.Field::Field("symbols", texts(["b"]))]),
     ),
   )
   assert_eq(table.text(10), Some("b"))
@@ -64,12 +64,12 @@ test "importing the current table appends to it" {
   let table = @ion.SymbolTable::system()
   ignore(
     table.apply_local_symbol_table(
-      local_table([@ion.Field::new("symbols", texts(["a"]))]),
+      local_table([@ion.Field::Field("symbols", texts(["a"]))]),
     ),
   )
   let append = local_table([
-    @ion.Field::new("imports", @ion.IonValue::symbol("$ion_symbol_table")),
-    @ion.Field::new("symbols", texts(["b"])),
+    @ion.Field::Field("imports", @ion.IonValue::symbol("$ion_symbol_table")),
+    @ion.Field::Field("symbols", texts(["b"])),
   ])
   assert_true(table.apply_local_symbol_table(append))
   assert_eq(table.text(10), Some("a"))
@@ -87,7 +87,7 @@ test "a slot that is not a string has unknown text" {
   ])
   ignore(
     table.apply_local_symbol_table(
-      local_table([@ion.Field::new("symbols", symbols)]),
+      local_table([@ion.Field::Field("symbols", symbols)]),
     ),
   )
   assert_eq(table.text(11), None)
@@ -100,7 +100,7 @@ test "a slot that is not a string has unknown text" {
 test "a symbols field that is not a list declares nothing" {
   let table = @ion.SymbolTable::system()
   let value = local_table([
-    @ion.Field::new("symbols", @ion.IonValue::string("a")),
+    @ion.Field::Field("symbols", @ion.IonValue::string("a")),
   ])
   assert_true(table.apply_local_symbol_table(value))
   assert_eq(table.max_id(), 9)
@@ -110,14 +110,14 @@ test "a symbols field that is not a list declares nothing" {
 test "only a struct whose first annotation is $ion_symbol_table is a table" {
   let table = @ion.SymbolTable::system()
   let second = @ion.IonValue::from_fields([
-    @ion.Field::new("symbols", texts(["a"])),
+    @ion.Field::Field("symbols", texts(["a"])),
   ]).with_annotations([
-    @ion.SymbolToken::new("x"),
-    @ion.SymbolToken::new("$ion_symbol_table"),
+    @ion.SymbolToken::SymbolToken("x"),
+    @ion.SymbolToken::SymbolToken("$ion_symbol_table"),
   ])
   assert_false(table.apply_local_symbol_table(second))
   let list = @ion.IonValue::list([]).with_annotations([
-    @ion.SymbolToken::new("$ion_symbol_table"),
+    @ion.SymbolToken::SymbolToken("$ion_symbol_table"),
   ])
   assert_false(table.apply_local_symbol_table(list))
   assert_false(table.apply_local_symbol_table(@ion.IonValue::symbol("a")))
@@ -128,11 +128,11 @@ test "only a struct whose first annotation is $ion_symbol_table is a table" {
 /// An import of the shared table `name`, with `max_id` when given.
 fn import_of(name : String, max_id? : Int32) -> @ion.IonValue {
   let fields = [
-    @ion.Field::new("name", @ion.IonValue::string(name)),
-    @ion.Field::new("version", @ion.IonValue::int(1)),
+    @ion.Field::Field("name", @ion.IonValue::string(name)),
+    @ion.Field::Field("version", @ion.IonValue::int(1)),
   ]
   if max_id is Some(max_id) {
-    fields.push(@ion.Field::new("max_id", @ion.IonValue::int(max_id)))
+    fields.push(@ion.Field::Field("max_id", @ion.IonValue::int(max_id)))
   }
   @ion.IonValue::from_fields(fields)
 }
@@ -141,7 +141,7 @@ fn import_of(name : String, max_id? : Int32) -> @ion.IonValue {
 test "an import reserves max_id symbol IDs with unknown text" {
   let table = @ion.SymbolTable::system()
   let value = local_table([
-    @ion.Field::new(
+    @ion.Field::Field(
       "imports",
       @ion.IonValue::list([
         import_of("one", max_id=2),
@@ -149,7 +149,7 @@ test "an import reserves max_id symbol IDs with unknown text" {
         import_of("big", max_id=268435444),
       ]),
     ),
-    @ion.Field::new("symbols", texts(["a"])),
+    @ion.Field::Field("symbols", texts(["a"])),
   ])
   assert_true(table.apply_local_symbol_table(value))
   assert_eq(table.text(10), None)
@@ -163,7 +163,7 @@ test "an import reserves max_id symbol IDs with unknown text" {
 test "an import without max_id is an error" {
   let table = @ion.SymbolTable::system()
   let value = local_table([
-    @ion.Field::new("imports", @ion.IonValue::list([import_of("shared")])),
+    @ion.Field::Field("imports", @ion.IonValue::list([import_of("shared")])),
   ])
   let mut failed = false
   ignore(
@@ -181,8 +181,8 @@ test "an import without max_id is an error" {
 test "a table with two symbols fields is malformed" {
   let table = @ion.SymbolTable::system()
   let value = local_table([
-    @ion.Field::new("symbols", texts(["a"])),
-    @ion.Field::new("symbols", texts(["b"])),
+    @ion.Field::Field("symbols", texts(["a"])),
+    @ion.Field::Field("symbols", texts(["b"])),
   ])
   let mut failed = false
   ignore(
@@ -202,7 +202,7 @@ test "resolving gives text to every symbol ID the table defines, and rejects an 
   ignore(
     table.apply_local_symbol_table(
       local_table([
-        @ion.Field::new(
+        @ion.Field::Field(
           "symbols",
           @ion.IonValue::list([
             @ion.IonValue::string("a"),
@@ -215,17 +215,17 @@ test "resolving gives text to every symbol ID the table defines, and rejects an 
   )
   let value = @ion.IonValue::from_fields([
     @ion.Field::from_token(@ion.SymbolToken::from_sid(10), sid(11)),
-    @ion.Field::new("list", @ion.IonValue::list([sid(10), sid(12), sid(0)])),
-    @ion.Field::new("sexp", @ion.IonValue::sexp([sid(11)])),
+    @ion.Field::Field("list", @ion.IonValue::list([sid(10), sid(12), sid(0)])),
+    @ion.Field::Field("sexp", @ion.IonValue::sexp([sid(11)])),
   ]).with_annotations([@ion.SymbolToken::from_sid(11)])
   let expected = @ion.IonValue::from_fields([
-    @ion.Field::new("a", @ion.IonValue::symbol("b")),
-    @ion.Field::new(
+    @ion.Field::Field("a", @ion.IonValue::symbol("b")),
+    @ion.Field::Field(
       "list",
       @ion.IonValue::list([@ion.IonValue::symbol("a"), sid(12), sid(0)]),
     ),
-    @ion.Field::new("sexp", @ion.IonValue::sexp([@ion.IonValue::symbol("b")])),
-  ]).with_annotations([@ion.SymbolToken::new("b")])
+    @ion.Field::Field("sexp", @ion.IonValue::sexp([@ion.IonValue::symbol("b")])),
+  ]).with_annotations([@ion.SymbolToken::SymbolToken("b")])
   assert_true(table.resolve(value).equals(expected))
   let mut failed = false
   ignore(
@@ -244,7 +244,7 @@ test "a version marker resets the table to the system symbols" {
   let table = @ion.SymbolTable::system()
   ignore(
     table.apply_local_symbol_table(
-      local_table([@ion.Field::new("symbols", texts(["a"]))]),
+      local_table([@ion.Field::Field("symbols", texts(["a"]))]),
     ),
   )
   table.reset()
@@ -294,18 +294,18 @@ test "the highest symbol ID counts only symbols without text" {
 test "a repeated field in an import is malformed" {
   for field in ["name", "version", "max_id"] {
     let fields = [
-      @ion.Field::new("name", @ion.IonValue::string("shared")),
-      @ion.Field::new("version", @ion.IonValue::int(1)),
-      @ion.Field::new("max_id", @ion.IonValue::int(1)),
+      @ion.Field::Field("name", @ion.IonValue::string("shared")),
+      @ion.Field::Field("version", @ion.IonValue::int(1)),
+      @ion.Field::Field("max_id", @ion.IonValue::int(1)),
     ]
     fields.push(
       match field {
-        "name" => @ion.Field::new("name", @ion.IonValue::string("shared"))
-        _ => @ion.Field::new(field, @ion.IonValue::int(1))
+        "name" => @ion.Field::Field("name", @ion.IonValue::string("shared"))
+        _ => @ion.Field::Field(field, @ion.IonValue::int(1))
       },
     )
     let value = local_table([
-      @ion.Field::new(
+      @ion.Field::Field(
         "imports",
         @ion.IonValue::list([@ion.IonValue::from_fields(fields)]),
       ),
@@ -332,10 +332,12 @@ fn shared(
   symbols : Array[@ion.IonValue],
 ) -> @ion.IonValue {
   @ion.IonValue::from_fields([
-    @ion.Field::new("name", @ion.IonValue::string(name)),
-    @ion.Field::new("version", @ion.IonValue::int(version)),
-    @ion.Field::new("symbols", @ion.IonValue::list(symbols)),
-  ]).with_annotations([@ion.SymbolToken::new("$ion_shared_symbol_table")])
+    @ion.Field::Field("name", @ion.IonValue::string(name)),
+    @ion.Field::Field("version", @ion.IonValue::int(version)),
+    @ion.Field::Field("symbols", @ion.IonValue::list(symbols)),
+  ]).with_annotations([
+    @ion.SymbolToken::SymbolToken("$ion_shared_symbol_table"),
+  ])
 }
 
 ///|
@@ -358,7 +360,7 @@ fn importing(imports : Array[@ion.IonValue]) -> @ion.SymbolTable raise {
   let table = @ion.SymbolTable::system(catalog=test_catalog())
   ignore(
     table.apply_local_symbol_table(
-      local_table([@ion.Field::new("imports", @ion.IonValue::list(imports))]),
+      local_table([@ion.Field::Field("imports", @ion.IonValue::list(imports))]),
     ),
   )
   table
@@ -371,12 +373,12 @@ fn import_entry(
   version? : Int32,
   max_id? : Int32,
 ) -> @ion.IonValue {
-  let fields = [@ion.Field::new("name", @ion.IonValue::string(name))]
+  let fields = [@ion.Field::Field("name", @ion.IonValue::string(name))]
   if version is Some(version) {
-    fields.push(@ion.Field::new("version", @ion.IonValue::int(version)))
+    fields.push(@ion.Field::Field("version", @ion.IonValue::int(version)))
   }
   if max_id is Some(max_id) {
-    fields.push(@ion.Field::new("max_id", @ion.IonValue::int(max_id)))
+    fields.push(@ion.Field::Field("max_id", @ion.IonValue::int(max_id)))
   }
   @ion.IonValue::from_fields(fields)
 }

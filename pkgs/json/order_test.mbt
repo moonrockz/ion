@@ -18,7 +18,7 @@ test "to_json names the first symbol with no text in document order" {
       sid(20),
       @core.IonValue::list([@core.IonValue::symbol_token(sid(30))]),
     ),
-    @core.Field::new("later", @core.IonValue::symbol_token(sid(40))),
+    @core.Field::Field("later", @core.IonValue::symbol_token(sid(40))),
   ])
   inspect(
     json_error(value),
@@ -54,7 +54,7 @@ test "to_json converts every level of a value nested past any fixed depth" {
   for depth in [1, 63, 64, 65, 128, 129, 300] {
     let mut value = @core.IonValue::int(7)
     for _ in 0..<depth {
-      value = @core.IonValue::from_fields([@core.Field::new("a", value)])
+      value = @core.IonValue::from_fields([@core.Field::Field("a", value)])
       value = @core.IonValue::list([value])
     }
     let mut expected = "7"
@@ -66,7 +66,7 @@ test "to_json converts every level of a value nested past any fixed depth" {
 }
 
 ///|
-test "to_ion keeps field order and every level past any fixed depth" {
+test "Ion constructor keeps field order and every level past any fixed depth" {
   for depth in [1, 63, 64, 65, 128, 129, 300] {
     let mut json = Json::number(7.0)
     for _ in 0..<depth {
@@ -76,7 +76,7 @@ test "to_ion keeps field order and every level past any fixed depth" {
     for _ in 0..<depth {
       expected = "[{b: null, a: " + expected + "}]"
     }
-    assert_eq(@text.write_ion(@json.to_ion(json)), expected)
+    assert_eq(@text.write_ion(@json.Ion(json)), expected)
   }
 }
 

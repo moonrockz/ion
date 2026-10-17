@@ -4,9 +4,10 @@ The core package of `moonrockz/ion`: the thirteen Ion types and the values
 that hold them, with no dependency on either encoding. The text and binary
 codecs, Ion Hash, JSON conversion, and Ion Schema all build on it.
 
-- `IonValue` is the one node type: an `IonValueKind` plus an ordered list of
-  annotations. Build values with the constructors (`IonValue::int`,
-  `IonValue::list`, `IonValue::from_fields`, ...), read them with `kind()`.
+- `Ion` is the node type: an `IonValueKind` plus an ordered list of
+  annotations. `IonValue` remains an alias for the same type. Build values
+  with `Ion(value)` and read them with `kind()`. Explicit helpers such as
+  `Ion::typed_null`, `Ion::sexp` and `Ion::from_fields` select Ion-specific forms.
 - `Decimal` and integers are exact (`BigInt` coefficients), so precision and
   negative zero survive every round trip.
 - `Timestamp` keeps the components it was given; its precision follows from
@@ -28,19 +29,78 @@ codecs, Ion Hash, JSON conversion, and Ion Schema all build on it.
 Values are immutable. Equivalence follows the Ion data model: annotations
 count, struct fields form an unordered multiset, and all NaNs are equivalent.
 
+`Ion(value)` uses the open `ToIon` trait. Integers retain their full precision,
+floating-point values become Ion floats, and strings become Ion strings.
+Arrays become lists, string-keyed maps become structs in iteration order,
+bytes become blobs, and unit becomes untyped null. Decimals, timestamps and
+symbol tokens keep their Ion types. Constructing from an existing Ion value
+preserves its annotations. Core `Json` values follow the JSON-to-Ion number
+mapping documented in the JSON package.
+
+The short helpers `decimal`, `timestamp` and `symbol` construct `Decimal`,
+`Timestamp` and `SymbolToken` payloads. Wrap a payload with `Ion(...)` to
+construct an Ion value. The `field` helper constructs a `Field` from a name
+and an Ion value.
+
+```mbt check
+///|
+test "construct Ion values from MoonBit values" {
+  let counts : @ion.IonValue = @ion.Ion(Map([("counts", [1, 2, 3])]))
+  inspect(@text.write_ion(counts), content="{counts: [1, 2, 3]}")
+  let json = @ion.Ion(Json({ "ready": true }))
+  inspect(@text.write_ion(json), content="{ready: true}")
+  let decimal = @ion.decimal(123N, -2)
+  inspect(@text.write_ion(@ion.Ion(decimal)), content="1.23")
+  let timestamp = @ion.timestamp(year=2024)
+  inspect(@text.write_ion(@ion.Ion(timestamp)), content="2024T")
+  let field = @ion.field("status", @ion.Ion(@ion.symbol("ready")))
+  inspect(
+    @text.write_ion(@ion.Ion::from_fields([field])),
+    content="{status: ready}",
+  )
+}
+```
+
+Implement `ToIon` for application types. Callers use the same constructor:
+
+```mbt check
+///|
+struct ExampleCount {
+  count : Int32
+}
+
+///|
+impl @ion.ToIon for ExampleCount with fn to_ion(self) -> @ion.Ion {
+  @ion.Ion(Map([("count", self.count)]))
+}
+
+///|
+test "construct Ion from an application type" {
+  inspect(
+    @text.write_ion(@ion.Ion(ExampleCount::{ count: 3, })),
+    content="{count: 3}",
+  )
+}
+```
+
+The old `IonValue::new`, `Field::new`, `Decimal::new`, `Timestamp::new` and
+`SymbolToken::new` calls remain available with deprecation warnings. Use
+`Ion(kind)`, `field(...)`, `decimal(...)`, `timestamp(...)` and `symbol(...)`.
+The short helpers alias the named constructors, which also remain available.
+
 ```mbt check
 ///|
 test "build a value and compare it" {
   let book = @ion.IonValue::from_fields([
-    @ion.Field::new("title", @ion.IonValue::string("Ion")),
-    @ion.Field::new(
+    @ion.field("title", @ion.IonValue::string("Ion")),
+    @ion.field(
       "tags",
       @ion.IonValue::list([
         @ion.IonValue::symbol("data"),
         @ion.IonValue::symbol("format"),
       ]),
     ),
-  ]).with_annotation(@ion.SymbolToken::new("book"))
+  ]).with_annotation(@ion.symbol("book"))
   inspect(book.ion_type().to_text(), content="struct")
   debug_inspect(
     book.annotations().map(token => token.text()),
@@ -50,15 +110,15 @@ test "build a value and compare it" {
   )
   // Field order does not matter to equivalence.
   let reordered = @ion.IonValue::from_fields([
-    @ion.Field::new(
+    @ion.field(
       "tags",
       @ion.IonValue::list([
         @ion.IonValue::symbol("data"),
         @ion.IonValue::symbol("format"),
       ]),
     ),
-    @ion.Field::new("title", @ion.IonValue::string("Ion")),
-  ]).with_annotation(@ion.SymbolToken::new("book"))
+    @ion.field("title", @ion.IonValue::string("Ion")),
+  ]).with_annotation(@ion.symbol("book"))
   assert_true(book.equals(reordered))
   // Annotations do.
   assert_false(book.equals(reordered.with_annotations([])))
@@ -132,7 +192,7 @@ test "timestamps" {
     content="Some(Unknown)",
   )
   // 2001 was not a leap year.
-  let invalid = @ion.Timestamp::new(year=2001, month=Some(2), day=Some(29))
+  let invalid = @ion.timestamp(year=2001, month=Some(2), day=Some(29))
   let message = try invalid.validate() catch {
     error => error.message()
   } noraise {
@@ -179,7 +239,7 @@ test "a symbol table resolves symbol IDs" {
   let table = @ion.SymbolTable::system()
   debug_inspect(table.text(4), content="Some(\"name\")")
   let declaration = @text.read_ion("{ symbols: [\"red\", \"green\"] }").with_annotation(
-    @ion.SymbolToken::new("$ion_symbol_table"),
+    @ion.symbol("$ion_symbol_table"),
   )
   assert_true(table.apply_local_symbol_table(declaration))
   inspect(table.max_id(), content="11")

@@ -168,11 +168,11 @@ test "a symbol ID beyond the symbol table is rejected" {
 test "a symbol ID with unknown text keeps only its ID" {
   // `$ion_symbol_table::{symbols: [null]}` and then the symbol with ID 10.
   let table = @ion.IonValue::from_fields([
-    @ion.Field::new(
+    @ion.Field::Field(
       "symbols",
       @ion.IonValue::list([@ion.IonValue::untyped_null()]),
     ),
-  ]).with_annotations([@ion.SymbolToken::new("$ion_symbol_table")])
+  ]).with_annotations([@ion.SymbolToken::SymbolToken("$ion_symbol_table")])
   let values = @binary.read_binary(
     @binary.write_binary([
       table,
@@ -248,7 +248,7 @@ test "NOP padding inside a struct makes the field disappear" {
   assert_true(
     values[0].equals(
       @ion.IonValue::from_fields([
-        @ion.Field::new("name", @ion.IonValue::bool(true)),
+        @ion.Field::Field("name", @ion.IonValue::bool(true)),
       ]),
     ),
   )
@@ -260,7 +260,7 @@ test "NOP padding inside a struct makes the field disappear" {
   assert_true(
     values[0].equals(
       @ion.IonValue::from_fields([
-        @ion.Field::new("name", @ion.IonValue::string("a")),
+        @ion.Field::Field("name", @ion.IonValue::string("a")),
       ]),
     ),
   )
@@ -347,12 +347,12 @@ fn table_value(
   symbols : Array[@ion.IonValue],
   imports? : @ion.IonValue,
 ) -> @ion.IonValue {
-  let fields = [@ion.Field::new("symbols", @ion.IonValue::list(symbols))]
+  let fields = [@ion.Field::Field("symbols", @ion.IonValue::list(symbols))]
   if imports is Some(imports) {
-    fields.insert(0, @ion.Field::new("imports", imports))
+    fields.insert(0, @ion.Field::Field("imports", imports))
   }
   @ion.IonValue::from_fields(fields).with_annotations([
-    @ion.SymbolToken::new("$ion_symbol_table"),
+    @ion.SymbolToken::SymbolToken("$ion_symbol_table"),
   ])
 }
 
@@ -391,13 +391,13 @@ test "importing $ion_symbol_table appends to the local symbols" {
 ///|
 test "a struct is a symbol table only when its first annotation says so" {
   let struct_ = @ion.IonValue::from_fields([
-    @ion.Field::new(
+    @ion.Field::Field(
       "symbols",
       @ion.IonValue::list([@ion.IonValue::string("a")]),
     ),
   ]).with_annotations([
-    @ion.SymbolToken::new("x"),
-    @ion.SymbolToken::new("$ion_symbol_table"),
+    @ion.SymbolToken::SymbolToken("x"),
+    @ion.SymbolToken::SymbolToken("$ion_symbol_table"),
   ])
   // The writer reserves symbol 10, whose text it does not know. Had the
   // struct been applied as a table, symbol 10 would read back as `a`.
@@ -460,26 +460,28 @@ test "symbols with unknown text keep their IDs apart from the writer's own" {
 test "binary imports resolve against a catalog" {
   let catalog = @ion.Catalog::load([
     @ion.IonValue::from_fields([
-      @ion.Field::new("name", @ion.IonValue::string("colors")),
-      @ion.Field::new(
+      @ion.Field::Field("name", @ion.IonValue::string("colors")),
+      @ion.Field::Field(
         "symbols",
         @ion.IonValue::list([
           @ion.IonValue::string("red"),
           @ion.IonValue::string("green"),
         ]),
       ),
-    ]).with_annotations([@ion.SymbolToken::new("$ion_shared_symbol_table")]),
+    ]).with_annotations([
+      @ion.SymbolToken::SymbolToken("$ion_shared_symbol_table"),
+    ]),
   ])
   let table = @ion.IonValue::from_fields([
-    @ion.Field::new(
+    @ion.Field::Field(
       "imports",
       @ion.IonValue::list([
         @ion.IonValue::from_fields([
-          @ion.Field::new("name", @ion.IonValue::string("colors")),
+          @ion.Field::Field("name", @ion.IonValue::string("colors")),
         ]),
       ]),
     ),
-  ]).with_annotations([@ion.SymbolToken::new("$ion_symbol_table")])
+  ]).with_annotations([@ion.SymbolToken::SymbolToken("$ion_symbol_table")])
   // The table imports `colors` (IDs 10 and 11), then symbol 11.
   let bytes = @binary.write_binary([table, sid_symbol(11)])
   assert_eq(read_back_text_with(bytes, catalog), "green")

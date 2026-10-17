@@ -91,12 +91,12 @@ pub async fn BinaryWriter::write(
   }
   if !added.is_empty() {
     let table = @ion.IonValue::from_fields([
-      @ion.Field::new("imports", @ion.IonValue::symbol("$ion_symbol_table")),
-      @ion.Field::new(
+      @ion.Field::Field("imports", @ion.IonValue::symbol("$ion_symbol_table")),
+      @ion.Field::Field(
         "symbols",
         @ion.IonValue::list(added.map(@ion.IonValue::string)),
       ),
-    ]).with_annotations([@ion.SymbolToken::new("$ion_symbol_table")])
+    ]).with_annotations([@ion.SymbolToken::SymbolToken("$ion_symbol_table")])
     out.append(@binary.encode_value(table, self.symbols).to_array())
   }
   out.append(@binary.encode_value(value, self.symbols).to_array())

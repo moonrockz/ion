@@ -5,10 +5,10 @@ test "binary reading accepts deep values with optional scoped fuel" {
     value = match level % 4 {
       0 => @ion.IonValue::list([value])
       1 => @ion.IonValue::sexp([value])
-      2 => @ion.IonValue::from_fields([@ion.Field::new("a", value)])
+      2 => @ion.IonValue::from_fields([@ion.Field::Field("a", value)])
       _ =>
         @ion.IonValue::list([value]).with_annotations([
-          @ion.SymbolToken::new("tag"),
+          @ion.SymbolToken::SymbolToken("tag"),
         ])
     }
   }

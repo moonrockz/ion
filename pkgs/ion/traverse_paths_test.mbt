@@ -4,24 +4,24 @@
 fn traversal_values() -> Array[@ion.IonValue] {
   [
     @ion.IonValue::from_fields([
-      @ion.Field::new(
+      @ion.Field::Field(
         "first",
         @ion.IonValue::list([
           @ion.IonValue::sexp([
             @ion.IonValue::int(1).with_annotation(
-              @ion.SymbolToken::new("scalar_a"),
+              @ion.SymbolToken::SymbolToken("scalar_a"),
             ),
             @ion.IonValue::string("inner"),
           ]),
         ]).with_annotations([
-          @ion.SymbolToken::new("list_a"),
-          @ion.SymbolToken::new("list_b"),
+          @ion.SymbolToken::SymbolToken("list_a"),
+          @ion.SymbolToken::SymbolToken("list_b"),
         ]),
       ),
-      @ion.Field::new("last", @ion.IonValue::bool(true)),
+      @ion.Field::Field("last", @ion.IonValue::bool(true)),
     ]).with_annotations([
-      @ion.SymbolToken::new("root_a"),
-      @ion.SymbolToken::new("root_b"),
+      @ion.SymbolToken::SymbolToken("root_a"),
+      @ion.SymbolToken::SymbolToken("root_b"),
     ]),
     @ion.IonValue::int(99),
   ]

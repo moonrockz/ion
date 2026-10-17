@@ -10,13 +10,13 @@ fn layered(levels : Int32) -> @ion.IonValue {
   let mut value = @ion.IonValue::symbol("leaf")
   for level = levels - 1; level >= 0; level = level - 1 {
     value = @ion.IonValue::from_fields([
-      @ion.Field::new(
+      @ion.Field::Field(
         "a",
         @ion.IonValue::list([@ion.IonValue::int(level), value]).with_annotation(
-          @ion.SymbolToken::new("tag"),
+          @ion.SymbolToken::SymbolToken("tag"),
         ),
       ),
-      @ion.Field::new("b", @ion.IonValue::string("s")),
+      @ion.Field::Field("b", @ion.IonValue::string("s")),
     ])
   }
   value
@@ -190,16 +190,16 @@ test "equals pairs repeated field names past the shallow recursion threshold" {
   // `{a: 1, a: 2}` against `{a: 2, a: 1}`: the first pairing by position
   // fails, and only another pairing shows that the structs are equal.
   let left = @ion.IonValue::from_fields([
-    @ion.Field::new("a", @ion.IonValue::int(1)),
-    @ion.Field::new("a", @ion.IonValue::int(2)),
+    @ion.Field::Field("a", @ion.IonValue::int(1)),
+    @ion.Field::Field("a", @ion.IonValue::int(2)),
   ])
   let right = @ion.IonValue::from_fields([
-    @ion.Field::new("a", @ion.IonValue::int(2)),
-    @ion.Field::new("a", @ion.IonValue::int(1)),
+    @ion.Field::Field("a", @ion.IonValue::int(2)),
+    @ion.Field::Field("a", @ion.IonValue::int(1)),
   ])
   let other = @ion.IonValue::from_fields([
-    @ion.Field::new("a", @ion.IonValue::int(2)),
-    @ion.Field::new("a", @ion.IonValue::int(3)),
+    @ion.Field::Field("a", @ion.IonValue::int(2)),
+    @ion.Field::Field("a", @ion.IonValue::int(3)),
   ])
   for depth in [0, 127, 128, 129, 300] {
     let wrap = (value : @ion.IonValue) => {
@@ -273,9 +273,9 @@ test "for_values interns symbols in document order past the shallow recursion th
   let mut value = @ion.IonValue::symbol("leaf")
   for level = levels - 1; level >= 0; level = level - 1 {
     let list = @ion.IonValue::list([@ion.IonValue::symbol("s\{level}"), value]).with_annotation(
-      @ion.SymbolToken::new("t\{level}"),
+      @ion.SymbolToken::SymbolToken("t\{level}"),
     )
-    value = @ion.IonValue::from_fields([@ion.Field::new("f\{level}", list)])
+    value = @ion.IonValue::from_fields([@ion.Field::Field("f\{level}", list)])
   }
   let table = @ion.SymbolTable::for_values([value])
   for level in 0..<levels {
@@ -320,7 +320,7 @@ test "resolve rewrites a field name even when its value has no IDs" {
 test "resolve keeps the annotations of a container whose children change" {
   let sid = @ion.SymbolToken::from_sid
   let value = @ion.IonValue::list([@ion.IonValue::symbol_token(sid(5))]).with_annotation(
-    @ion.SymbolToken::new("a"),
+    @ion.SymbolToken::SymbolToken("a"),
   )
   inspect(
     @text.write_ion(@ion.SymbolTable::system().resolve(value)),

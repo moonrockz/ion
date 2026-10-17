@@ -7,11 +7,15 @@ test "unknown imported identity ignores stream IDs and table versions" {
   assert_false(a.equivalent(@ion.SymbolToken::from_import(10, "shared", 1, 2)))
   assert_false(a.equivalent(@ion.SymbolToken::from_sid(10)))
   assert_false(a.equivalent(@ion.SymbolToken::from_sid(0)))
-  assert_false(a.equivalent(@ion.SymbolToken::new("shared")))
+  assert_false(a.equivalent(@ion.SymbolToken::SymbolToken("shared")))
   assert_true(
     @ion.SymbolToken::from_sid(10).equivalent(@ion.SymbolToken::from_sid(0)),
   )
-  assert_true(@ion.SymbolToken::new("a").equivalent(@ion.SymbolToken::new("a")))
+  assert_true(
+    @ion.SymbolToken::SymbolToken("a").equivalent(
+      @ion.SymbolToken::SymbolToken("a"),
+    ),
+  )
 }
 
 ///|

@@ -59,7 +59,7 @@ test "field names compare by symbol equivalence" {
     @ion.Field::from_token(numbered, @ion.IonValue::int(1)),
   ])
   let c = @ion.IonValue::from_fields([
-    @ion.Field::new("a", @ion.IonValue::int(1)),
+    @ion.Field::Field("a", @ion.IonValue::int(1)),
   ])
   assert_true(a.equals(b))
   assert_true(!a.equals(c))
@@ -92,17 +92,17 @@ test "repeated field names match as a multiset 100,000 levels deep" {
   let deep = @testkit.deep_value(Mixed, 100_000)
   let one = @ion.IonValue::int(1)
   let a = @ion.IonValue::from_fields([
-    @ion.Field::new("a", deep),
-    @ion.Field::new("a", one),
+    @ion.Field::Field("a", deep),
+    @ion.Field::Field("a", one),
   ])
   let b = @ion.IonValue::from_fields([
-    @ion.Field::new("a", one),
-    @ion.Field::new("a", deep),
+    @ion.Field::Field("a", one),
+    @ion.Field::Field("a", deep),
   ])
   assert_true(a.equals(b))
   let other = @ion.IonValue::from_fields([
-    @ion.Field::new("a", one),
-    @ion.Field::new("a", @testkit.deep_value(Mixed, 99_999)),
+    @ion.Field::Field("a", one),
+    @ion.Field::Field("a", @testkit.deep_value(Mixed, 99_999)),
   ])
   assert_true(!a.equals(other))
 }
@@ -118,9 +118,9 @@ fn repeated_name_chain(
   let mut value = @ion.IonValue::int(0)
   for _ in 0..<levels {
     value = @ion.IonValue::from_fields([
-      @ion.Field::new("a", value),
-      @ion.Field::new("a", @ion.IonValue::int(first)),
-      @ion.Field::new("a", @ion.IonValue::int(second)),
+      @ion.Field::Field("a", value),
+      @ion.Field::Field("a", @ion.IonValue::int(first)),
+      @ion.Field::Field("a", @ion.IonValue::int(second)),
     ])
   }
   value
@@ -180,22 +180,22 @@ test "class IDs compare field names by symbol equivalence" {
   let zero = @ion.IonValue::int(0)
   let one = @ion.IonValue::int(1)
   let left = @ion.IonValue::from_fields([
-    @ion.Field::new(
+    @ion.Field::Field(
       "a",
       @ion.IonValue::from_fields([@ion.Field::from_token(unknown, one)]),
     ),
-    @ion.Field::new("a", zero),
+    @ion.Field::Field("a", zero),
   ])
   let right_numbered = @ion.IonValue::from_fields([
-    @ion.Field::new("a", zero),
-    @ion.Field::new(
+    @ion.Field::Field("a", zero),
+    @ion.Field::Field(
       "a",
       @ion.IonValue::from_fields([@ion.Field::from_token(numbered, one)]),
     ),
   ])
   let right_imported = @ion.IonValue::from_fields([
-    @ion.Field::new("a", zero),
-    @ion.Field::new(
+    @ion.Field::Field("a", zero),
+    @ion.Field::Field(
       "a",
       @ion.IonValue::from_fields([@ion.Field::from_token(imported, one)]),
     ),

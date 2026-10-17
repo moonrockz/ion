@@ -251,8 +251,8 @@ fn Suite::load_types(
       .filter(other => other != name)
       .map(other => {
         @ion.IonValue::from_fields([
-          @ion.Field::new("name", @ion.IonValue::symbol(other)),
-        ]).with_annotations([@ion.SymbolToken::new("type")])
+          @ion.Field::Field("name", @ion.IonValue::symbol(other)),
+        ]).with_annotations([@ion.SymbolToken::SymbolToken("type")])
       })
     let types = try
       @schema.Schema::load(
@@ -395,10 +395,11 @@ fn Suite::run_schema_test(
       .any(field => field.name().text() == Some("name")) {
       fields
     } else {
-      [@ion.Field::new("name", @ion.IonValue::symbol("invalid_type"))] + fields
+      [@ion.Field::Field("name", @ion.IonValue::symbol("invalid_type"))] +
+      fields
     }
     let type_definition = @ion.IonValue::from_fields(named).with_annotations([
-      @ion.SymbolToken::new("type"),
+      @ion.SymbolToken::SymbolToken("type"),
     ])
     let (outcome, _) = self.load_outcome(
       [@ion.IonValue::symbol(self.marker), type_definition],
@@ -423,9 +424,9 @@ fn Suite::test_type(
     return (schema, type_name)
   }
   let wrapper = @ion.IonValue::from_fields([
-    @ion.Field::new("name", @ion.IonValue::symbol("built_in_type")),
-    @ion.Field::new("type", @ion.IonValue::symbol(type_name)),
-  ]).with_annotations([@ion.SymbolToken::new("type")])
+    @ion.Field::Field("name", @ion.IonValue::symbol("built_in_type")),
+    @ion.Field::Field("type", @ion.IonValue::symbol(type_name)),
+  ]).with_annotations([@ion.SymbolToken::SymbolToken("type")])
   let built_in = try
     @schema.Schema::load(
       [@ion.IonValue::symbol(self.marker)] +

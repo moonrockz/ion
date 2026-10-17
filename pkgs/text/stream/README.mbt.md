@@ -127,8 +127,8 @@ async test "write a container without a tree" {
   let sink : Collected = { written: b"", }
   let writer = @stream.IncrementalWriter::new(sink)
   writer.step_in(Struct)
-  writer.set_field_name(@ion.SymbolToken::new("items"))
-  writer.set_annotations([@ion.SymbolToken::new("tag")])
+  writer.set_field_name(@ion.symbol("items"))
+  writer.set_annotations([@ion.symbol("tag")])
   writer.step_in(List)
   for item in 0..<3 {
     writer.write_int(item)

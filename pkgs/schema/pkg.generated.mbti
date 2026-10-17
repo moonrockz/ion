@@ -13,8 +13,8 @@ import {
 // Types and methods
 pub(all) enum Bound {
   Unbounded
-  Inclusive(@ion.IonValue)
-  Exclusive(@ion.IonValue)
+  Inclusive(@ion.Ion)
+  Exclusive(@ion.Ion)
 } derive(@debug.Debug)
 pub fn Bound::to_repr(Self) -> @debug.Repr
 
@@ -24,7 +24,7 @@ pub(all) enum Constraint {
   TypeRef(String)
   Element(Constraint)
   Fields(Array[FieldConstraint])
-  ValidValues(Array[@ion.IonValue])
+  ValidValues(Array[@ion.Ion])
   InRange(ValueRange)
   ContainerLength(Int, Int?)
   CodepointLength(Int, Int?)
@@ -48,7 +48,7 @@ pub(all) enum Constraint {
   ClosedFields(Array[String])
   Annotations(Constraint)
   OrderedElements(Array[(Constraint, Occurs)])
-  Contains(Array[@ion.IonValue])
+  Contains(Array[@ion.Ion])
 } derive(@debug.Debug)
 pub fn Constraint::any() -> Self
 pub fn Constraint::to_repr(Self) -> @debug.Repr
@@ -98,14 +98,14 @@ pub struct Schema {
 pub fn Schema::empty() -> Self
 pub fn Schema::find(Self, String) -> TypeDefinition?
 pub fn Schema::from_types(Array[TypeDefinition]) -> Self
-pub fn Schema::is_valid(Self, String, @ion.IonValue, fuel? : @ion.Fuel) -> Bool raise @ion.IonError
-pub fn Schema::is_valid_document(Self, String, Array[@ion.IonValue], fuel? : @ion.Fuel) -> Bool raise @ion.IonError
-pub fn Schema::load(Array[@ion.IonValue], resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError, fuel? : @ion.Fuel) -> Self raise @ion.IonError
-pub fn Schema::load_from_text(StringView, resolver? : (String) -> Array[@ion.IonValue] raise @ion.IonError, fuel? : @ion.Fuel) -> Self raise @ion.IonError
+pub fn Schema::is_valid(Self, String, @ion.Ion, fuel? : @ion.Fuel) -> Bool raise @ion.IonError
+pub fn Schema::is_valid_document(Self, String, Array[@ion.Ion], fuel? : @ion.Fuel) -> Bool raise @ion.IonError
+pub fn Schema::load(Array[@ion.Ion], resolver? : (String) -> Array[@ion.Ion] raise @ion.IonError, fuel? : @ion.Fuel) -> Self raise @ion.IonError
+pub fn Schema::load_from_text(StringView, resolver? : (String) -> Array[@ion.Ion] raise @ion.IonError, fuel? : @ion.Fuel) -> Self raise @ion.IonError
 pub fn Schema::to_repr(Self) -> @debug.Repr
 pub fn Schema::types(Self) -> Array[TypeDefinition]
-pub fn Schema::validate(Self, String, @ion.IonValue, fuel? : @ion.Fuel) -> Array[Violation] raise @ion.IonError
-pub fn Schema::validate_document(Self, String, Array[@ion.IonValue], fuel? : @ion.Fuel) -> Array[Violation] raise @ion.IonError
+pub fn Schema::validate(Self, String, @ion.Ion, fuel? : @ion.Fuel) -> Array[Violation] raise @ion.IonError
+pub fn Schema::validate_document(Self, String, Array[@ion.Ion], fuel? : @ion.Fuel) -> Array[Violation] raise @ion.IonError
 
 pub struct TypeDefinition {
   name : String
@@ -119,7 +119,7 @@ pub struct ValueRange {
   lower : Bound
   upper : Bound
 } derive(@debug.Debug)
-pub fn ValueRange::contains(Self, @ion.IonValue) -> Bool
+pub fn ValueRange::contains(Self, @ion.Ion) -> Bool
 pub fn ValueRange::lower(Self) -> Bound
 pub fn ValueRange::new(Bound, Bound) -> Self
 pub fn ValueRange::to_repr(Self) -> @debug.Repr

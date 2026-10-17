@@ -8,7 +8,7 @@ test "decimal text round-trips through parsing" {
   @quickcheck.check((pair : (BigInt, Int32)) => {
     // Keep the exponent small: the value is arbitrary precision, but the
     // exponent travels as an Ion `int` and the parser reads it back as one.
-    let original = @ion.Decimal::new(pair.0, pair.1 % 1000)
+    let original = @ion.Decimal::Decimal(pair.0, pair.1 % 1000)
     let reparsed = @ion.Decimal::parse(original.to_ion_string())
     reparsed.coefficient().equal(original.coefficient()) &&
     reparsed.exponent() == original.exponent() &&
@@ -19,7 +19,7 @@ test "decimal text round-trips through parsing" {
 ///|
 test "timestamp text round-trips through parsing" {
   @quickcheck.check((seed : (Int32, Int32, Int32, Int32, Int32, Int32)) => {
-    let original = @ion.Timestamp::new(
+    let original = @ion.Timestamp::Timestamp(
       year=2000 + (seed.0 & 0xFF),
       month=Some((seed.1 & 0x0F) % 12 + 1),
       day=Some((seed.2 & 0x1F) % 28 + 1),

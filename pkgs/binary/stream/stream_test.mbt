@@ -129,7 +129,9 @@ async test "a large value and many small ones arrive in small reads" {
   let values = [@ion.IonValue::list(items)]
   for i in 0..<2000 {
     values.push(
-      @ion.IonValue::from_fields([@ion.Field::new("id", @ion.IonValue::int(i))]),
+      @ion.IonValue::from_fields([
+        @ion.Field::Field("id", @ion.IonValue::int(i)),
+      ]),
     )
   }
   for chunk in [7, 4096] {

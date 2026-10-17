@@ -38,7 +38,7 @@ test "decimal spelling is positional when exact and reasonably short" {
 test "decimal text round-trips exact components and signed zero" {
   @quickcheck.check((pair : (BigInt, Int32)) => {
     let exponent = pair.1 % 50
-    let decimal = @ion.Decimal::new(pair.0, exponent)
+    let decimal = @ion.Decimal::Decimal(pair.0, exponent)
     let zero = @ion.Decimal::negative_zero_at(exponent)
     let value = @ion.IonValue::list([
       @ion.IonValue::decimal(decimal),
@@ -50,8 +50,8 @@ test "decimal text round-trips exact components and signed zero" {
 
 ///|
 test "extreme decimal exponents never expand to positional zeros" {
-  let smallest = @ion.Decimal::new(BigInt::from_int(1), -2147483648)
-  let largest = @ion.Decimal::new(BigInt::from_int(1), 2147483647)
+  let smallest = @ion.Decimal::Decimal(BigInt::from_int(1), -2147483648)
+  let largest = @ion.Decimal::Decimal(BigInt::from_int(1), 2147483647)
   assert_eq(@text.write_ion(@ion.IonValue::decimal(smallest)), "1d-2147483648")
   assert_eq(@text.write_ion(@ion.IonValue::decimal(largest)), "1d2147483647")
   assert_true(

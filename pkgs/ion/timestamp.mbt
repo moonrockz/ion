@@ -45,7 +45,9 @@ pub struct Timestamp {
 /// Build a timestamp from its components. Components left as `None` reduce the
 /// precision; `fraction` requires `second`, and `offset` is required for any
 /// value that carries a time.
-pub fn Timestamp::new(
+#as_free_fn(timestamp)
+#alias(new, deprecated="Use `@ion.timestamp(...)` instead")
+pub fn Timestamp::Timestamp(
   year~ : Int32,
   month~ : Int32? = None,
   day~ : Int32? = None,
@@ -316,7 +318,7 @@ fn read_fraction(
     )
   }
   let coefficient = parse_digits_to_bigint(digits, false)
-  (Decimal::new(coefficient, -digits.length()), i)
+  (Decimal::Decimal(coefficient, -digits.length()), i)
 }
 
 ///|
@@ -381,7 +383,7 @@ pub fn Timestamp::parse(text : StringView) -> Timestamp raise IonError {
         "unexpected characters after a year-precision timestamp",
       )
     }
-    return Timestamp::new(year~)
+    return Timestamp::Timestamp(year~)
   }
   if text[i] != '-' {
     raise IonError::Syntax("expected '-' in timestamp")
@@ -401,7 +403,7 @@ pub fn Timestamp::parse(text : StringView) -> Timestamp raise IonError {
         "unexpected characters after a month-precision timestamp",
       )
     }
-    return Timestamp::new(year~, month=Some(month))
+    return Timestamp::Timestamp(year~, month=Some(month))
   }
   if text[i] != '-' {
     raise IonError::Syntax("expected '-' in timestamp")
@@ -413,14 +415,14 @@ pub fn Timestamp::parse(text : StringView) -> Timestamp raise IonError {
     raise IonError::DataModel("timestamp day is out of range for its month")
   }
   if i == n {
-    return Timestamp::new(year~, month=Some(month), day=Some(day))
+    return Timestamp::Timestamp(year~, month=Some(month), day=Some(day))
   }
   if text[i] != 'T' {
     raise IonError::Syntax("expected 'T' in timestamp")
   }
   i += 1
   if i == n {
-    return Timestamp::new(year~, month=Some(month), day=Some(day))
+    return Timestamp::Timestamp(year~, month=Some(month), day=Some(day))
   }
   let (hour, next) = read_fixed_uint(text, i, 2)
   i = next
@@ -458,7 +460,7 @@ pub fn Timestamp::parse(text : StringView) -> Timestamp raise IonError {
   if i != n {
     raise IonError::Syntax("unexpected characters after timestamp")
   }
-  Timestamp::new(
+  Timestamp::Timestamp(
     year~,
     month=Some(month),
     day=Some(day),

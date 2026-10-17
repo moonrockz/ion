@@ -70,7 +70,7 @@ pub fn gen_value(
   imported_symbols~ : Bool = false,
 ) -> @quickcheck.Generator[@ion.IonValue] {
   let choices = [
-    (8U, @quickcheck.elements(symbol_texts).map(@ion.SymbolToken::new)),
+    (8U, @quickcheck.elements(symbol_texts).map(text => @ion.SymbolToken(text))),
   ]
   if unknown_symbols {
     choices.push((2U, @quickcheck.elements(unknown_tokens)))
@@ -154,7 +154,7 @@ fn decimal_gen() -> @quickcheck.Generator[@ion.IonValue] {
       @quickcheck.int_range(-5, 6),
       (coefficient, exponent) => {
         @ion.IonValue::decimal(
-          @ion.Decimal::new(BigInt::from_int(coefficient), exponent),
+          @ion.Decimal::Decimal(BigInt::from_int(coefficient), exponent),
         )
       },
     ),
@@ -184,21 +184,29 @@ fn timestamp_at(precision : Int32, seed : Int32) -> @ion.Timestamp {
     },
   )
   match precision {
-    0 => @ion.Timestamp::new(year~)
-    1 => @ion.Timestamp::new(year~, month~)
-    2 => @ion.Timestamp::new(year~, month~, day~)
-    3 => @ion.Timestamp::new(year~, month~, day~, hour~, minute~, offset~)
+    0 => @ion.Timestamp::Timestamp(year~)
+    1 => @ion.Timestamp::Timestamp(year~, month~)
+    2 => @ion.Timestamp::Timestamp(year~, month~, day~)
+    3 => @ion.Timestamp::Timestamp(year~, month~, day~, hour~, minute~, offset~)
     4 =>
-      @ion.Timestamp::new(year~, month~, day~, hour~, minute~, second~, offset~)
-    _ =>
-      @ion.Timestamp::new(
+      @ion.Timestamp::Timestamp(
         year~,
         month~,
         day~,
         hour~,
         minute~,
         second~,
-        fraction=Some(@ion.Decimal::new(BigInt::from_int(seed % 1000), -3)),
+        offset~,
+      )
+    _ =>
+      @ion.Timestamp::Timestamp(
+        year~,
+        month~,
+        day~,
+        hour~,
+        minute~,
+        second~,
+        fraction=Some(@ion.Decimal::Decimal(BigInt::from_int(seed % 1000), -3)),
         offset~,
       )
   }

@@ -29,29 +29,29 @@
 /// order, and any nesting depth works.
 ///
 /// See the module comment for the mapping, especially for numbers.
-pub fn to_ion(json : Json) -> @core.IonValue {
-  ion_shallow(json, shallow_depth)
+pub impl ToIon for Json with fn to_ion(self : Json) -> IonValue {
+  ion_shallow(self, @work.SHALLOW_DEPTH)
 }
 
 ///|
 /// Convert `json` with recursion while `levels` is above zero, then with
 /// `ion_deep`. Recursion is the fastest way to convert a small value; the
 /// limit keeps the call stack small at any depth.
-fn ion_shallow(json : Json, levels : Int32) -> @core.IonValue {
+fn ion_shallow(json : Json, levels : Int32) -> IonValue {
   match json {
     Json::Array(elements) if levels > 0 => {
-      let items : Array[@core.IonValue] = Array::new(capacity=elements.length())
+      let items : Array[IonValue] = Array(capacity=elements.length())
       for element in elements {
         items.push(ion_shallow(element, levels - 1))
       }
-      @core.IonValue::list(items)
+      IonValue::list(items)
     }
     Json::Object(entries) if levels > 0 => {
-      let fields : Array[@core.Field] = Array::new(capacity=entries.length())
-      for name, member in entries {
-        fields.push(@core.Field::new(name, ion_shallow(member, levels - 1)))
+      let fields : Array[Field] = Array(capacity=entries.length())
+      for name, item in entries {
+        fields.push(Field::Field(name, ion_shallow(item, levels - 1)))
       }
-      @core.IonValue::from_fields(fields)
+      IonValue::from_fields(fields)
     }
     Json::Array(_) | Json::Object(_) => ion_deep(json)
     scalar => scalar_to_ion(scalar)
@@ -63,15 +63,15 @@ fn ion_shallow(json : Json, levels : Int32) -> @core.IonValue {
 /// elements or fields that receive their conversions. An object's members are
 /// copied into an array so that they can be taken by index, in order.
 priv enum IonContainer {
-  Items(Array[Json], Array[@core.IonValue])
-  Fields(Array[(String, Json)], Array[@core.Field])
+  Items(Array[Json], Array[IonValue])
+  Fields(Array[(String, Json)], Array[Field])
 }
 
 ///|
 /// Convert `json` top-down with a stack of open containers, not recursion.
 /// Each container's Ion value is added to its parent when the walk enters it,
 /// and filled while the walk is inside it.
-fn ion_deep(json : Json) -> @core.IonValue {
+fn ion_deep(json : Json) -> IonValue {
   let open : Array[IonContainer] = []
   // The index of the next child of each open container.
   let next : Array[Int32] = []
@@ -86,8 +86,8 @@ fn ion_deep(json : Json) -> @core.IonValue {
       }
       Fields(members, fields) if index < members.length() => {
         next[top] = index + 1
-        let (name, member) = members[index]
-        fields.push(@core.Field::new(name, ion_start(member, open, next)))
+        let (name, item) = members[index]
+        fields.push(Field::Field(name, ion_start(item, open, next)))
       }
       _ => {
         ignore(open.pop())
@@ -105,25 +105,23 @@ fn ion_start(
   json : Json,
   open : Array[IonContainer],
   next : Array[Int32],
-) -> @core.IonValue {
+) -> IonValue {
   match json {
     Json::Array(elements) => {
-      let items : Array[@core.IonValue] = Array::new(capacity=elements.length())
+      let items : Array[IonValue] = Array(capacity=elements.length())
       open.push(Items(elements, items))
       next.push(0)
-      @core.IonValue::list(items)
+      IonValue::list(items)
     }
     Json::Object(entries) => {
-      let members : Array[(String, Json)] = Array::new(
-        capacity=entries.length(),
-      )
-      for name, member in entries {
-        members.push((name, member))
+      let members : Array[(String, Json)] = Array(capacity=entries.length())
+      for name, item in entries {
+        members.push((name, item))
       }
-      let fields : Array[@core.Field] = Array::new(capacity=entries.length())
+      let fields : Array[Field] = Array(capacity=entries.length())
       open.push(Fields(members, fields))
       next.push(0)
-      @core.IonValue::from_fields(fields)
+      IonValue::from_fields(fields)
     }
     scalar => scalar_to_ion(scalar)
   }
@@ -131,12 +129,12 @@ fn ion_start(
 
 ///|
 /// The Ion value of a JSON value with no children.
-fn scalar_to_ion(json : Json) -> @core.IonValue {
+fn scalar_to_ion(json : Json) -> IonValue {
   match json {
-    Json::Null => @core.IonValue::untyped_null()
-    Json::True => @core.IonValue::bool(true)
-    Json::False => @core.IonValue::bool(false)
-    Json::String(text) => @core.IonValue::string(text)
+    Json::Null => IonValue::untyped_null()
+    Json::True => IonValue::bool(true)
+    Json::False => IonValue::bool(false)
+    Json::String(text) => IonValue::string(text)
     Json::Number(value, repr~) =>
       number_text_to_ion(
         match repr {
@@ -152,21 +150,21 @@ fn scalar_to_ion(json : Json) -> @core.IonValue {
 
 ///|
 /// Convert a JSON number from a decimal spelling.
-fn number_text_to_ion(text : String, fallback : Double) -> @core.IonValue {
+fn number_text_to_ion(text : String, fallback : Double) -> IonValue {
   if has_exponent(text) {
     let value = @string.parse_double(text) catch { _ => fallback }
-    return @core.IonValue::float(value)
+    return IonValue::float(value)
   }
   if text.contains(".") {
-    let parsed = @core.Decimal::parse(text) catch {
+    let parsed = Decimal::parse(text) catch {
       _ => return double_to_ion(fallback)
     }
-    return @core.IonValue::decimal(parsed)
+    return IonValue::decimal(parsed)
   }
   let parsed = @string.parse_bigint(text) catch {
     _ => return double_to_ion(fallback)
   }
-  @core.IonValue::big_int(parsed)
+  IonValue::big_int(parsed)
 }
 
 ///|
@@ -187,11 +185,11 @@ fn shortest_spelling(value : Double) -> String {
 ///|
 /// Convert a JSON number to Ion from the `Double` alone, the fallback for a
 /// spelling that does not parse.
-fn double_to_ion(value : Double) -> @core.IonValue {
+fn double_to_ion(value : Double) -> IonValue {
   if is_integral_64(value) {
-    @core.IonValue::big_int(@bigint.BigInt::from_int64(value.to_int64()))
+    IonValue::big_int(@bigint.BigInt::from_int64(value.to_int64()))
   } else {
-    @core.IonValue::float(value)
+    IonValue::float(value)
   }
 }
 

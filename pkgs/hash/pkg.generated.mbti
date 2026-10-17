@@ -6,11 +6,11 @@ import {
 }
 
 // Values
-pub fn ion_hash(@ion.IonValue) -> Bytes raise @ion.IonError
+pub fn ion_hash(@ion.Ion) -> Bytes raise @ion.IonError
 
-pub fn ion_hash_hex(@ion.IonValue) -> String raise @ion.IonError
+pub fn ion_hash_hex(@ion.Ion) -> String raise @ion.IonError
 
-pub fn ion_hash_with(@ion.IonValue, (Array[Byte]) -> Array[Byte]) -> Bytes raise @ion.IonError
+pub fn ion_hash_with(@ion.Ion, (Array[Byte]) -> Array[Byte]) -> Bytes raise @ion.IonError
 
 // Errors
 

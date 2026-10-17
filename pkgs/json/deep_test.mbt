@@ -51,7 +51,7 @@ test "write_json writes values 100,000 levels deep" {
 }
 
 ///|
-test "to_ion converts JSON 100,000 levels deep" {
+test "Ion constructor converts JSON 100,000 levels deep" {
   let mut array = Json::number(1.0)
   let mut object = Json::number(1.0)
   for _ in 0..<deep {
@@ -59,7 +59,7 @@ test "to_ion converts JSON 100,000 levels deep" {
     object = Json::object(Map([("name", object)]))
   }
   for json in [array, object] {
-    let (inner, depth) = @testkit.innermost(@json.to_ion(json))
+    let (inner, depth) = @testkit.innermost(@json.Ion(json))
     assert_eq(depth, deep)
     assert_true(inner.kind() is Int(_))
   }
