@@ -1,0 +1,16 @@
+schema: html-design
+githubCopilot:
+  cloudAgent: false
+context: |
+  Ion is a MoonBit library for Amazon Ion 1.0, text and binary codecs, Ion Schema, Ion Hash and JSON conversion. Keep the ion CLI thin and preserve exact value semantics and conformance behavior.
+  Follow AGENTS.md for repository conventions, toolchain, testing and local beads tracking.
+  OpenSpec holds versioned requirements and designs; beads holds ownership and status.
+rules:
+  proposal:
+    - State scope and affected public contracts. Link repository-local tracking under a Tracking section.
+  specs:
+    - Describe observable behavior with concrete success and failure scenarios.
+  design:
+    - Use the shared offline design.html template and discuss compatibility and migration.
+  tasks:
+    - Include verification, tests and documentation with each task group.

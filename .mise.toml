@@ -3,5 +3,7 @@
 # https://mise.jdx.dev
 
 [tools]
+node = "24.14.1"
+"npm:@fission-ai/openspec" = "1.14.3"
 "cargo:git-cliff" = "2.7.0"
 lefthook = "2.1.1"
