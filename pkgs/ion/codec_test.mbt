@@ -128,3 +128,31 @@ test "nested containers round-trip in key order" {
   )
   assert_eq(back.to_array(), original.to_array())
 }
+
+///|
+test "Char rejects a string that holds a lone surrogate, not a scalar value" {
+  let lone = @ion.Ion(String::from_array([Int32::unsafe_to_char(0xD800)]))
+  let error = try (@ion.FromIon::from_ion(lone) : Char) catch {
+    error => error
+  } noraise {
+    _ => fail("expected a decode error")
+  }
+  assert_true(error is WrongLength(expected=1, ..))
+  // The message counts the same way the decoder does, with no abort.
+  inspect(
+    error.message(),
+    content="$: expected string of length 1, found a string with an unpaired surrogate",
+  )
+  let broken = @ion.Ion(
+    String::from_array([Int32::unsafe_to_char(0xD800), 'a']),
+  )
+  let error = try (@ion.FromIon::from_ion(broken) : Char) catch {
+    error => error
+  } noraise {
+    _ => fail("expected a decode error")
+  }
+  inspect(
+    error.message(),
+    content="$: expected string of length 1, found a string with an unpaired surrogate",
+  )
+}

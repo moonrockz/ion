@@ -177,8 +177,14 @@ pub fn FromIonError::message(self : FromIonError) -> String {
       builder.write_string(kind_text(actual))
       builder.write_string(" of length ")
       builder.write_string(expected.to_string())
-      builder.write_string(", found length ")
-      builder.write_string(kind_length(actual).to_string())
+      match actual {
+        String(text) if has_unpaired_surrogate(text) =>
+          builder.write_string(", found a string with an unpaired surrogate")
+        _ => {
+          builder.write_string(", found length ")
+          builder.write_string(kind_length(actual).to_string())
+        }
+      }
     }
     DuplicateField(name~, ..) => {
       builder.write_string("duplicate field name ")
@@ -228,11 +234,19 @@ fn kind_text(kind : IonValueKind) -> String {
 /// The number of elements of a container or characters of a string.
 fn kind_length(kind : IonValueKind) -> Int32 {
   match kind {
-    String(text) => text.char_length()
+    String(text) => text.iter().count()
     List(items) | Sexp(items) => items.length()
     Struct(fields) => fields.length()
     _ => 0
   }
+}
+
+///|
+/// Whether `text` holds a UTF-16 surrogate that is not part of a pair. Such a
+/// string has no Unicode scalar value there; the readers never produce one,
+/// but a string built in code can hold one.
+fn has_unpaired_surrogate(text : String) -> Bool {
+  text.iter().any(character => character.to_int().is_surrogate())
 }
 
 ///|
@@ -457,12 +471,13 @@ pub impl[T : FromIon] FromIon for T? with fn from_ion(value : Ion) -> T? raise F
 }
 
 ///|
-/// Reads an Ion string of exactly one character.
+/// Reads an Ion string of exactly one Unicode scalar value. An unpaired
+/// surrogate is not one.
 pub impl FromIon for Char with fn from_ion(value : Ion) -> Char raise FromIonError {
   match value.kind {
     String(text) =>
       match text.iter().to_array() {
-        [character] => character
+        [character] if !character.to_int().is_surrogate() => character
         _ => raise WrongLength(path=[], actual=value.kind, expected=1)
       }
     _ => raise mismatch(String, value)
