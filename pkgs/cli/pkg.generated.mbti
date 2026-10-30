@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub async fn run(Array[String], &@io.Reader, &@io.Writer, &@io.Writer) -> Int32
+pub async fn run(Array[String], &@io.Reader, &@io.Writer, &@io.Writer) -> Int
 
 // Errors
 

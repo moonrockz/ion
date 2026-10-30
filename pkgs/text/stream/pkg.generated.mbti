@@ -22,7 +22,7 @@ pub async fn IncrementalWriter::step_in(Self, @ion.IonType) -> Unit
 pub async fn IncrementalWriter::step_out(Self) -> Unit
 pub async fn IncrementalWriter::write(Self, @ion.Ion) -> Unit
 pub async fn IncrementalWriter::write_bool(Self, Bool) -> Unit
-pub async fn IncrementalWriter::write_int(Self, Int32) -> Unit
+pub async fn IncrementalWriter::write_int(Self, Int) -> Unit
 pub async fn IncrementalWriter::write_null(Self, kind? : @ion.IonType) -> Unit
 pub async fn IncrementalWriter::write_string(Self, String) -> Unit
 
