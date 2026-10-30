@@ -460,6 +460,7 @@ pub impl[T : FromIon] FromIon for T?
 pub impl FromIon for Bytes
 pub impl FromIon for @bigint.BigInt
 pub impl[T : FromIon] FromIon for Array[T]
+pub impl FromIon for Json
 pub impl[T : FromIon] FromIon for Map[String, T]
 pub impl[A : FromIon, B : FromIon] FromIon for (A, B)
 pub impl[A : FromIon, B : FromIon, C : FromIon] FromIon for (A, B, C)

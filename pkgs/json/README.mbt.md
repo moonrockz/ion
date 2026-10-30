@@ -92,7 +92,9 @@ test "a symbol with unknown text has no JSON form" {
   }
   inspect(
     message,
-    content="a symbol known only by symbol ID 0 has no text to convert to JSON",
+    content=(
+      #|$: symbol $0 has no known text
+    ),
   )
 }
 ```

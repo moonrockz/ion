@@ -399,7 +399,7 @@ pub impl[T : FromIon] FromIon for Map[String, T] with fn from_ion(value : Ion) -
     Struct(fields) => {
       let result : Map[String, T] = Map([], capacity=fields.length())
       for field in fields {
-        let name = field_name_text(field.name)
+        let name = symbol_text(field.name)
         if result.contains(name) {
           raise DuplicateField(path=[], name~)
         }
@@ -413,16 +413,6 @@ pub impl[T : FromIon] FromIon for Map[String, T] with fn from_ion(value : Ion) -
       result
     }
     _ => raise mismatch(Struct, value)
-  }
-}
-
-///|
-/// The text of a struct field name, resolving the Ion 1.0 system symbols by
-/// symbol ID.
-fn field_name_text(token : SymbolToken) -> String raise FromIonError {
-  match symbol_token_text(token) {
-    Some(text) => text
-    None => raise MissingSymbolText(path=[], token~)
   }
 }
 

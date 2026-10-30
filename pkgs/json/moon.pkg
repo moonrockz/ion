@@ -6,10 +6,7 @@
 import {
   "moonrockz/ion/internal/work",
   "moonrockz/ion/ion" @core,
-  "moonbitlang/core/bigint",
-  "moonbitlang/core/encoding/base64",
   "moonbitlang/core/json" @cjson,
-  "moonbitlang/core/string",
 }
 
 import {
