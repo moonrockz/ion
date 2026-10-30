@@ -4,6 +4,7 @@ package "moonrockz/ion/ion"
 import {
   "moonbitlang/core/bigint",
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/x/decimal",
 }
 
@@ -18,6 +19,8 @@ pub fn days_in_month(Int, Int) -> Int
 
 pub fn[A] fold_values(Array[Ion], A, IonFold[A]) -> A
 
+pub fn[T : @json.FromJson] from_ion_via_json(Ion) -> T raise FromIonError
+
 pub fn highest_symbol_id(Array[Ion]) -> Int
 
 pub fn is_leap_year(Int) -> Bool
@@ -25,6 +28,8 @@ pub fn is_leap_year(Int) -> Bool
 pub fn shift_date(Int, Int, Int, Int) -> (Int, Int, Int)
 
 pub fn system_symbol_text(Int) -> String?
+
+pub fn[T : ToJson] to_ion_via_json(T) -> Ion
 
 // Errors
 pub(all) suberror FromIonError {

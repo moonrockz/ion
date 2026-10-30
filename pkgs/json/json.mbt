@@ -11,14 +11,24 @@
 //     JSON" process.
 //   * [`read_json`] and [`write_json`] are the convenience wrappers that go
 //     through JSON text.
+//   * [`to_ion_via_json`] and [`from_ion_via_json`] give a type with core
+//     `ToJson` and `FromJson` its Ion codecs, through its JSON form.
 //
 // The two directions are deliberately not inverses of each other. A symbol, a
 // timestamp, and a string all become a JSON string on the way out, so the
 // trip back cannot tell them apart; that is inherent to JSON, not a shortcut.
 
 ///|
-/// An Ion value, shared with the core data model.
-pub using @core {type Ion, trait ToIon}
+/// An Ion value and its codecs, shared with the core data model, and the
+/// bridges for types with core `ToJson` and `FromJson`.
+pub using @core {
+  type Ion,
+  trait ToIon,
+  trait FromIon,
+  type FromIonError,
+  to_ion_via_json,
+  from_ion_via_json,
+}
 
 ///|
 /// Parse JSON text into an Ion value, following the same rules as [`Ion`].

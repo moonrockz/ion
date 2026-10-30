@@ -160,12 +160,12 @@ such symbol, when a symbol or field name has no text.
 
 ### Requirement: JSON bridges convert through core JSON
 
-The JSON package SHALL provide `to_ion_via_json`, which encodes any value with
+The core package SHALL provide `to_ion_via_json`, which encodes any value with
 core `ToJson` as the Ion value of its JSON, and `from_ion_via_json`, which
-decodes any value with core `FromJson` from the JSON of an Ion value. A
-failure in either step SHALL raise the decode error; a `FromJson` failure
-SHALL keep its message and SHALL name its path as Ion field names and list
-indexes.
+decodes any value with core `FromJson` from the JSON of an Ion value. The JSON
+package SHALL re-export both. A failure in either step SHALL raise the decode
+error; a `FromJson` failure SHALL keep its message and SHALL name its path as
+Ion field names and list indexes.
 
 #### Scenario: Round trip of a derived type
 
@@ -178,3 +178,9 @@ indexes.
 - **WHEN** the Ion struct `{id: "x"}` is decoded with `from_ion_via_json` as a
   struct whose `id` field is an `Int`
 - **THEN** decoding fails with a JSON decode error whose path is field `id`
+
+#### Scenario: An Ion to JSON failure is a decode error
+
+- **WHEN** an Ion value with a symbol that has no text is decoded with
+  `from_ion_via_json`
+- **THEN** decoding fails with a missing-symbol-text error, not an abort

@@ -157,19 +157,25 @@ symbol with no text, in the same document order.</p>
 pub fn[T : FromJson] from_ion_via_json(value : Ion) -&gt; T raise FromIonError</code></pre>
 <p>The names mirror <code>to_ion</code> and <code>from_ion</code> and say how
 the conversion happens, so a bridge impl reads as
-<code>impl FromIon for Event with from_ion(v) { @json.from_ion_via_json(v) }</code>.
-They live in <code>pkgs/json</code>, the JSON interoperability package, which
-already depends on <code>pkgs/ion</code>; there is no cycle. The JSON step
-follows <code>to_json</code> rules, so it folds duplicate field names onto the
-last and drops annotations; that is the documented cost of the bridge. A
-<code>JsonDecodeError</code> becomes <code>JsonDecode</code> with core's
-message. Core's <code>JsonPath</code> is opaque and renders as a JSON Pointer,
-so the bridge walks the pointer through the JSON value: an array step is an
-index, any other step is a field name.</p>
+<code>impl FromIon for Event with from_ion(v) { @ion.from_ion_via_json(v) }</code>.
+They live in <code>pkgs/ion</code>, next to the traits and both JSON
+directions (see <a href="#json-1">JSON-1</a>), and <code>pkgs/json</code>
+re-exports them; there is no cycle. A second reason: <code>derive(FromJson)</code>
+expands to code that names <code>@json</code>, which inside <code>pkgs/json</code>
+is the package itself, so derived examples cannot compile in its tests or
+README. A caller that imports only <code>@ion</code> has everything it needs.</p>
+<p>The JSON step follows <code>to_json</code> rules, so it folds duplicate field
+names onto the last and drops annotations; that is the documented cost of the
+bridge. Core's derived JSON form leaves out a <code>None</code> field and
+rejects an explicit <code>null</code> for it, so Ion written by hand for a
+bridged type leaves the field out. A <code>JsonDecodeError</code> becomes
+<code>JsonDecode</code> with core's message. Core's <code>JsonPath</code> is
+opaque and renders as a JSON Pointer, so the bridge walks the pointer through
+the JSON value: a step into an array is an index, any other step is a field
+name.</p>
 <p>Alternatives: <code>from_json_value</code> and <code>decode_via_json</code>
-(asymmetric names), and putting the bridges in <code>@ion</code> (possible
-after <a href="#json-1">JSON-1</a>, but JSON interoperability is the job of
-<code>@json</code>).</p>
+(asymmetric names), and bridges only in <code>pkgs/json</code> (derived
+examples cannot compile there).</p>
 
 <h2 id="risks">Risks and trade-offs</h2>
 <table>

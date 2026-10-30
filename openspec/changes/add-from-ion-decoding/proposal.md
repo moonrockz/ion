@@ -20,9 +20,10 @@ of its types derive core `ToJson` and `FromJson`; MoonBit cannot derive
   `Map[String, T]`.
 - Add `ToIon` and `FromIon` for `Option[T]`, `Char`, `Byte`, and tuples of
   two and three elements.
-- Add the bridges `@json.to_ion_via_json` (any `ToJson` value to Ion) and
-  `@json.from_ion_via_json` (Ion to any `FromJson` value). A failure in the Ion
-  to JSON step or in `FromJson` raises `FromIonError`, not an abort.
+- Add the bridges `@ion.to_ion_via_json` (any `ToJson` value to Ion) and
+  `@ion.from_ion_via_json` (Ion to any `FromJson` value), re-exported from
+  `@json`. A failure in the Ion to JSON step or in `FromJson` raises
+  `FromIonError`, not an abort.
 - Move the Ion to JSON conversion from `@json` into `@ion`, so that `Json` can
   implement `FromIon`. `@json.to_json` keeps its signature and its rules.
   The message of its `IonError::Unsupported` now names the value path.
@@ -47,9 +48,9 @@ None. The repository has no published specs yet.
 
 ## Impact
 
-- `pkgs/ion`: new trait, error type, impls; the Ion to JSON conversion moves
-  here from `pkgs/json`. `pkg.generated.mbti` grows.
-- `pkgs/json`: new bridge functions; re-exports `FromIon` and
-  `FromIonError`; `to_json` delegates to `@ion`.
+- `pkgs/ion`: new trait, error type, impls and bridge functions; the Ion to
+  JSON conversion moves here from `pkgs/json`. `pkg.generated.mbti` grows.
+- `pkgs/json`: re-exports `FromIon`, `FromIonError` and the bridges;
+  `to_json` delegates to `@ion`.
 - No new dependencies. No change to the text or binary codecs, Ion Schema,
   Ion Hash or the CLI.
