@@ -8,17 +8,17 @@ import {
 }
 
 // Values
-pub fn change_one_leaf(@ion.Ion, Int) -> @ion.Ion
+pub fn change_one_leaf(@ion.Ion, Int32) -> @ion.Ion
 
-pub fn count_values(@ion.Ion) -> Int
+pub fn count_values(@ion.Ion) -> Int32
 
-pub fn deep_value(DeepShape, Int, leaf? : @ion.Ion) -> @ion.Ion
+pub fn deep_value(DeepShape, Int32, leaf? : @ion.Ion) -> @ion.Ion
 
-pub fn gen_json(max_depth~ : Int, max_width~ : Int) -> @quickcheck.Generator[Json]
+pub fn gen_json(max_depth~ : Int32, max_width~ : Int32) -> @quickcheck.Generator[Json]
 
-pub fn gen_value(max_depth~ : Int, max_width~ : Int, unknown_symbols? : Bool, imported_symbols? : Bool) -> @quickcheck.Generator[@ion.Ion]
+pub fn gen_value(max_depth~ : Int32, max_width~ : Int32, unknown_symbols? : Bool, imported_symbols? : Bool) -> @quickcheck.Generator[@ion.Ion]
 
-pub fn innermost(@ion.Ion) -> (@ion.Ion, Int)
+pub fn innermost(@ion.Ion) -> (@ion.Ion, Int32)
 
 pub fn near_misses(@ion.Ion) -> Array[@ion.Ion]
 
@@ -36,7 +36,7 @@ pub(all) enum DeepShape {
   AnnotatedList
   Mixed
 } derive(Eq, @debug.Debug)
-pub fn DeepShape::at(Self, Int) -> Self
+pub fn DeepShape::at(Self, Int32) -> Self
 pub fn DeepShape::equal(Self, Self) -> Bool
 pub fn DeepShape::not_equal(Self, Self) -> Bool
 pub fn DeepShape::to_repr(Self) -> @debug.Repr

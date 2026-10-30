@@ -26,8 +26,8 @@ pub(all) enum Constraint {
   Fields(Array[FieldConstraint])
   ValidValues(Array[@ion.Ion])
   InRange(ValueRange)
-  ContainerLength(Int, Int?)
-  CodepointLength(Int, Int?)
+  ContainerLength(Int32, Int32?)
+  CodepointLength(Int32, Int32?)
   AllOf(Array[Constraint])
   AnyOf(Array[Constraint])
   OneOf(Array[Constraint])
@@ -35,11 +35,11 @@ pub(all) enum Constraint {
   Nothing
   IsDocument
   Matches(Regex)
-  ByteLength(Int, Int?)
-  Utf8ByteLength(Int, Int?)
-  Precision(Int, Int?)
-  Exponent(Int, Int?)
-  TimestampPrecision(Int, Int?)
+  ByteLength(Int32, Int32?)
+  Utf8ByteLength(Int32, Int32?)
+  Precision(Int32, Int32?)
+  Exponent(Int32, Int32?)
+  TimestampPrecision(Int32, Int32?)
   TimestampOffsets(Array[@ion.TimestampOffset])
   Ieee754Float(FloatFormat)
   FieldNames(Constraint)
@@ -70,11 +70,11 @@ pub fn FloatFormat::not_equal(Self, Self) -> Bool
 pub fn FloatFormat::to_repr(Self) -> @debug.Repr
 
 pub struct Occurs {
-  lower : Int
-  upper : Int?
+  lower : Int32
+  upper : Int32?
 } derive(@debug.Debug)
-pub fn Occurs::allows(Self, Int) -> Bool
-pub fn Occurs::new(Int, Int?) -> Self
+pub fn Occurs::allows(Self, Int32) -> Bool
+pub fn Occurs::new(Int32, Int32?) -> Self
 pub fn Occurs::optional() -> Self
 pub fn Occurs::required() -> Self
 pub fn Occurs::to_repr(Self) -> @debug.Repr

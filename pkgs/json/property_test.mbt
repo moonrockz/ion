@@ -140,3 +140,17 @@ test "generated JSON survives a trip through Ion" {
     }
   }
 }
+
+///|
+test "generated JSON decodes from its Ion value through FromIon" {
+  for
+    json in @testkit.gen_json(max_depth=6, max_width=4).samples(
+      count=300,
+      size=8,
+    ) {
+    let back : Json = @json.FromIon::from_ion(@json.Ion(json))
+    if !json_equal(back, json) {
+      fail("JSON \{json.stringify()} came back as \{back.stringify()}")
+    }
+  }
+}

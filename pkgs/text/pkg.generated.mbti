@@ -8,13 +8,13 @@ import {
 }
 
 // Values
-pub fn complete_length(TextEncoding, BytesView) -> Int
+pub fn complete_length(TextEncoding, BytesView) -> Int32
 
 pub fn decode_ion_text(BytesView) -> String raise @ion.IonError
 
 pub fn decode_text(TextEncoding, BytesView) -> String raise @ion.IonError
 
-pub fn detect_encoding(BytesView) -> (TextEncoding, Int)
+pub fn detect_encoding(BytesView) -> (TextEncoding, Int32)
 
 pub fn dispatch_event(IonEvent, &IonHandler) -> Unit
 
@@ -30,7 +30,7 @@ pub fn read_ion(StringView, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> @ion.
 
 pub fn read_ion_datagram(StringView, catalog? : @ion.Catalog, fuel? : @ion.Fuel) -> Array[@ion.Ion] raise @ion.IonError
 
-pub fn read_ion_prefix(StringView, symbols~ : @ion.SymbolTable, end_of_input~ : Bool, fuel? : @ion.Fuel) -> (@ion.Ion?, Int)? raise @ion.IonError
+pub fn read_ion_prefix(StringView, symbols~ : @ion.SymbolTable, end_of_input~ : Bool, fuel? : @ion.Fuel) -> (@ion.Ion?, Int32)? raise @ion.IonError
 
 pub fn symbol_to_text(@ion.SymbolToken, in_sexp? : Bool) -> String raise @ion.IonError
 
@@ -40,13 +40,13 @@ pub fn write_all(Array[@ion.Ion]) -> String raise @ion.IonError
 
 pub fn write_all_pretty(Array[@ion.Ion]) -> String raise @ion.IonError
 
-pub fn write_fragment(@ion.Ion, depth? : Int, pretty? : Bool, in_sexp? : Bool) -> String raise @ion.IonError
+pub fn write_fragment(@ion.Ion, depth? : Int32, pretty? : Bool, in_sexp? : Bool) -> String raise @ion.IonError
 
 pub fn write_ion(@ion.Ion) -> String raise @ion.IonError
 
 pub fn write_ion_pretty(@ion.Ion) -> String raise @ion.IonError
 
-pub fn write_stream_value(@ion.Ion, reserved~ : Int, pretty? : Bool) -> (String, Int) raise @ion.IonError
+pub fn write_stream_value(@ion.Ion, reserved~ : Int32, pretty? : Bool) -> (String, Int32) raise @ion.IonError
 
 // Errors
 
@@ -68,17 +68,17 @@ pub fn CstDocument::values(Self) -> Array[CstValue]
 pub struct CstValue {
   annotations : Array[IonToken]
   field_name : IonToken?
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
   content : CstContent
 } derive(@debug.Debug)
 pub fn CstValue::annotations(Self) -> Array[IonToken]
 pub fn CstValue::content(Self) -> CstContent
 pub fn CstValue::elements(Self) -> Array[Self]?
-pub fn CstValue::end(Self) -> Int
+pub fn CstValue::end(Self) -> Int32
 pub fn CstValue::field_name(Self) -> IonToken?
 pub fn CstValue::slice(Self, StringView) -> StringView
-pub fn CstValue::start(Self) -> Int
+pub fn CstValue::start(Self) -> Int32
 pub fn CstValue::to_repr(Self) -> @debug.Repr
 
 pub(all) enum IonEvent {
@@ -99,7 +99,7 @@ pub fn IonEvent::to_text(Self) -> String
 
 pub struct IonReader {
   events : Array[IonEvent]
-  mut index : Int
+  mut index : Int32
 }
 pub fn IonReader::feed(Self, &IonHandler) -> Unit
 pub fn IonReader::from_text(StringView, fuel? : @ion.Fuel) -> Self raise @ion.IonError
@@ -110,13 +110,13 @@ pub fn IonReader::remaining(Self) -> Array[IonEvent]
 
 pub struct IonToken {
   kind : IonTokenKind
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
 } derive(@debug.Debug)
-pub fn IonToken::end(Self) -> Int
+pub fn IonToken::end(Self) -> Int32
 pub fn IonToken::kind(Self) -> IonTokenKind
 pub fn IonToken::slice(Self, StringView) -> StringView
-pub fn IonToken::start(Self) -> Int
+pub fn IonToken::start(Self) -> Int32
 pub fn IonToken::to_repr(Self) -> @debug.Repr
 
 pub(all) enum IonTokenKind {

@@ -17,7 +17,7 @@ pub fn[T : ToJson] to_ion_via_json(T) -> @ion.Ion
 
 pub fn to_json(@ion.Ion) -> Json raise @ion.IonError
 
-pub fn write_json(@ion.Ion, indent? : Int) -> String raise @ion.IonError
+pub fn write_json(@ion.Ion, indent? : Int32) -> String raise @ion.IonError
 
 // Errors
 
