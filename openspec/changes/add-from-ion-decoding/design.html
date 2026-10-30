@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>add-from-ion-decoding: design</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root { color-scheme: light dark; --bg: #fafafa; --fg: #18212f; --muted: #526071;
+  --line: #cbd5e1; --panel: #eef2f6; --link: #075caa; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111827; --fg: #e5e7eb; --muted: #b0bdce;
+    --line: #475569; --panel: #1e293b; --link: #8cc8ff; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 70rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+h1, h2, h3 { line-height: 1.25; overflow-wrap: anywhere; }
+h2 { margin-top: 2rem; border-bottom: 1px solid var(--line); padding-bottom: .4rem; }
+a { color: var(--link); }
+a:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+.meta { color: var(--muted); }
+.toc, pre, details { background: var(--panel); border: 1px solid var(--line);
+  border-radius: .4rem; padding: 1rem; }
+code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+pre { overflow-x: auto; } pre code { overflow-wrap: normal; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid var(--line); padding: .6rem; text-align: left;
+  overflow-wrap: anywhere; }
+svg { max-width: 100%; height: auto; }
+@media print { main { max-width: none; padding: 0; } pre, tr { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+<h1>add-from-ion-decoding: design</h1>
+<p class="meta">OpenSpec change | 2026-10-30 | proposed</p>
+
+<nav class="toc" aria-label="Contents">
+<ul>
+<li><a href="#context">Context</a></li>
+<li><a href="#goals">Goals and non-goals</a></li>
+<li><a href="#decisions">Decisions</a></li>
+<li><a href="#risks">Risks and trade-offs</a></li>
+<li><a href="#migration">Migration plan</a></li>
+</ul>
+</nav>
+
+<h2 id="context">Context</h2>
+<p>See <a href="proposal.md">proposal.md</a> for the motivation and
+<a href="specs/value-codecs/spec.md">the value-codecs spec</a> for the rules.
+<code>@ion</code> has <code>pub(open) trait ToIon</code> and
+<code>impl ToIon for Json</code>. The Ion to JSON direction
+(<code>@json.to_json</code>) lives in <code>pkgs/json</code>, which depends on
+<code>pkgs/ion</code>. MoonBit lets an impl live only in the package of the
+trait or of the type, so <code>impl FromIon for Json</code> must be in
+<code>pkgs/ion</code>.</p>
+
+<h2 id="goals">Goals and non-goals</h2>
+<p><strong>Goals:</strong> one decode trait and one decode error type that
+library users and Moon-Lander can match on; exact, total rules per type; no
+change to how the readers and writers behave.</p>
+<p><strong>Non-goals:</strong> derive support; decoding helpers for user
+structs (such as a required-field reader); coercions between Ion types; tuples
+of more than three elements.</p>
+
+<h2 id="decisions">Decisions</h2>
+
+<h3 id="err-1">ERR-1. A new suberror, not new IonError cases</h3>
+<pre><code class="language-moonbit">pub(open) trait FromIon {
+  fn from_ion(Ion) -&gt; Self raise FromIonError
+}
+
+pub(all) suberror FromIonError {
+  TypeMismatch(path~ : Array[PathSegment], expected~ : IonType, actual~ : IonValueKind)
+  OutOfRange(path~ : Array[PathSegment], actual~ : IonValueKind, range~ : ValueRange)
+  WrongLength(path~ : Array[PathSegment], actual~ : IonValueKind, expected~ : Int)
+  DuplicateField(path~ : Array[PathSegment], name~ : String)
+  MissingSymbolText(path~ : Array[PathSegment], token~ : SymbolToken)
+  JsonDecode(path~ : Array[PathSegment], message~ : String)
+}
+
+pub(all) enum PathSegment { Name(String); Index(Int) }
+pub(all) enum ValueRange { Integers(min~ : BigInt, max~ : BigInt); Float32 }</code></pre>
+<p><code>IonError</code> is <code>pub(all)</code> and its cases hold a message
+string. New cases would break every exhaustive match downstream, and would mix
+"the input is not valid Ion" with "valid Ion is not the shape I want". A
+separate type keeps the reader and writer contracts as they are and gives each
+decode failure a structured payload. Like <code>IonError</code>, it derives
+<code>Debug</code> and has <code>message()</code>; it also has
+<code>path()</code> and <code>within(PathSegment)</code>.</p>
+<p><code>actual</code> keeps the whole <code>IonValueKind</code> of the value
+that failed (a shared reference, not a copy). A typed null therefore shows as
+<code>Null(Int)</code>, which tells <code>null.int</code> apart from a value of
+a different type without an extra case. <code>TypeMismatch</code> also states
+the expected <code>IonType</code>; in the other cases the range, the length or
+the case itself is the expectation.</p>
+
+<h3 id="err-2">ERR-2. Paths are built while the error returns</h3>
+<p>A path is an array of segments, outermost first. A container decodes each
+element, catches its error and raises <code>error.within(segment)</code>, which
+puts the segment in front. The cost falls only on the failure path. A user
+<code>FromIon</code> impl can call <code>within</code> to add its own field
+names. <code>message()</code> renders the path as <code>$</code>,
+<code>.name</code> for a field and <code>[i]</code> for an index, for example
+<code>$.events[1]: expected int, found string</code>.</p>
+
+<h3 id="rule-1">RULE-1. Decode accepts only what encode writes</h3>
+<p>Each type reads only the Ion type that its <code>ToIon</code> writes. A
+symbol is not a <code>String</code>, a decimal or an int is not a
+<code>Double</code>, an int is not a <code>Decimal</code>, a clob is not
+<code>Bytes</code> and an S-expression is not an <code>Array</code>. Ion keeps
+these types apart on purpose, and an implicit conversion loses precision or
+meaning without notice. One rule is easy to state and to test. A caller who
+wants a coercion decodes as <code>Ion</code> and converts. Annotations are
+ignored, because <code>ToIon</code> writes none and a payload can carry a type
+annotation that the decoder of the payload does not need.</p>
+
+<h3 id="rule-2">RULE-2. Numeric limits</h3>
+<p>Integers decode only when the value is in the target range; otherwise
+<code>OutOfRange</code> with <code>Integers(min, max)</code>. <code>Byte</code>
+is the range 0 to 255. <code>Float</code> rounds the Ion float to the nearest
+<code>Float</code>, because a text float such as <code>0.1e0</code> has no
+exact <code>Float</code>; a finite value that rounds to an infinity is
+<code>OutOfRange</code> with <code>Float32</code>. NaN and the infinities pass
+through.</p>
+
+<h3 id="null-1">NULL-1. Option and typed nulls</h3>
+<p><code>None</code> writes the untyped <code>null</code>. Every null, typed or
+untyped, reads as <code>None</code>: the decoder of <code>T?</code> cannot know
+the Ion type of <code>T</code>, and "null means absent" is how Ion data is used
+in practice. <code>Unit</code> reads only the untyped <code>null</code>.
+Consequence: <code>Some(x)</code> does not round-trip when <code>x</code>
+itself writes a null (<code>T</code> is <code>Unit</code>, <code>Ion</code>,
+<code>Json</code> or an <code>Option</code>); it reads back as
+<code>None</code>.</p>
+
+<h3 id="map-1">MAP-1. Duplicate field names are an error</h3>
+<p>Ion structs may repeat a field name; a <code>Map</code> cannot. The decoder
+raises <code>DuplicateField</code> instead of keeping the first or the last
+value, so no data is dropped without notice. A field name with no text raises
+<code>MissingSymbolText</code>; an Ion 1.0 system symbol ID resolves to its
+text, as in the JSON conversion. Key order follows the struct.</p>
+
+<h3 id="json-1">JSON-1. The Ion to JSON conversion moves to @ion</h3>
+<p>The conversion code moves from <code>pkgs/json/to_json.mbt</code> to
+<code>pkgs/ion</code>, unchanged, and backs <code>impl FromIon for Json</code>.
+<code>@json.to_json</code> stays as a wrapper with the same signature that maps
+<code>MissingSymbolText</code> to <code>IonError::Unsupported</code>. To keep
+the stack-safe conversion as fast as before, it does not track a path; after a
+failure, a second walk with an explicit stack finds the path of the first
+symbol with no text, in the same document order.</p>
+
+<h3 id="brg-1">BRG-1. Bridge names and placement</h3>
+<pre><code class="language-moonbit">pub fn[T : ToJson] to_ion_via_json(value : T) -&gt; Ion
+pub fn[T : FromJson] from_ion_via_json(value : Ion) -&gt; T raise FromIonError</code></pre>
+<p>The names mirror <code>to_ion</code> and <code>from_ion</code> and say how
+the conversion happens, so a bridge impl reads as
+<code>impl FromIon for Event with from_ion(v) { @json.from_ion_via_json(v) }</code>.
+They live in <code>pkgs/json</code>, the JSON interoperability package, which
+already depends on <code>pkgs/ion</code>; there is no cycle. The JSON step
+follows <code>to_json</code> rules, so it folds duplicate field names onto the
+last and drops annotations; that is the documented cost of the bridge. A
+<code>JsonDecodeError</code> becomes <code>JsonDecode</code> with core's
+message. Core's <code>JsonPath</code> is opaque and renders as a JSON Pointer,
+so the bridge walks the pointer through the JSON value: an array step is an
+index, any other step is a field name.</p>
+<p>Alternatives: <code>from_json_value</code> and <code>decode_via_json</code>
+(asymmetric names), and putting the bridges in <code>@ion</code> (possible
+after <a href="#json-1">JSON-1</a>, but JSON interoperability is the job of
+<code>@json</code>).</p>
+
+<h2 id="risks">Risks and trade-offs</h2>
+<table>
+<thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>Strict rules reject hand-written Ion such as <code>1.5</code> for a <code>Double</code> field.</td><td>The error names the path and the expected type. Callers can decode as <code>Ion</code> and convert.</td></tr>
+<tr><td><code>Option</code> of a null-writing type does not round-trip.</td><td>Documented in the spec and the trait docs; property tests exclude it.</td></tr>
+<tr><td>Moving the JSON conversion could change its speed.</td><td>The code moves without change; the path search runs only after a failure.</td></tr>
+<tr><td>The message of <code>@json.to_json</code> errors changes.</td><td>The error case is still <code>Unsupported</code>; noted in the pull request.</td></tr>
+</tbody>
+</table>
+
+<h2 id="migration">Migration plan</h2>
+<p>Additive. Existing callers of <code>@json.to_json</code> keep working.
+Moon-Lander can bump its pin to the release that contains this change and
+match on <code>FromIonError</code>.</p>
+</main>
+</body>
+</html>
