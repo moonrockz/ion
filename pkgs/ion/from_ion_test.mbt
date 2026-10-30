@@ -281,3 +281,87 @@ test "within puts a segment in front of the error path" {
   let outer = error.within(Name("items"))
   assert_eq(outer.path(), [Name("items"), Index(0)])
 }
+
+///|
+test "Array reads an Ion list element by element" {
+  let value : Array[Int32] = @ion.FromIon::from_ion(ion("[1, 2, 3]"))
+  assert_eq(value, [1, 2, 3])
+}
+
+///|
+test "Array rejects an S-expression" {
+  let sexp = ion("(1 2)")
+  let error = try (@ion.FromIon::from_ion(sexp) : Array[Int32]) catch {
+    error => error
+  } noraise {
+    _ => fail("expected a decode error")
+  }
+  assert_true(error is TypeMismatch(path=[], expected=List, actual=Sexp(_)))
+}
+
+///|
+test "Array adds the element index to the path of an element error" {
+  let list = ion("[1, \"two\", 3]")
+  let error = try (@ion.FromIon::from_ion(list) : Array[Int32]) catch {
+    error => error
+  } noraise {
+    _ => fail("expected a decode error")
+  }
+  assert_true(error is TypeMismatch(path=[Index(1)], expected=Int, ..))
+}
+
+///|
+test "Map reads an Ion struct and keeps the field order" {
+  let value : Map[String, Int32] = @ion.FromIon::from_ion(ion("{b: 2, a: 1}"))
+  assert_eq(value.to_array(), [("b", 2), ("a", 1)])
+}
+
+///|
+test "Map names the field and the index of a nested failure" {
+  let value = ion("{events: [1, \"x\"]}")
+  let error = try
+    (@ion.FromIon::from_ion(value) : Map[String, Array[Int32]])
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected a decode error")
+  }
+  assert_eq(error.path(), [Name("events"), Index(1)])
+  assert_eq(error.message(), "$.events[1]: expected int, found string")
+}
+
+///|
+test "Map rejects a struct with a repeated field name" {
+  let value = ion("{a: 1, a: 2}")
+  let error = try (@ion.FromIon::from_ion(value) : Map[String, Int32]) catch {
+    error => error
+  } noraise {
+    _ => fail("expected a decode error")
+  }
+  assert_true(error is DuplicateField(path=[], name="a"))
+}
+
+///|
+test "Map rejects a field name with no known text" {
+  let value = @ion.Ion::from_fields([
+    @ion.Field::from_token(@ion.SymbolToken::from_sid(99), @ion.Ion(1)),
+  ])
+  let error = try (@ion.FromIon::from_ion(value) : Map[String, Int32]) catch {
+    error => error
+  } noraise {
+    _ => fail("expected a decode error")
+  }
+  guard error is MissingSymbolText(path=[], token~) else {
+    fail("expected MissingSymbolText, got \{error.message()}")
+  }
+  assert_eq(token.sid(), Some(99))
+}
+
+///|
+test "Map resolves a field name that is an Ion 1.0 system symbol ID" {
+  let value = @ion.Ion::from_fields([
+    @ion.Field::from_token(@ion.SymbolToken::from_sid(4), @ion.Ion(1)),
+  ])
+  let map : Map[String, Int32] = @ion.FromIon::from_ion(value)
+  assert_eq(map.to_array(), [("name", 1)])
+}

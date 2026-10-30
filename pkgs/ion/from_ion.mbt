@@ -370,3 +370,135 @@ pub impl FromIon for SymbolToken with fn from_ion(value : Ion) -> SymbolToken ra
 pub impl FromIon for Ion with fn from_ion(value : Ion) -> Ion {
   value
 }
+
+///|
+/// Reads an Ion list. An element error gains the element's index.
+pub impl[T : FromIon] FromIon for Array[T] with fn from_ion(value : Ion) -> Array[
+  T,
+] raise FromIonError {
+  match value.kind {
+    List(items) => {
+      let result : Array[T] = Array(capacity=items.length())
+      for index, item in items {
+        result.push(element(item, index))
+      }
+      result
+    }
+    _ => raise mismatch(List, value)
+  }
+}
+
+///|
+/// Reads an Ion struct in field order. Every field name needs known text, and
+/// no name may repeat. A field error gains the field's name.
+pub impl[T : FromIon] FromIon for Map[String, T] with fn from_ion(value : Ion) -> Map[
+  String,
+  T,
+] raise FromIonError {
+  match value.kind {
+    Struct(fields) => {
+      let result : Map[String, T] = Map([], capacity=fields.length())
+      for field in fields {
+        let name = field_name_text(field.name)
+        if result.contains(name) {
+          raise DuplicateField(path=[], name~)
+        }
+        result.set(
+          name,
+          FromIon::from_ion(field.value) catch {
+            error => raise error.within(Name(name))
+          },
+        )
+      }
+      result
+    }
+    _ => raise mismatch(Struct, value)
+  }
+}
+
+///|
+/// The text of a struct field name, resolving the Ion 1.0 system symbols by
+/// symbol ID.
+fn field_name_text(token : SymbolToken) -> String raise FromIonError {
+  match symbol_token_text(token) {
+    Some(text) => text
+    None => raise MissingSymbolText(path=[], token~)
+  }
+}
+
+///|
+/// The text of a symbol token: its own text, or the text of the Ion 1.0
+/// system symbol with its symbol ID. A token imported from a shared table
+/// has no text here.
+fn symbol_token_text(token : SymbolToken) -> String? {
+  match (token.text, token.import_location, token.sid) {
+    (Some(text), _, _) => Some(text)
+    (None, None, Some(sid)) => system_symbol_text(sid)
+    (None, _, _) => None
+  }
+}
+
+///|
+/// Decode the element at `index` of a list; an error gains the index.
+fn[T : FromIon] element(item : Ion, index : Int32) -> T raise FromIonError {
+  FromIon::from_ion(item) catch {
+    error => raise error.within(Index(index))
+  }
+}
+
+///|
+/// The elements of an Ion list of exactly `length` elements.
+fn list_of(value : Ion, length : Int32) -> Array[Ion] raise FromIonError {
+  match value.kind {
+    List(items) if items.length() == length => items
+    List(_) => raise WrongLength(path=[], actual=value.kind, expected=length)
+    _ => raise mismatch(List, value)
+  }
+}
+
+///|
+/// Every null, typed or untyped, reads as `None`; any other value reads as
+/// `Some` of the inner type.
+pub impl[T : FromIon] FromIon for T? with fn from_ion(value : Ion) -> T? raise FromIonError {
+  match value.kind {
+    Null(_) => None
+    _ => Some(FromIon::from_ion(value))
+  }
+}
+
+///|
+/// Reads an Ion string of exactly one character.
+pub impl FromIon for Char with fn from_ion(value : Ion) -> Char raise FromIonError {
+  match value.kind {
+    String(text) =>
+      match text.iter().to_array() {
+        [character] => character
+        _ => raise WrongLength(path=[], actual=value.kind, expected=1)
+      }
+    _ => raise mismatch(String, value)
+  }
+}
+
+///|
+/// Reads an Ion int from 0 to 255.
+pub impl FromIon for Byte with fn from_ion(value : Ion) -> Byte raise FromIonError {
+  int_between(value, 0N, 255N).to_int().to_byte()
+}
+
+///|
+/// Reads an Ion list of exactly two elements.
+pub impl[A : FromIon, B : FromIon] FromIon for (A, B) with fn from_ion(
+  value : Ion,
+) -> (A, B) raise FromIonError {
+  let items = list_of(value, 2)
+  (element(items[0], 0), element(items[1], 1))
+}
+
+///|
+/// Reads an Ion list of exactly three elements.
+pub impl[A : FromIon, B : FromIon, C : FromIon] FromIon for (A, B, C) with fn from_ion(
+  value : Ion,
+) -> (A, B, C) raise FromIonError {
+  let items = list_of(value, 3)
+  (element(items[0], 0), element(items[1], 1), element(items[2], 2))
+}

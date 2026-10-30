@@ -447,6 +447,8 @@ pub(open) trait FromIon {
 }
 pub impl FromIon for Unit
 pub impl FromIon for Bool
+pub impl FromIon for Byte
+pub impl FromIon for Char
 pub impl FromIon for Int
 pub impl FromIon for Int64
 pub impl FromIon for UInt
@@ -454,8 +456,13 @@ pub impl FromIon for UInt64
 pub impl FromIon for Float
 pub impl FromIon for Double
 pub impl FromIon for String
+pub impl[T : FromIon] FromIon for T?
 pub impl FromIon for Bytes
 pub impl FromIon for @bigint.BigInt
+pub impl[T : FromIon] FromIon for Array[T]
+pub impl[T : FromIon] FromIon for Map[String, T]
+pub impl[A : FromIon, B : FromIon] FromIon for (A, B)
+pub impl[A : FromIon, B : FromIon, C : FromIon] FromIon for (A, B, C)
 
 pub(open) trait IonVisitor {
   fn visit_value(Self, Ion) -> Unit = _
@@ -471,6 +478,8 @@ pub(open) trait ToIon {
 }
 pub impl ToIon for Unit
 pub impl ToIon for Bool
+pub impl ToIon for Byte
+pub impl ToIon for Char
 pub impl ToIon for Int
 pub impl ToIon for Int64
 pub impl ToIon for UInt
@@ -478,8 +487,11 @@ pub impl ToIon for UInt64
 pub impl ToIon for Float
 pub impl ToIon for Double
 pub impl ToIon for String
+pub impl[T : ToIon] ToIon for T?
 pub impl ToIon for Bytes
 pub impl ToIon for @bigint.BigInt
 pub impl[T : ToIon] ToIon for Array[T]
 pub impl ToIon for Json
 pub impl[T : ToIon] ToIon for Map[String, T]
+pub impl[A : ToIon, B : ToIon] ToIon for (A, B)
+pub impl[A : ToIon, B : ToIon, C : ToIon] ToIon for (A, B, C)
