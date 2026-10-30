@@ -19,9 +19,9 @@ Tracking: bd `ion-sfb`.
 
 ## 4. Laws and documentation
 
-- [ ] 4.1 Add quickcheck round-trip properties for every supported type.
-- [ ] 4.2 Document decoding in the `@ion` and `@json` READMEs (executable examples) and the cookbook.
-- [ ] 4.3 Run `moon info && moon fmt`, `mise run test:all`, and `openspec validate --all --strict`.
+- [x] 4.1 Add quickcheck round-trip properties for every supported type.
+- [x] 4.2 Document decoding in the `@ion` and `@json` READMEs (executable examples) and the cookbook.
+- [x] 4.3 Run `moon info && moon fmt`, `mise run test:all`, and `openspec validate --all --strict`.
 
 ## Workflow follow-up
 
