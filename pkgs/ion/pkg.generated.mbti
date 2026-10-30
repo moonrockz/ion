@@ -27,6 +27,19 @@ pub fn shift_date(Int, Int, Int, Int) -> (Int, Int, Int)
 pub fn system_symbol_text(Int) -> String?
 
 // Errors
+pub(all) suberror FromIonError {
+  TypeMismatch(path~ : Array[PathSegment], expected~ : IonType, actual~ : IonValueKind)
+  OutOfRange(path~ : Array[PathSegment], actual~ : IonValueKind, range~ : ValueRange)
+  WrongLength(path~ : Array[PathSegment], actual~ : IonValueKind, expected~ : Int)
+  DuplicateField(path~ : Array[PathSegment], name~ : String)
+  MissingSymbolText(path~ : Array[PathSegment], token~ : SymbolToken)
+  JsonDecode(path~ : Array[PathSegment], message~ : String)
+} derive(@debug.Debug)
+pub fn FromIonError::message(Self) -> String
+pub fn FromIonError::path(Self) -> Array[PathSegment]
+pub fn FromIonError::to_repr(Self) -> @debug.Repr
+pub fn FromIonError::within(Self, PathSegment) -> Self
+
 pub(all) suberror IonError {
   Syntax(String)
   DataModel(String)
@@ -67,6 +80,8 @@ pub fn Decimal::coefficient(Self) -> @bigint.BigInt
 pub fn Decimal::compare(Self, Self) -> Int?
 pub fn Decimal::exponent(Self) -> Int
 pub fn Decimal::from_int(Int) -> Self
+#deprecated
+pub fn Decimal::from_ion(Ion) -> Self raise FromIonError
 pub fn Decimal::from_x(@decimal.Decimal) -> Self
 pub fn Decimal::is_negative(Self) -> Bool
 pub fn Decimal::is_negative_zero(Self) -> Bool
@@ -83,6 +98,7 @@ pub fn Decimal::to_ion_string(Self) -> String
 pub fn Decimal::to_repr(Self) -> @debug.Repr
 pub fn Decimal::to_x(Self) -> @decimal.Decimal?
 pub fn Decimal::zero() -> Self
+pub impl FromIon for Decimal
 pub impl ToIon for Decimal
 
 pub struct Field {
@@ -171,6 +187,8 @@ pub fn Ion::float(Double) -> Self
 pub fn[A] Ion::fold(Self, A, IonFold[A]) -> A
 pub fn[R] Ion::fold_up(Self, scalar~ : (Self) -> R raise?, container~ : (Self, Array[(SymbolToken?, R)]) -> R raise?) -> R raise?
 pub fn Ion::from_fields(Array[Field]) -> Self
+#deprecated
+pub fn Ion::from_ion(Self) -> Self raise FromIonError
 pub fn Ion::has_annotations(Self) -> Bool
 pub fn Ion::has_imported_symbols(Self) -> Bool
 pub fn Ion::int(Int) -> Self
@@ -195,6 +213,7 @@ pub fn Ion::walk(Self) -> Iter[WalkEvent]
 pub fn Ion::walker(Self) -> ValueWalker
 pub fn Ion::with_annotation(Self, SymbolToken) -> Self
 pub fn Ion::with_annotations(Self, Array[SymbolToken]) -> Self
+pub impl FromIon for Ion
 pub impl ToIon for Ion
 
 pub(all) struct IonFold[A] {
@@ -250,6 +269,14 @@ pub fn IonValueKind::to_ion(Self) -> Ion
 pub fn IonValueKind::to_repr(Self) -> @debug.Repr
 pub impl ToIon for IonValueKind
 
+pub(all) enum PathSegment {
+  Name(String)
+  Index(Int)
+} derive(Eq, @debug.Debug)
+pub fn PathSegment::equal(Self, Self) -> Bool
+pub fn PathSegment::not_equal(Self, Self) -> Bool
+pub fn PathSegment::to_repr(Self) -> @debug.Repr
+
 type SharedSymbolTable
 pub fn SharedSymbolTable::from_value(Ion) -> Self? raise IonError
 pub fn SharedSymbolTable::name(Self) -> String
@@ -289,6 +316,8 @@ pub fn SymbolToken::SymbolToken(String) -> Self
 pub fn SymbolToken::equal(Self, Self) -> Bool
 pub fn SymbolToken::equivalent(Self, Self) -> Bool
 pub fn SymbolToken::from_import(Int, String, Int, Int) -> Self
+#deprecated
+pub fn SymbolToken::from_ion(Ion) -> Self raise FromIonError
 pub fn SymbolToken::from_sid(Int) -> Self
 pub fn SymbolToken::has_text(Self) -> Bool
 pub fn SymbolToken::hash(Self) -> Int
@@ -300,6 +329,7 @@ pub fn SymbolToken::text(Self) -> String?
 #deprecated
 pub fn SymbolToken::to_ion(Self) -> Ion
 pub fn SymbolToken::to_repr(Self) -> @debug.Repr
+pub impl FromIon for SymbolToken
 pub impl ToIon for SymbolToken
 
 pub struct Timestamp {
@@ -321,6 +351,8 @@ pub fn Timestamp::as_utc(Self) -> Self
 pub fn Timestamp::compare_instant(Self, Self) -> Int
 pub fn Timestamp::day(Self) -> Int?
 pub fn Timestamp::fraction(Self) -> Decimal?
+#deprecated
+pub fn Timestamp::from_ion(Ion) -> Self raise FromIonError
 pub fn Timestamp::hour(Self) -> Int?
 pub fn Timestamp::minute(Self) -> Int?
 pub fn Timestamp::month(Self) -> Int?
@@ -335,6 +367,7 @@ pub fn Timestamp::to_repr(Self) -> @debug.Repr
 pub fn Timestamp::validate(Self) -> Unit raise IonError
 pub fn Timestamp::with_offset(Self, TimestampOffset) -> Self
 pub fn Timestamp::year(Self) -> Int
+pub impl FromIon for Timestamp
 pub impl ToIon for Timestamp
 
 pub(all) enum TimestampOffset {
@@ -359,6 +392,14 @@ pub fn TimestampPrecision::hash(Self) -> Int
 pub fn TimestampPrecision::hash_combine(Self, Hasher) -> Unit
 pub fn TimestampPrecision::not_equal(Self, Self) -> Bool
 pub fn TimestampPrecision::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ValueRange {
+  Integers(min~ : @bigint.BigInt, max~ : @bigint.BigInt)
+  Float32
+} derive(Eq, @debug.Debug)
+pub fn ValueRange::equal(Self, Self) -> Bool
+pub fn ValueRange::not_equal(Self, Self) -> Bool
+pub fn ValueRange::to_repr(Self) -> @debug.Repr
 
 pub struct ValueWalker {
   // private fields
@@ -401,6 +442,21 @@ pub fn WriterState::set_field_name(Self, SymbolToken) -> Unit raise IonError
 // Type aliases
 
 // Traits
+pub(open) trait FromIon {
+  fn from_ion(Ion) -> Self raise FromIonError
+}
+pub impl FromIon for Unit
+pub impl FromIon for Bool
+pub impl FromIon for Int
+pub impl FromIon for Int64
+pub impl FromIon for UInt
+pub impl FromIon for UInt64
+pub impl FromIon for Float
+pub impl FromIon for Double
+pub impl FromIon for String
+pub impl FromIon for Bytes
+pub impl FromIon for @bigint.BigInt
+
 pub(open) trait IonVisitor {
   fn visit_value(Self, Ion) -> Unit = _
   fn visit_annotation(Self, SymbolToken) -> Unit = _
