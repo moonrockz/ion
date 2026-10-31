@@ -6,10 +6,14 @@ import {
 }
 
 // Values
+pub fn[T : @moonbitlang/core/json.FromJson] from_ion_via_json(@ion.Ion) -> T raise @ion.FromIonError
+
 pub fn read_json(StringView, fuel? : @ion.Fuel) -> @ion.Ion raise @ion.IonError
 
 #deprecated
 pub fn to_ion(Json) -> @ion.Ion
+
+pub fn[T : ToJson] to_ion_via_json(T) -> @ion.Ion
 
 pub fn to_json(@ion.Ion) -> Json raise @ion.IonError
 
@@ -20,7 +24,11 @@ pub fn write_json(@ion.Ion, indent? : Int) -> String raise @ion.IonError
 // Types and methods
 
 // Type aliases
+pub using @ion {type FromIonError}
+
 pub using @ion {type Ion}
+
+pub using @ion {trait FromIon}
 
 pub using @ion {trait ToIon}
 

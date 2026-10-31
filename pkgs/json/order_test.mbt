@@ -1,5 +1,6 @@
 // to_json raises for the first symbol with no text in document order: a
-// field name before its value, and an earlier field before a later one.
+// field name before its value, and an earlier field before a later one. The
+// message names the path to that symbol, or to the struct of that field name.
 
 ///|
 fn json_error(value : @core.IonValue) -> String {
@@ -8,6 +9,16 @@ fn json_error(value : @core.IonValue) -> String {
   } noraise {
     _ => "converted"
   }
+}
+
+///|
+/// The path of `count` nested first elements, as `[0][0]...`.
+fn zeros(count : Int32) -> String {
+  let builder = StringBuilder()
+  for _ in 0..<count {
+    builder.write_string("[0]")
+  }
+  builder.to_string()
 }
 
 ///|
@@ -22,7 +33,9 @@ test "to_json names the first symbol with no text in document order" {
   ])
   inspect(
     json_error(value),
-    content="a symbol known only by symbol ID 20 has no text to convert to JSON",
+    content=(
+      #|$: symbol $20 has no known text
+    ),
   )
 }
 
@@ -43,9 +56,9 @@ test "to_json keeps document order when the first error is far deeper" {
     inner,
     @core.IonValue::symbol_token(sid(40)),
   ])
-  inspect(
+  assert_eq(
     json_error(value),
-    content="a symbol known only by symbol ID 20 has no text to convert to JSON",
+    "$" + zeros(301) + ": symbol $20 has no known text",
   )
 }
 
@@ -89,9 +102,9 @@ test "to_json names a field name before its value below the recursion limit" {
   for _ in 0..<300 {
     value = @core.IonValue::list([value])
   }
-  inspect(
+  assert_eq(
     json_error(value),
-    content="a symbol known only by symbol ID 20 has no text to convert to JSON",
+    "$" + zeros(300) + ": symbol $20 has no known text",
   )
 }
 

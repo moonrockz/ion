@@ -91,8 +91,33 @@ test "JSON export changes Ion-specific values" {
 }
 ```
 
-`read_json` and `write_json` operate on text. `to_ion` and `to_json` convert
-between `IonValue` and MoonBit's core `Json` without an intermediate string.
+`read_json` and `write_json` operate on text. `Ion(json)` and `to_json`
+convert between `Ion` and MoonBit's core `Json` without an intermediate
+string.
+
+A type that derives core `ToJson` and `FromJson` gets Ion codecs through its
+JSON form:
+
+```moonbit
+struct DeadLetter {
+  id : Int
+  reason : String
+} derive(ToJson, FromJson)
+
+impl @ion.ToIon for DeadLetter with fn to_ion(self) {
+  @ion.to_ion_via_json(self)
+}
+
+impl @ion.FromIon for DeadLetter with fn from_ion(value) {
+  @ion.from_ion_via_json(value)
+}
+```
+
+`from_ion_via_json` raises `@ion.FromIonError`, with the path to the value that
+failed. The trip follows the export rules below, and core's derived form
+leaves out a field that is `None`: write such a field as absent, not as
+`null`. To decode Ion types exactly, without JSON in between, use
+`@ion.FromIon` (see the [core package README](../../pkgs/ion/README.mbt.md)).
 
 ## Decide whether the conversion fits your data
 

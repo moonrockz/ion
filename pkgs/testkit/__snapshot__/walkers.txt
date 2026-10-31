@@ -180,7 +180,7 @@ $ion_symbol_table::{
 ]
 binary: e00100eaed8183da87b80f0f856c6f63616cb5710c710b70
 hash: error: cannot hash a symbol whose text is unknown
-json: error: a symbol known only by symbol ID 11 has no text to convert to JSON
+json: error: $[1]: symbol $11 has no known text
 events: DocumentStart ListStart Scalar(local) Scalar($11) Scalar($0) ListEnd DocumentEnd
 == value 18
 text: {$0: $0}
@@ -190,7 +190,7 @@ pretty:
 }
 binary: e00100ead28070
 hash: 7ba39acba8e4918db3370e3f384b1da89c7d174bb140521e79e7ba3b71347d84
-json: error: a symbol known only by symbol ID 0 has no text to convert to JSON
+json: error: $: symbol $0 has no known text
 events: DocumentStart StructStart FieldName($0) Scalar($0) StructEnd DocumentEnd
 == value 19
 text: deep::[{a: (b {c: [d]})}]

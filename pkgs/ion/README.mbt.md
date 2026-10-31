@@ -15,8 +15,10 @@ codecs, Ion Hash, JSON conversion, and Ion Schema all build on it.
 - `SymbolToken` has optional text and an optional symbol ID, and
   `SymbolTable` maps IDs to text as a stream's symbol tables declare them.
 - `IonVisitor` and `IonFold` traverse a value depth-first.
-- Every failure is an `IonError`: `Syntax`, `DataModel`, `Unsupported`, or
-  `FuelExhausted`.
+- `FromIon` decodes MoonBit values from Ion, the inverse of `ToIon`.
+- Every read, write or validation failure is an `IonError`: `Syntax`,
+  `DataModel`, `Unsupported`, or `FuelExhausted`. A decode failure is a
+  `FromIonError` that names the path to the value that failed.
 - Nesting is unrestricted by default. Readers and schema operations accept
   optional `Fuel::Limited(Budget(...))` for defensive coding. Fuel bounds
   open nested operations, with siblings reusing the enclosing budget.
@@ -141,6 +143,144 @@ test "read a value by its kind" {
       )
     _ => fail("expected a struct")
   }
+}
+```
+
+## Decoding values
+
+`FromIon` is the inverse of `ToIon`. Call it with the type you want:
+`let x : T = @ion.FromIon::from_ion(value)`. Each type reads exactly the Ion
+type that its `ToIon` writes, and nothing else:
+
+| MoonBit type | Ion type |
+|---|---|
+| `Unit` | untyped `null` |
+| `Bool` | `bool` |
+| `Int`, `Int64`, `UInt`, `UInt64`, `Byte`, `BigInt` | `int`, in the type's range |
+| `Float`, `Double` | `float` (`Float` rounds to nearest) |
+| `Decimal`, `Timestamp` | `decimal`, `timestamp` |
+| `String`, `Char` | `string` (`Char`: exactly one character) |
+| `SymbolToken` | `symbol` |
+| `Bytes` | `blob` |
+| `Array[T]`, `(A, B)`, `(A, B, C)` | `list` (tuples: exactly that length) |
+| `Map[String, T]` | `struct` with unique field names that have text |
+| `T?` | any null is `None`; any other value is `Some` |
+| `Ion` | any value, unchanged |
+| `Json` | any value, by the JSON package's down-conversion |
+
+So a symbol is not a `String`, a decimal is not a `Double`, an int is not a
+`Decimal`, a clob is not `Bytes` and a typed null such as `null.int` is not an
+`Int`. Annotations on the decoded value are ignored. `None` writes the untyped
+`null`, so `Some(x)` reads back as `None` when `x` itself writes a null.
+
+```mbt check
+///|
+test "decode MoonBit values from Ion" {
+  let value = @text.read_ion("{name: \"Ada\", born: 1815, tags: [\"math\"]}")
+  let fields : Map[String, @ion.Ion] = @ion.FromIon::from_ion(value)
+  let born : Int32 = @ion.FromIon::from_ion(fields.get("born").unwrap())
+  assert_eq(born, 1815)
+  let pair : (Int32, String?) = @ion.FromIon::from_ion(
+    @text.read_ion("[1, null]"),
+  )
+  assert_eq(pair, (1, None))
+}
+```
+
+A failure raises `FromIonError`. Every case carries the `path` from the
+decoded root to the value that failed, as field names and list indexes:
+`TypeMismatch` keeps the expected Ion type and the actual kind (a typed null
+is `Null(Int)`), `OutOfRange` states the range, `WrongLength` the length,
+`DuplicateField` the name, `MissingSymbolText` the token, and `JsonDecode`
+the message of core's JSON decoder. `message()` renders the path in `$`
+notation:
+
+```mbt check
+///|
+test "a decode error names the path to the value" {
+  let value = @text.read_ion("{events: [1, null.int]}")
+  let error = try
+    (@ion.FromIon::from_ion(value) : Map[String, Array[Int32]])
+  catch {
+    error => error
+  } noraise {
+    _ => fail("expected a decode error")
+  }
+  assert_true(error is TypeMismatch(expected=Int, actual=Null(Int), ..))
+  inspect(error.message(), content="$.events[1]: expected int, found null.int")
+}
+```
+
+Implement `FromIon` for application types. Use `within` to add a field name
+to the path of an error from a field. Here a missing field reads as `null`,
+so it fails as a type mismatch at that field:
+
+```mbt check
+///|
+impl @ion.FromIon for ExampleCount with fn from_ion(value) {
+  let fields : Map[String, @ion.Ion] = @ion.FromIon::from_ion(value)
+  let count = fields.get("count").unwrap_or(@ion.Ion::untyped_null())
+  {
+    count: @ion.FromIon::from_ion(count) catch {
+      error => raise error.within(Name("count"))
+    },
+  }
+}
+
+///|
+test "decode an application type" {
+  let count : ExampleCount = @ion.FromIon::from_ion(
+    @ion.Ion(ExampleCount::{ count: 3, }),
+  )
+  assert_eq(count.count, 3)
+  let empty = @text.read_ion("{}")
+  let missing = try (@ion.FromIon::from_ion(empty) : ExampleCount) catch {
+    error => error.message()
+  } noraise {
+    _ => "decoded"
+  }
+  inspect(missing, content="$.count: expected int, found null")
+}
+```
+
+A type that derives core `ToJson` and `FromJson` gets both codecs through its
+JSON form with `to_ion_via_json` and `from_ion_via_json`. The trip follows the
+JSON rules, so annotations are dropped and symbols become strings. A
+`FromJson` failure becomes `JsonDecode` with its path in Ion terms:
+
+```mbt check
+///|
+struct ExampleEvent {
+  id : Int32
+  reason : String
+} derive(ToJson, FromJson, Eq, Debug)
+
+///|
+impl @ion.ToIon for ExampleEvent with fn to_ion(self) {
+  @ion.to_ion_via_json(self)
+}
+
+///|
+impl @ion.FromIon for ExampleEvent with fn from_ion(value) {
+  @ion.from_ion_via_json(value)
+}
+
+///|
+test "bridge a derived JSON type to Ion" {
+  let event = ExampleEvent::{ id: 7, reason: "timeout", }
+  inspect(
+    @text.write_ion(@ion.Ion(event)),
+    content="{id: 7, reason: \"timeout\"}",
+  )
+  let back : ExampleEvent = @ion.FromIon::from_ion(@ion.Ion(event))
+  assert_eq(back, event)
+  let wrong = @text.read_ion("[{id: \"seven\", reason: r}]")
+  let error = try (@ion.FromIon::from_ion(wrong) : Array[ExampleEvent]) catch {
+    error => error
+  } noraise {
+    _ => fail("expected a decode error")
+  }
+  assert_eq(error.path(), [Index(0), Name("id")])
 }
 ```
 

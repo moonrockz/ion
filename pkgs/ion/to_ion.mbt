@@ -110,3 +110,40 @@ pub impl[T : ToIon] ToIon for Map[String, T] with fn to_ion(
   }
   IonValue::from_fields(fields)
 }
+
+///|
+/// `None` writes the untyped `null`; `Some(value)` writes `value`. Every null
+/// reads back as `None`, so `Some(value)` does not round-trip when `value`
+/// itself writes a null.
+pub impl[T : ToIon] ToIon for T? with fn to_ion(self : T?) -> Ion {
+  match self {
+    None => IonValue::untyped_null()
+    Some(value) => Ion(value)
+  }
+}
+
+///|
+/// A character writes an Ion string of that one character.
+pub impl ToIon for Char with fn to_ion(self : Char) -> Ion {
+  IonValue::string(self.to_string())
+}
+
+///|
+/// A byte writes an Ion int from 0 to 255.
+pub impl ToIon for Byte with fn to_ion(self : Byte) -> Ion {
+  IonValue::int(self.to_int())
+}
+
+///|
+/// A pair writes an Ion list of its two components.
+pub impl[A : ToIon, B : ToIon] ToIon for (A, B) with fn to_ion(self : (A, B)) -> Ion {
+  IonValue::list([Ion(self.0), Ion(self.1)])
+}
+
+///|
+/// A triple writes an Ion list of its three components.
+pub impl[A : ToIon, B : ToIon, C : ToIon] ToIon for (A, B, C) with fn to_ion(
+  self : (A, B, C),
+) -> Ion {
+  IonValue::list([Ion(self.0), Ion(self.1), Ion(self.2)])
+}
