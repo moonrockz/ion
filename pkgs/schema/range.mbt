@@ -8,6 +8,7 @@
 
 ///|
 /// A bound of a range.
+#derive(Debug)
 pub(all) enum Bound {
   /// `min` or `max`: there is no bound.
   Unbounded
@@ -15,14 +16,15 @@ pub(all) enum Bound {
   Inclusive(@ion.IonValue)
   /// The bound value is not in the range: `exclusive::` in ISL.
   Exclusive(@ion.IonValue)
-} derive(Debug)
+}
 
 ///|
 /// A range of numbers or of timestamps.
+#derive(Debug)
 pub struct ValueRange {
   lower : Bound
   upper : Bound
-} derive(Debug)
+}
 
 ///|
 /// A range from `lower` to `upper`.
@@ -70,10 +72,11 @@ pub fn ValueRange::contains(self : ValueRange, value : @ion.IonValue) -> Bool {
 
 ///|
 /// What a range compares: numbers or timestamps.
+#derive(Eq)
 priv enum RangeKind {
   Number
   Instant
-} derive(Eq)
+}
 
 ///|
 /// Whether a value can be compared in a range, and as what. A null or a `nan`

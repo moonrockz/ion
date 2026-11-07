@@ -3,3 +3,6 @@
 
 # Generated MoonBit interfaces are derived; collapse them in diffs.
 pkg.generated.mbti linguist-generated=true
+
+# The tools CLI compares the managed OpenSpec files byte for byte.
+openspec/schemas/html-design/** text eol=lf

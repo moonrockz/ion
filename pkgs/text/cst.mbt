@@ -7,6 +7,7 @@
 
 ///|
 /// The content of a concrete syntax tree value.
+#derive(Debug)
 pub(all) enum CstContent {
   /// A scalar value's token (null, bool, int, float, decimal, timestamp,
   /// symbol, string, clob, or blob).
@@ -14,23 +15,25 @@ pub(all) enum CstContent {
   List(Array[CstValue])
   Sexp(Array[CstValue])
   Struct(Array[CstValue])
-} derive(Debug)
+}
 
 ///|
 /// A value in the concrete syntax tree.
+#derive(Debug)
 pub struct CstValue {
   annotations : Array[IonToken]
   field_name : IonToken?
   start : Int32
   end : Int32
   content : CstContent
-} derive(Debug)
+}
 
 ///|
 /// A concrete syntax tree for an Ion datagram.
+#derive(Debug)
 pub struct CstDocument {
   values : Array[CstValue]
-} derive(Debug)
+}
 
 ///|
 /// Parse Ion text into a concrete syntax tree.

@@ -21,23 +21,26 @@
 
 ///|
 /// A predefined character class.
+#derive(Debug)
 priv enum Predefined {
   Digit
   Space
   Word
-} derive(Debug)
+}
 
 ///|
 /// A member of a character class.
+#derive(Debug)
 priv enum ClassItem {
   Single(Char)
   Span(Char, Char)
   /// A predefined class, or its complement when the flag is `true`.
   Named(Predefined, Bool)
-} derive(Debug)
+}
 
 ///|
 /// A parsed regular expression.
+#derive(Debug)
 priv enum Node {
   Literal(Char)
   AnyChar
@@ -49,16 +52,17 @@ priv enum Node {
   Alternation(Array[Node])
   /// A greedy repetition, from a minimum to an optional maximum count.
   Repeat(Node, Int32, Int32?)
-} derive(Debug)
+}
 
 ///|
 /// A regular expression of the ISL 2.0 `regex` constraint.
+#derive(Debug)
 pub struct Regex {
   source : String
   ignore_case : Bool
   multiline : Bool
   priv program : Array[Instruction]
-} derive(Debug)
+}
 
 ///|
 /// Parse `source` as an ISL 2.0 regular expression. A construct that ISL 2.0
@@ -387,6 +391,7 @@ fn Regex::char_matches(
 
 ///|
 /// A Pike VM instruction.
+#derive(Debug)
 priv enum Instruction {
   /// Read one character that matches a `Literal`, `AnyChar`, or `Class`.
   Read(Node)
@@ -396,7 +401,7 @@ priv enum Instruction {
   Fork(Int32, Int32)
   Jump(Int32)
   Accept
-} derive(Debug)
+}
 
 ///|
 /// The most instructions an expression may compile to. Counted repetition

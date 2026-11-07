@@ -2,10 +2,11 @@
 
 ///|
 /// A single way in which a value fails to satisfy a schema type.
+#derive(Debug)
 pub struct Violation {
   path : String
   message : String
-} derive(Debug)
+}
 
 ///|
 /// The location within the value where the violation occurred (`$`, `$.field`,

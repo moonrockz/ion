@@ -11,13 +11,13 @@ pub fn[T : @moonbitlang/core/json.FromJson] from_ion_via_json(@ion.Ion) -> T rai
 pub fn read_json(StringView, fuel? : @ion.Fuel) -> @ion.Ion raise @ion.IonError
 
 #deprecated
-pub fn to_ion(Json) -> @ion.Ion
+pub fn to_ion(@moonbitlang/core/json.Json) -> @ion.Ion
 
-pub fn[T : ToJson] to_ion_via_json(T) -> @ion.Ion
+pub fn[T : @moonbitlang/core/json.ToJson] to_ion_via_json(T) -> @ion.Ion
 
-pub fn to_json(@ion.Ion) -> Json raise @ion.IonError
+pub fn to_json(@ion.Ion) -> @moonbitlang/core/json.Json raise @ion.IonError
 
-pub fn write_json(@ion.Ion, indent? : Int) -> String raise @ion.IonError
+pub fn write_json(@ion.Ion, indent? : Int32) -> String raise @ion.IonError
 
 // Errors
 

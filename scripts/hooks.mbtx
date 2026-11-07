@@ -1,18 +1,13 @@
-///|
+----
 import {
   "moonbitlang/async@0.22.4",
   "moonbitlang/async@0.22.4/process",
-  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/x@0.5.7/sys",
   "moonbitlang/core/env",
-  "moonrockz/moonspec@0.10.0",
-  "moonrockz/expect@0.6.0",
-  // moonspec 0.10.0 pulls older versions of these modules, whose moon.mod.json
-  // manifests the current toolchain rejects. Remove these pins after a moonspec
-  // release that depends on fixed versions.
-  "moonbitlang/regexp@0.3.6",
-  "moonbit-community/prettyprinter@0.4.11",
-  "moonrockz/gherkin@0.5.1",
+  "moonrockz/moonspec@0.12.0/async" @moonspec,
+  "moonrockz/expect@0.6.1",
 }
+----
 
 ///|
 /// Git hooks installation.
@@ -27,10 +22,11 @@ import {
 let usage : String = "usage: hooks.mbtx install"
 
 ///|
+#derive(Debug, Eq)
 struct Command {
   program : String
   args : Array[String]
-} derive(Debug, Eq)
+}
 
 ///|
 fn Command::to_string(self : Command) -> String {
@@ -58,7 +54,7 @@ fn install_commands() -> Array[Command] {
 ///|
 /// The result of removing the override. git exits with 5 when the key is
 /// not set, which is the usual case.
-fn unset_result(code : Int) -> Result[Unit, String] {
+fn unset_result(code : Int32) -> Result[Unit, String] {
   match code {
     0 | 5 => Ok(())
     _ => Err("git config --unset core.hooksPath failed with exit code \{code}")
@@ -66,7 +62,7 @@ fn unset_result(code : Int) -> Result[Unit, String] {
 }
 
 ///|
-async fn run_command(command : Command) -> Int {
+async fn run_command(command : Command) -> Int32 {
   @process.run(command.program, command.args) catch {
     error => {
       eprintln("\{command.program}: \{error}")
@@ -76,7 +72,7 @@ async fn run_command(command : Command) -> Int {
 }
 
 ///|
-async fn install() -> Int {
+async fn install() -> Int32 {
   match unset_result(run_command(unset_hooks_path)) {
     Ok(_) => run_command(lefthook_install)
     Err(message) => {
@@ -113,7 +109,7 @@ impl @moonspec.World for HooksWorld with fn configure(self, setup) {
     @expect.expect(lines.join("\n")).to_equal(doc.content)
   })
   setup.when1("git exits with {int} while removing the override", fn(
-    code : Int,
+    code : Int32,
   ) {
     self.unset = Some(unset_result(code))
   })

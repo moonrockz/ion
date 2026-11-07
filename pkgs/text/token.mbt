@@ -6,6 +6,7 @@
 
 ///|
 /// The lexical kind of an Ion text token.
+#derive(Debug)
 pub(all) enum IonTokenKind {
   /// A run of whitespace.
   Whitespace
@@ -50,15 +51,16 @@ pub(all) enum IonTokenKind {
   DoubleColon
   /// An unquoted operator inside an S-expression.
   Operator(String)
-} derive(Debug)
+}
 
 ///|
 /// A token: its kind and its inclusive-start/exclusive-end span in the source.
+#derive(Debug)
 pub struct IonToken {
   kind : IonTokenKind
   start : Int32
   end : Int32
-} derive(Debug)
+}
 
 ///|
 /// The token's kind.

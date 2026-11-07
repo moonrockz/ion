@@ -37,7 +37,7 @@ fn user_value_ready(pending : StringView) -> Bool {
     }
     match prefix {
       Some((Some(_), _)) => return true
-      Some((None, consumed)) => rest = rest.view(start_offset=consumed)
+      Some((None, consumed)) => rest = rest.exact_view(start=consumed)
       None => return false
     }
   }

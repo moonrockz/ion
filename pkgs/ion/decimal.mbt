@@ -6,11 +6,12 @@
 
 ///|
 /// An Ion `decimal` value, kept as `coefficient * 10^exponent`.
+#derive(Debug)
 pub struct Decimal {
   coefficient : BigInt
   exponent : Int32
   negative_zero : Bool
-} derive(Debug)
+}
 
 ///|
 /// Build a decimal from an explicit coefficient and base-10 exponent.

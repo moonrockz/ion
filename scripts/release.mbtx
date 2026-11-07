@@ -1,20 +1,15 @@
-///|
+----
 import {
   "moonbitlang/async@0.22.4",
   "moonbitlang/async@0.22.4/process",
   "moonbitlang/async@0.22.4/fs",
-  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/x@0.5.7/sys",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
-  "moonrockz/moonspec@0.10.0",
-  "moonrockz/expect@0.6.0",
-  // moonspec 0.10.0 pulls older versions of these modules, whose moon.mod.json
-  // manifests the current toolchain rejects. Remove these pins after a moonspec
-  // release that depends on fixed versions.
-  "moonbitlang/regexp@0.3.6",
-  "moonbit-community/prettyprinter@0.4.11",
-  "moonrockz/gherkin@0.5.1",
+  "moonrockz/moonspec@0.12.0/async" @moonspec,
+  "moonrockz/expect@0.6.1",
 }
+----
 
 ///|
 /// Release tooling for the Release workflow.
@@ -43,6 +38,7 @@ let release_dir : String = "release"
 
 ///|
 /// A subcommand of the script.
+#derive(Eq, Debug)
 enum Command {
   Version
   Plan
@@ -50,7 +46,7 @@ enum Command {
   Tag(String)
   Credentials
   Assets
-} derive(Eq, Debug)
+}
 
 ///|
 /// Read the subcommand from the script arguments.
@@ -70,7 +66,7 @@ fn parse_command(args : ArrayView[String]) -> Command? {
 ///|
 /// The next version from the git-cliff exit code and stdout, without the
 /// leading `v`.
-fn choose_version(exit_code : Int, stdout : String) -> String {
+fn choose_version(exit_code : Int32, stdout : String) -> String {
   let version = without_v(stdout.trim().to_owned())
   if exit_code == 0 && version != "" {
     version
@@ -83,7 +79,7 @@ fn choose_version(exit_code : Int, stdout : String) -> String {
 /// `text` without one leading `v`.
 fn without_v(text : String) -> String {
   if text.has_prefix("v") {
-    text.view(start_offset=1).to_owned()
+    text.exact_view(start=1).to_owned()
   } else {
     text
   }
@@ -91,12 +87,13 @@ fn without_v(text : String) -> String {
 
 ///|
 /// Where the release version comes from.
+#derive(Eq, Debug)
 enum VersionSource {
   /// A tag push: the tag names the version.
   FromTag(String)
   /// Any other run: git-cliff computes it from the commits.
   FromCommits
-} derive(Eq, Debug)
+}
 
 ///|
 /// Releases run from a tag push, a push to main, or a manual run on main.
@@ -117,11 +114,12 @@ fn version_source(
 
 ///|
 /// The decision of a Release run, written to GITHUB_OUTPUT.
+#derive(Eq, Debug)
 struct Plan {
   version : String
   prerelease : Bool
   tag_exists : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The release version must be the one in moon.mod. A version with a `-`
@@ -165,23 +163,24 @@ fn mod_version(moon_mod : String) -> String? {
 fn version_value(line : StringView) -> String? {
   let line = line.trim()
   guard line.has_prefix("version") else { return None }
-  let rest = line.view(start_offset=7).trim_start()
+  let rest = line.exact_view(start=7).trim_start()
   guard rest.has_prefix("=") else { return None }
-  let value = rest.view(start_offset=1).trim()
+  let value = rest.exact_view(start=1).trim()
   guard value.length() >= 2 && value.has_prefix("\"") && value.has_suffix("\"") else {
     return None
   }
-  Some(value.view(start_offset=1, end_offset=value.length() - 1).to_owned())
+  Some(value.exact_view(start=1, end=value.length() - 1).to_owned())
 }
 
 ///|
 /// Which release notes git-cliff renders.
+#derive(Eq, Debug)
 enum NotesTarget {
   /// The notes of the latest tag.
   Latest
   /// The commits after the latest tag, under a new tag.
   Unreleased(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// The notes of a tagged version are the latest tag's; the notes of a version
@@ -210,10 +209,11 @@ fn tag_name(version : String) -> String {
 
 ///|
 /// A program and its arguments.
+#derive(Eq, Debug)
 struct Invocation {
   program : String
   args : Array[String]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Create the annotated release tag, then push it to origin.
@@ -237,16 +237,17 @@ fn require_token(value : String?) -> Result[String, String] {
 ///|
 /// `{"token": ...}` with correct JSON escaping.
 fn credentials_json(token : String) -> String {
-  "{\"token\": \{token.to_json().stringify()}}\n"
+  "{\"token\": \{@json.to_json(token).stringify()}}\n"
 }
 
 ///|
 /// A build artifact and the release asset that it becomes.
+#derive(Eq, Debug)
 struct Asset {
   source : String
   target : String
   executable : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 /// The native CLI builds (downloaded to artifacts/) and their release names.
@@ -297,8 +298,8 @@ async fn stdout_of(
   cmd : String,
   args : Array[String],
   cwd? : StringView,
-  extra_env? : Map[String, String] = {},
-) -> (Int, String) {
+  extra_env~ : Map[String, String] = {},
+) -> (Int32, String) {
   // Collect stderr only to discard it; this needs no null device.
   let (code, out, _) = @process.collect_output(cmd, args, cwd?, extra_env~) catch {
     _ => (1, b"", b"")
@@ -449,7 +450,7 @@ async fn main {
 ///|
 /// Scenario state for `features/release.feature`.
 struct ReleaseWorld {
-  mut exit_code : Int
+  mut exit_code : Int32
   mut stdout : String
   mut event_name : String?
   mut ref_type : String?
@@ -520,7 +521,7 @@ fn invocation_line(i : Invocation) -> String {
 ///|
 impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
   setup.given2("git-cliff exits with {int} and prints {string}", fn(
-    code : Int,
+    code : Int32,
     stdout : String,
   ) {
     self.exit_code = code
@@ -637,7 +638,7 @@ impl @moonspec.World for ReleaseWorld with fn configure(self, setup) {
   })
   setup.then3("the listing of {string} with {int} bytes is {string}", fn(
     name : String,
-    size : Int,
+    size : Int32,
     expected : String,
   ) raise {
     @expect.expect(listing_line(name, size.to_int64())).to_equal(expected)
@@ -686,7 +687,7 @@ async fn git_cliff_dir() -> String? {
 ///|
 /// The directory part of `path`, or `None` when it has none.
 fn parent_dir(path : String) -> String? {
-  path.rev_find("/").map(i => path.view(end_offset=i).to_owned())
+  path.rev_find("/").map(i => path.exact_view(end=i).to_owned())
 }
 
 ///|

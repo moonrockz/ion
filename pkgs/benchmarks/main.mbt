@@ -194,14 +194,12 @@ async fn main {
     @utf8.encode(text).length()
   }
   println(
-    {
+    @core_json.to_json({
       "iterations": iterations,
       "elapsed_ms": elapsed,
       "input_bytes": bytes,
       "checksum": expected,
-    }
-    .to_json()
-    .stringify(),
+    }).stringify(),
   )
 }
 

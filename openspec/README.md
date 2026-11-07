@@ -2,27 +2,31 @@
 
 ## Shared OpenSpec bundle
 
-`html-design` comes from Mission Control's `moonrockz/openspec-ext` bundle.
-The schema, templates, licenses and verification script are generated snapshots;
-keep repository overrides in `openspec/config.yaml` and `AGENTS.md`.
+`html-design` comes from Mission Control's tools CLI, `mission-control-tools`.
+`.mise.toml` pins its version. The schema, templates and licenses are managed
+snapshots; `openspec/extensions.lock.json` records their digests and the tool
+version that wrote them. Keep repository overrides in `openspec/config.yaml` and
+`AGENTS.md`.
 
-- Run `mise run openspec:check` to verify the committed file hashes and default schema.
-- Run `mise run openspec:setup` to regenerate the six core agent skills with isolated global preferences.
-- Run `mise exec -- openspec schema validate html-design` and
-  `mise exec -- openspec validate --all --strict` before review.
+- Run `mise run openspec:check` to verify the committed file digests, the
+  default schema and the pinned tool version.
+- Run `mise run openspec:setup` to regenerate the six core agent skills with
+  isolated global preferences.
+- Run `mise run openspec:verify` before review. It runs `openspec:check` and
+  `openspec:validate` (`openspec schema validate html-design`, then
+  `openspec validate --all --strict`).
 - New designs are offline `design.html` with inline CSS. Existing changes keep
   their schema metadata and original designs, including Markdown designs.
 - OpenSpec requirements and change artifacts are committed project documentation.
   Scratch documents remain local under the existing repository rules.
 
-The extension module awaits publication. Until then, update snapshots from a
-Mission Control source checkout with its pinned toolchain:
+To update the snapshots, change the `github:moonrockz/mission-control` version
+in `.mise.toml`, then run:
 
 ```shell
-mise exec -- moon run apps/openspec-ext/cmd -- install /absolute/path/to/this-repo
+mise install
+mise exec -- mission-control-tools openspec install
+mise run openspec:verify
 ```
 
-Run that command from Mission Control, then run this repository's checks. After
-release, use `moonx moonrockz/openspec-ext@<published-version>/cmd install .`
-with an actual published version. Do not add an unpublished registry dependency.
-See [the shared tool guide](https://github.com/moonrockz/mission-control/blob/main/apps/openspec-ext/README.md).
+See [the tools guide](https://github.com/moonrockz/mission-control/blob/main/apps/tools/README.md).

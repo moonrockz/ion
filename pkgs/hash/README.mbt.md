@@ -59,7 +59,7 @@ test "the canonical serialization" {
   let hex = serialized
     .to_array()
     .map(octet => {
-      (octet.to_int() + 0x100).to_string(radix=16).view(start_offset=1)
+      (octet.to_int() + 0x100).to_string(radix=16).exact_view(start=1)
     })
     .join(" ")
   // 0B begins the value, 11 is `true`'s descriptor, and 0E ends the value.

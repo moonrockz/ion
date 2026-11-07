@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
-#MISE description="Validate all OpenSpec artifacts"
+#MISE description="Validate the shared OpenSpec workflow"
+#MISE depends=["openspec:schema"]
 exec openspec validate --all --strict

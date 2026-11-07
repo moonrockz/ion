@@ -1,25 +1,20 @@
-///|
+----
 import {
   "moonbitlang/async@0.22.4",
   "moonbitlang/async@0.22.4/process",
   "moonbitlang/async@0.22.4/fs",
   "moonbitlang/async@0.22.4/stdio",
-  "moonbitlang/x@0.5.5/sys",
-  "moonbitlang/x@0.5.5/crypto",
+  "moonbitlang/x@0.5.7/sys",
+  "moonbitlang/x@0.5.7/crypto",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/bigint",
-  "moonrockz/moonspec@0.10.0",
-  "moonrockz/expect@0.6.0",
-  // moonspec 0.10.0 pulls older versions of these modules, whose moon.mod.json
-  // manifests the current toolchain rejects. Remove these pins after a moonspec
-  // release that depends on fixed versions.
-  "moonbitlang/regexp@0.3.6",
-  "moonbit-community/prettyprinter@0.4.11",
-  "moonrockz/gherkin@0.5.1",
+  "moonrockz/moonspec@0.12.0/async" @moonspec,
+  "moonrockz/expect@0.6.1",
 }
+----
 
 ///|
 /// CI tooling for the test jobs.
@@ -44,48 +39,54 @@ let usage : String =
 
 ///|
 /// A MoonBit build target.
+#derive(Debug, Eq)
 enum Target {
   Wasm
   WasmGc
   Js
   Native
   Llvm
-} derive(Debug, Eq)
+}
 
 ///|
 /// The options of `ci.mbtx test`.
+#derive(Debug, Eq)
 struct TestOptions {
   target : Target
   coverage : Bool
   log : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// A program and its arguments.
+#derive(Debug, Eq)
 struct Command {
   program : String
   args : Array[String]
-} derive(Debug, Eq)
+}
 
 ///|
 /// The commands of `ci.mbtx test`: preparation commands that write to the
 /// console, then the test command whose output goes to the log too.
+#derive(Debug, Eq)
 struct TestPlan {
   prepare : Array[Command]
   run : Command
-} derive(Debug, Eq)
+}
 
 ///|
 /// The options of `ci.mbtx conformance`.
+#derive(Debug, Eq)
 struct ConformanceOptions {
   log : String
-  exit_code : Int?
+  exit_code : Int32?
   target : Target
   output_dir : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// A conformance suite that the tests report on.
+#derive(Debug, Eq, Hash)
 enum Suite {
   IonFiles
   IonReaders
@@ -93,7 +94,7 @@ enum Suite {
   Isl10
   Isl20
   IonHash
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 let suites : Array[Suite] = [
@@ -107,6 +108,7 @@ let suites : Array[Suite] = [
 
 ///|
 /// One of the counts in a CONFORMANCE record.
+#derive(Debug, Eq)
 enum Count {
   Total
   Passed
@@ -117,7 +119,7 @@ enum Count {
   Stale
   Files
   OutOfScope
-} derive(Debug, Eq)
+}
 
 ///|
 let counts : Array[Count] = [
@@ -134,56 +136,62 @@ let counts : Array[Count] = [
 
 ///|
 /// The counts of one suite. The first seven are shown in the summary table.
+#derive(Debug, Eq)
 struct Counts {
-  total : Int
-  passed : Int
-  skipped : Int
-  known_failures : Int
-  not_applicable : Int
-  unexpected : Int
-  stale : Int
-  files : Int
-  out_of_scope : Int
-} derive(Debug, Eq)
+  total : Int32
+  passed : Int32
+  skipped : Int32
+  known_failures : Int32
+  not_applicable : Int32
+  unexpected : Int32
+  stale : Int32
+  files : Int32
+  out_of_scope : Int32
+}
 
 ///|
 /// One valid CONFORMANCE record.
+#derive(Debug, Eq)
 struct SuiteResult {
   suite : Suite
   counts : Counts
   details : Array[String]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 enum Status {
   Passed
   Failed
   Incomplete
-} derive(Debug, Eq)
+}
 
 ///|
 /// Revisions of the conformance data.
+#derive(Debug, Eq)
 struct Corpora {
   ion_tests : String?
   ion_schema_tests : String?
   ion_hash_fixture_sha256 : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Facts about the checkout and the runner that go into a report.
+#derive(Debug, Eq)
 struct Environment {
   runner_os : String
   commit : String?
   corpora : Corpora
-} derive(Debug, Eq)
+}
 
 ///|
 /// The conformance report. Its JSON form keeps the field names of the
 /// Python report (schema version 1), because reports of earlier runs are
 /// baselines.
+#derive(Debug, Eq)
 struct Report {
   status : Status
-  test_exit_code : Int?
+  test_exit_code : Int32?
   target : Target
   runner_os : String
   excluded_suites : Map[Suite, String]
@@ -192,56 +200,63 @@ struct Report {
   suites : Map[Suite, SuiteResult]
   errors : Array[String]
   comparison : Comparison?
-} derive(Debug, Eq)
+}
 
 ///|
 /// The run that a baseline comes from.
+#derive(Debug, Eq)
 struct BaselineRun {
   run_id : Int64
   url : String
   commit : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// The report of an earlier successful main run, or why there is none.
+#derive(Debug, Eq)
 enum Baseline[T] {
   Available(BaselineRun, T)
   Unavailable(String)
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 enum SuiteState {
   Reported
   Excluded
   Missing
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 struct SuiteChange {
   baseline_state : SuiteState
   current_state : SuiteState
   delta : Counts?
   exclusion_changed : Bool
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 struct Changes {
   current_commit : String?
   baseline_corpora : Corpora
   current_corpora : Corpora
   corpus_changes : Array[String]
   suites : Map[Suite, SuiteChange]
-} derive(Debug, Eq)
+}
 
 ///|
 /// The change from the baseline, or why there is no baseline.
+#derive(Debug, Eq)
 enum Comparison {
   NoBaseline(String)
   Compared(BaselineRun, Changes)
-} derive(Debug, Eq)
+}
 
 ///|
 /// A workflow run from the GitHub run listing.
+#derive(Debug, Eq)
 struct WorkflowRun {
   id : Int64
   head_branch : String?
@@ -249,24 +264,26 @@ struct WorkflowRun {
   event : String?
   html_url : String
   head_sha : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// An artifact from the GitHub artifact listing.
+#derive(Debug, Eq)
 struct Artifact {
   id : Int64
   name : String
   expired : Bool
-  size_in_bytes : Int?
-} derive(Debug, Eq)
+  size_in_bytes : Int32?
+}
 
 ///|
 /// The report file of a downloaded artifact.
+#derive(Debug, Eq)
 enum ReportFile {
   Contents(Bytes)
   Missing
   TooLarge
-} derive(Debug, Eq)
+}
 
 ///|
 /// One step of the baseline search. The search is pure: each request step
@@ -305,7 +322,7 @@ let record_prefix : String = "CONFORMANCE "
 
 ///|
 /// The largest artifact that the baseline search downloads.
-let max_artifact_bytes : Int = 16 * 1024 * 1024
+let max_artifact_bytes : Int32 = 16 * 1024 * 1024
 
 ///|
 /// The largest report file that the baseline search reads.
@@ -313,7 +330,7 @@ let max_report_bytes : Int64 = 1024L * 1024L
 
 ///|
 /// The time limit of each `gh` call.
-let request_timeout_ms : Int = 30000
+let request_timeout_ms : Int32 = 30000
 
 // ------------------------------------------------------------ arguments
 
@@ -395,7 +412,7 @@ fn Command::to_string(self : Command) -> String {
 
 ///|
 /// The line that `ci.mbtx test` appends to GITHUB_OUTPUT.
-fn github_output(exit_code : Int) -> String {
+fn github_output(exit_code : Int32) -> String {
   "exit_code=\{exit_code}\n"
 }
 
@@ -410,8 +427,8 @@ fn parent_dir(path : String) -> String? {
   }
   match index {
     None => None
-    Some(0) => Some(path.view(end_offset=1).to_owned())
-    Some(end) => Some(path.view(end_offset=end).to_owned())
+    Some(0) => Some(path.exact_view(end=1).to_owned())
+    Some(end) => Some(path.exact_view(end~).to_owned())
   }
 }
 
@@ -421,7 +438,7 @@ fn parse_conformance_args(
 ) -> Result[ConformanceOptions, String] {
   let mut log : String? = None
   // None: the flag is absent. Some(None): the flag has an empty value.
-  let mut exit_code : Int?? = None
+  let mut exit_code : Int32?? = None
   let mut target = Wasm
   let mut output_dir : String? = None
   let mut rest = args
@@ -543,7 +560,7 @@ let table_counts : Array[Count] = [
 ]
 
 ///|
-fn Counts::get(self : Counts, count : Count) -> Int {
+fn Counts::get(self : Counts, count : Count) -> Int32 {
   match count {
     Total => self.total
     Passed => self.passed
@@ -599,7 +616,7 @@ fn SuiteState::name(self : SuiteState) -> String {
 ///|
 /// A count is a JSON integer that is not negative. Booleans, fractions and
 /// null are not counts.
-fn decode_count(fields : Map[String, Json], count : Count) -> Int? {
+fn decode_count(fields : Map[String, Json], count : Count) -> Int32? {
   match fields.get(count.key()) {
     Some(Number(value, ..)) if value >= 0.0 &&
       value == value.floor() &&
@@ -622,7 +639,7 @@ fn decode_record(
   if results.contains(suite) {
     return Err("duplicate result for \{id}")
   }
-  let values : Array[Int] = []
+  let values : Array[Int32] = []
   for count in counts {
     match decode_count(fields, count) {
       Some(value) => values.push(value)
@@ -735,7 +752,7 @@ fn exclusions_for(target : Target) -> Map[Suite, String] {
 /// valid counts, and no suite has unexpected results or stale exclusions.
 fn make_report(
   log : String,
-  exit_code : Int?,
+  exit_code : Int32?,
   target : Target,
   environment : Environment,
 ) -> Report {
@@ -778,7 +795,7 @@ fn optional_string(value : String?) -> Json {
 }
 
 ///|
-fn optional_int(value : Int?) -> Json {
+fn optional_int(value : Int32?) -> Json {
   match value {
     Some(number) => Json::number(number.to_double())
     None => Json::null()
@@ -898,7 +915,7 @@ fn Comparison::to_json(self : Comparison) -> Json {
 }
 
 ///|
-fn unicode_escape(code : Int) -> String {
+fn unicode_escape(code : Int32) -> String {
   "\\u" + code.to_string(radix=16).pad_start(4, '0')
 }
 
@@ -932,7 +949,7 @@ fn escape(text : String) -> String {
 }
 
 ///|
-fn signed(value : Int) -> String {
+fn signed(value : Int32) -> String {
   if value >= 0 {
     "+\{value}"
   } else {
@@ -949,7 +966,7 @@ fn revision_text(revision : String?) -> String {
 }
 
 ///|
-fn exit_code_text(exit_code : Int?) -> String {
+fn exit_code_text(exit_code : Int32?) -> String {
   match exit_code {
     Some(code) => code.to_string()
     None => "None"
@@ -958,7 +975,7 @@ fn exit_code_text(exit_code : Int?) -> String {
 
 ///|
 /// Compare strings by code point, like Python `sorted`.
-fn compare_code_points(left : String, right : String) -> Int {
+fn compare_code_points(left : String, right : String) -> Int32 {
   let a = left.iter().collect()
   let b = right.iter().collect()
   let shorter = if a.length() < b.length() { a.length() } else { b.length() }
@@ -1734,7 +1751,7 @@ fn non_empty_env(name : String) -> String? {
 ///|
 /// Run a command and copy its merged stdout and stderr to our stdout and to
 /// the log file as the output arrives.
-async fn tee(command : Command, log_path : String) -> Int {
+async fn tee(command : Command, log_path : String) -> Int32 {
   if parent_dir(log_path) is Some(dir) {
     @fs.mkdir(dir, recursive=true, allow_exist=true)
   }
@@ -1759,7 +1776,7 @@ async fn tee(command : Command, log_path : String) -> Int {
 }
 
 ///|
-async fn run_test(options : TestOptions) -> Int {
+async fn run_test(options : TestOptions) -> Int32 {
   let plan = test_plan(options)
   for command in plan.prepare {
     let code = @process.run(command.program, command.args)
@@ -1780,7 +1797,7 @@ async fn run_test(options : TestOptions) -> Int {
 }
 
 ///|
-async fn run_conformance(options : ConformanceOptions) -> Int {
+async fn run_conformance(options : ConformanceOptions) -> Int32 {
   let log = if @fs.exists(options.log) {
     @utf8.decode_lossy(@fs.read_file(options.log).binary())
   } else {
@@ -1829,7 +1846,7 @@ async fn run_conformance(options : ConformanceOptions) -> Int {
 }
 
 ///|
-fn usage_error(message : String) -> Int {
+fn usage_error(message : String) -> Int32 {
   eprintln(message)
   eprintln(usage)
   2
@@ -1883,7 +1900,7 @@ impl @moonspec.World for TestWorld with fn configure(self, setup) {
     @expect.expect(self.parsed).to_equal(Err(message))
   })
   setup.then2("the GitHub output for exit code {int} is {string}", fn(
-    code : Int,
+    code : Int32,
     line : String,
   ) raise {
     @expect.expect(github_output(code)).to_equal(line + "\n")
@@ -1903,7 +1920,7 @@ struct LogRecord {
 struct FakeRun {
   id : Int64
   mut expired : Bool
-  mut size_in_bytes : Int
+  mut size_in_bytes : Int32
   mut report : ReportFile
   mut download_fails : Bool
 }
@@ -2055,7 +2072,7 @@ fn ConformanceWorld::fake_run(
 fn ConformanceWorld::make(
   self : ConformanceWorld,
   target : String,
-  exit_code : Int?,
+  exit_code : Int32?,
 ) -> Unit raise {
   guard Target::parse(target) is Some(target) else {
     fail("unknown target \{target}")
@@ -2277,7 +2294,7 @@ impl @moonspec.World for ConformanceWorld with fn configure(self, setup) {
   // Making the report
   setup.when2("the {word} tests exit with code {int}", fn(
     target : String,
-    code : Int,
+    code : Int32,
   ) raise {
     self.make(target, Some(code))
   })
@@ -2298,7 +2315,7 @@ impl @moonspec.World for ConformanceWorld with fn configure(self, setup) {
       fail("no error contains \{text}: \{Repr(errors)}")
     }
   })
-  setup.then1("{int} suites are excluded", fn(count : Int) raise {
+  setup.then1("{int} suites are excluded", fn(count : Int32) raise {
     @expect.expect(self.current().excluded_suites.length()).to_equal(count)
   })
   setup.then1("the summary is:", fn(doc : @moonspec.DocString) raise {
@@ -2350,7 +2367,7 @@ impl @moonspec.World for ConformanceWorld with fn configure(self, setup) {
   setup.then1("the log path is {string}", fn(path : String) raise {
     @expect.expect(self.options().log).to_equal(path)
   })
-  setup.then1("the exit code is {int}", fn(code : Int) raise {
+  setup.then1("the exit code is {int}", fn(code : Int32) raise {
     @expect.expect(self.options().exit_code).to_equal(Some(code))
   })
   setup.then0("there is no exit code", fn() raise {
@@ -2451,7 +2468,7 @@ impl @moonspec.World for ConformanceWorld with fn configure(self, setup) {
   })
   setup.given2("the artifact of run {long} has {int} bytes", fn(
     id : Int64,
-    size : Int,
+    size : Int32,
   ) raise {
     self.fake_run(id).size_in_bytes = size
   })
@@ -2570,7 +2587,7 @@ impl @moonspec.World for ConformanceWorld with fn configure(self, setup) {
   setup.then3("the {string} delta of {word} is {int}", fn(
     suite : String,
     key : String,
-    delta : Int,
+    delta : Int32,
   ) raise {
     guard self.changes().suites.get(suite_of(suite)) is Some(change) &&
       change.delta is Some(counts) else {
@@ -2659,66 +2676,74 @@ async test "baseline feature" {
 
 ///|
 /// The options of `ci.mbtx bench`.
+#derive(Debug, Eq)
 struct BenchOptions {
   output_dir : String
-  items : Int
-  samples : Int
-  sample_ms : Int
-  cli_items : Int
-} derive(Debug, Eq)
+  items : Int32
+  samples : Int32
+  sample_ms : Int32
+  cli_items : Int32
+}
 
 ///|
 /// The workload sizes that a report measured. Two reports compare only when
 /// their configs are equal.
+#derive(Debug, Eq)
 struct BenchConfig {
-  items : Int
-  samples : Int
-  sample_ms : Int
-  cli_items : Int
-} derive(Debug, Eq)
+  items : Int32
+  samples : Int32
+  sample_ms : Int32
+  cli_items : Int32
+}
 
 ///|
+#derive(Debug, Eq)
 enum Shape {
   Many
   Large
   Deep
   Mixed
-} derive(Debug, Eq)
+}
 
 ///|
 /// One benchmark driver operation on one fixture shape.
+#derive(Debug, Eq)
 struct Workload {
   shape : Shape
   mode : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// The median of the samples of one workload. `samples` keeps the driver
 /// output of each sample as it was.
+#derive(Debug, Eq)
 struct Metric {
   median_ms : Double
   mib_per_second : Double
   samples : Array[Json]
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 struct CliSample {
   elapsed_ms : Double
   peak_rss_bytes : Int64
-} derive(Debug, Eq)
+}
 
 ///|
 /// The CLI `print -` measurement.
+#derive(Debug, Eq)
 struct CliResult {
   input_bytes : Int64
   median_ms : Double
   median_peak_rss_bytes : Double
   samples : Array[CliSample]
-} derive(Debug, Eq)
+}
 
 ///|
 /// The performance report. It passed when it has no errors. Its JSON form
 /// keeps the field names of the Python report (schema version 1).
+#derive(Debug, Eq)
 struct BenchReport {
   commit : String
   runner_os : String
@@ -2730,38 +2755,42 @@ struct BenchReport {
   cli : CliResult?
   errors : Array[String]
   comparison : Baseline[BenchChanges]?
-} derive(Debug, Eq)
+}
 
 ///|
 /// What the comparison needs from a compatible earlier report.
+#derive(Debug, Eq)
 struct PreviousBench {
   toolchain : Json
   cpu : Json
   metrics : Map[String, Double]
   peak_rss_bytes : Double
-} derive(Debug, Eq)
+}
 
 ///|
 /// A toolchain or CPU that differs from the baseline.
+#derive(Debug, Eq)
 struct EnvironmentChange {
   key : String
   previous : Json
   current : String
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 struct MetricChange {
   baseline_ms : Double
   change_percent : Double
-} derive(Debug, Eq)
+}
 
 ///|
+#derive(Debug, Eq)
 struct BenchChanges {
   current_commit : String
   environment_changes : Array[EnvironmentChange]
   metrics : Array[(String, MetricChange)]
   cli_peak_rss_change_percent : Double?
-} derive(Debug, Eq)
+}
 
 // ------------------------------------------------------ bench functions
 
@@ -2797,11 +2826,11 @@ let cli_line : String = "{name: \"ion\", values: [1, 2, 3], tag: sample}\n"
 
 ///|
 /// The time limit of each benchmark command.
-let bench_timeout_ms : Int = 180000
+let bench_timeout_ms : Int32 = 180000
 
 ///|
 /// A time limit in words: whole seconds, or milliseconds.
-fn duration_text(ms : Int) -> String {
+fn duration_text(ms : Int32) -> String {
   if ms == 1000 {
     "1 second"
   } else if ms % 1000 == 0 {
@@ -3007,7 +3036,7 @@ fn summarize(samples : Array[Json]) -> Result[Metric, String] {
 
 ///|
 /// The input of the CLI measurement: one small struct per line.
-fn cli_input(items : Int) -> String {
+fn cli_input(items : Int32) -> String {
   let out = StringBuilder()
   for _ in 0..<items {
     out.write_string(cli_line)
@@ -3065,7 +3094,7 @@ fn cpu_from_cpuinfo(text : String) -> String? {
   for line in text.split("\n") {
     if line.has_prefix("model name") || line.has_prefix("Hardware") {
       let value = match line.find(":") {
-        Some(index) => line.view(start_offset=index + 1)
+        Some(index) => line.exact_view(start=index + 1)
         None => line
       }
       return Some(value.trim().to_owned())
@@ -3075,7 +3104,7 @@ fn cpu_from_cpuinfo(text : String) -> String? {
 }
 
 ///|
-fn truncate_chars(text : String, limit : Int) -> String {
+fn truncate_chars(text : String, limit : Int32) -> String {
   let out = StringBuilder()
   let mut count = 0
   for char in text {
@@ -3229,7 +3258,7 @@ fn decode_bench_config(fields : Map[String, Json]) -> BenchConfig? {
     fields.get("rss_method") is Some(String("external-time")) else {
     return None
   }
-  let values : Array[Int] = []
+  let values : Array[Int32] = []
   for key in ["items", "samples", "sample_ms", "cli_items"] {
     match fields.get(key) {
       Some(Number(value, ..)) if value == value.floor() &&
@@ -3376,7 +3405,7 @@ fn python_json_compact(json : Json) -> String {
 ///|
 /// Format like the Python format spec `.<digits>f` (`+.<digits>f` with
 /// `plus`): the exact binary value, rounded half to even.
-fn format_fixed(value : Double, digits : Int, plus? : Bool = false) -> String {
+fn format_fixed(value : Double, digits : Int32, plus~ : Bool = false) -> String {
   let bits = value.reinterpret_as_int64()
   let sign = if bits < 0L { "-" } else if plus { "+" } else { "" }
   let exponent_bits = ((bits >> 52) & 0x7FFL).to_int()
@@ -3412,9 +3441,9 @@ fn format_fixed(value : Double, digits : Int, plus? : Bool = false) -> String {
   } else {
     let point = text.length() - digits
     sign +
-    text.view(end_offset=point).to_owned() +
+    text.exact_view(end=point).to_owned() +
     "." +
-    text.view(start_offset=point).to_owned()
+    text.exact_view(start=point).to_owned()
   }
 }
 
@@ -3529,7 +3558,7 @@ fn failure_message(error : Error) -> String {
 /// `combined`). A failed command fails with its stderr.
 async fn bench_command(
   command : Command,
-  combined? : Bool = false,
+  combined~ : Bool = false,
 ) -> String raise BenchFailure {
   let output = @async.with_timeout_opt(bench_timeout_ms, async fn() {
     @process.collect_output(command.program, command.args)
@@ -3581,7 +3610,7 @@ async fn measure_cli_in(
   dir : String,
   cli : Command,
   source : String,
-  timeout_ms? : Int = bench_timeout_ms,
+  timeout_ms~ : Int32 = bench_timeout_ms,
 ) -> CliSample {
   let stats = dir + "/rss"
   let errors = dir + "/stderr"
@@ -3737,7 +3766,7 @@ async fn cpu_identifier(machine : String) -> String {
 }
 
 ///|
-async fn run_bench(options : BenchOptions) -> Int {
+async fn run_bench(options : BenchOptions) -> Int32 {
   @fs.mkdir(options.output_dir, recursive=true, allow_exist=true)
   let commit = match non_empty_env("GITHUB_SHA") {
     Some(sha) => sha
@@ -3972,7 +4001,7 @@ impl @moonspec.World for BenchWorld with fn configure(self, setup) {
     @expect.expect(metric.median_ms).to_equal(median)
     @expect.expect(metric.mib_per_second).to_equal(mib)
   })
-  setup.then1("the metric keeps the {int} samples", fn(count : Int) raise {
+  setup.then1("the metric keeps the {int} samples", fn(count : Int32) raise {
     guard self.metric is Ok(metric) else {
       fail("expected a metric, got \{Repr(self.metric)}")
     }
@@ -3984,7 +4013,7 @@ impl @moonspec.World for BenchWorld with fn configure(self, setup) {
   })
   setup.then3(
     "the CLI input for {int} items has {int} bytes and starts with:",
-    fn(items : Int, bytes : Int, doc : @moonspec.DocString) raise {
+    fn(items : Int32, bytes : Int32, doc : @moonspec.DocString) raise {
       let input = cli_input(items)
       @expect.expect(@utf8.encode(input).length()).to_equal(bytes)
       @expect.expect(input.has_prefix(doc.content + "\n")).to_be_true()
@@ -4138,11 +4167,11 @@ impl @moonspec.World for BenchWorld with fn configure(self, setup) {
     self.report = Some({ ..self.current(), cli: None, }.fail(message))
   })
   setup.when1("the measurements fail with {int} characters of output", fn(
-    count : Int,
+    count : Int32,
   ) raise {
     self.report = Some(self.current().fail("x".repeat(count)))
   })
-  setup.then1("the bench error has {int} characters", fn(count : Int) raise {
+  setup.then1("the bench error has {int} characters", fn(count : Int32) raise {
     @expect.expect(self.current().errors.map(error => error.length())).to_equal([
         count,
       ],
@@ -4259,7 +4288,7 @@ async test "measure_cli stops the command as well as time when it times out" {
   } noraise {
     sample => fail("expected a timeout, got \{Repr(sample)}")
   }
-  let pid = @fs.read_file(pid_file).text().trim().to_string()
+  let pid = @fs.read_file(pid_file).text().trim().to_owned()
   @fs.rmdir(dir, recursive=true)
   @expect.expect(failure.contains("timed out after 1 second")).to_be_true()
   @expect.expect(process_left(pid)).to_equal(false)

@@ -7,20 +7,22 @@
 ///|
 /// The identity of an imported symbol with unknown text. `sid` is its
 /// one-based position in the shared table, not its ID in a stream.
+#derive(Eq, Hash, Debug)
 pub struct ImportLocation {
   name : String
   sid : Int32
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// A symbol token: known text, a stream-local symbol ID, and the shared-table
 /// location when an imported symbol's text is unknown.
+#derive(Eq, Hash, Debug)
 pub struct SymbolToken {
   text : String?
   sid : Int32?
   import_location : ImportLocation?
   import_version : Int32?
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// A symbol token with known text.

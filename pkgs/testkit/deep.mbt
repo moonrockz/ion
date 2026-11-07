@@ -3,6 +3,7 @@
 
 ///|
 /// The container that each level of a deep value adds.
+#derive(Debug, Eq)
 pub(all) enum DeepShape {
   /// `[[...]]`
   List
@@ -14,7 +15,7 @@ pub(all) enum DeepShape {
   AnnotatedList
   /// List, struct and sexp in turn, from the outside in.
   Mixed
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend DeepShape with @debug.Debug::{to_repr}

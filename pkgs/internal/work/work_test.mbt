@@ -1,7 +1,8 @@
 ///|
+#derive(Debug, Eq)
 suberror Failed {
   AtLeaf
-} derive(Debug, Eq)
+}
 
 ///|
 async fn descend(

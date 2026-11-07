@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="Validate the shared html-design OpenSpec schema"
+exec openspec schema validate html-design

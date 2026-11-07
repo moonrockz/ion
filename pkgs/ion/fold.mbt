@@ -10,11 +10,12 @@
 /// - `Continue(a)` — descend into the value's children with the new accumulator
 /// - `SkipChildren(a)` — do not descend, continue with siblings
 /// - `Stop(a)` — stop the whole traversal and return `a`
+#derive(Debug, Eq)
 pub(all) enum FoldAction[A] {
   Continue(A)
   SkipChildren(A)
   Stop(A)
-} derive(Debug, Eq)
+}
 
 ///|
 /// The accumulator carried by a `FoldAction`.

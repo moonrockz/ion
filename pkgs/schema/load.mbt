@@ -674,7 +674,7 @@ fn built_in_type(name : String) -> Constraint? {
     "nothing" => Some(Nothing)
     "document" => Some(IsDocument)
     _ if name.has_prefix("$") =>
-      match built_in_ion_types(name.view(start_offset=1).to_owned()) {
+      match built_in_ion_types(name.exact_view(start=1).to_owned()) {
         Some(types) =>
           Some(
             AnyOf([
@@ -991,7 +991,7 @@ async fn Context::base_types(
         _ => ()
       }
       let ion_name = if name.has_prefix("$") {
-        name.view(start_offset=1).to_owned()
+        name.exact_view(start=1).to_owned()
       } else {
         name
       }

@@ -2,6 +2,7 @@
 
 ///|
 /// An error raised while reading, writing, or validating Ion.
+#derive(Debug)
 pub(all) suberror IonError {
   /// A syntax or encoding error in Ion text or binary input.
   Syntax(String)
@@ -17,7 +18,7 @@ pub(all) suberror IonError {
     operation~ : FuelOperation,
     location~ : FuelLocation
   )
-} derive(Debug)
+}
 
 ///|
 /// The human-readable message carried by an [`IonError`].

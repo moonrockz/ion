@@ -20,10 +20,11 @@
 
 ///|
 /// The version of the Ion Schema Language that a schema document uses.
+#derive(Eq)
 priv enum IslVersion {
   Isl10
   Isl20
-} derive(Eq)
+}
 
 ///|
 /// Load a schema from a parsed schema document, in ISL 1.0 or ISL 2.0 as its

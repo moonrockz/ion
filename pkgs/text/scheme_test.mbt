@@ -182,12 +182,13 @@ test "an operator symbol round-trips inside an S-expression" {
 
 ///|
 /// A Scheme-like S-expression, used to generate Ion text that represents code.
+#derive(Debug)
 enum SampleExpr {
   Number(BigInt)
   Identifier(String)
   Str(String)
   Call(Array[SampleExpr])
-} derive(Debug)
+}
 
 ///|
 /// Procedure names, operators, variables, and awkward symbols.

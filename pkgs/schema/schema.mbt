@@ -2,16 +2,18 @@
 
 ///|
 /// A named Ion Schema type: a name and the constraints its values must satisfy.
+#derive(Debug)
 pub struct TypeDefinition {
   name : String
   constraints : Array[Constraint]
-} derive(Debug)
+}
 
 ///|
 /// A loaded Ion Schema.
+#derive(Debug)
 pub struct Schema {
   types : Array[TypeDefinition]
-} derive(Debug)
+}
 
 ///|
 /// An empty schema.

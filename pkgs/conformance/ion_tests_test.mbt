@@ -69,7 +69,7 @@ fn describe(error : Error) -> String {
     @ion.IonError::FuelExhausted(..) as error => error.message()
     Failure(message) =>
       match message.find("FAILED: ") {
-        Some(index) => message.view(start_offset=index + 8).to_owned()
+        Some(index) => message.exact_view(start=index + 8).to_owned()
         None => message
       }
     _ => error.to_string()
@@ -207,7 +207,7 @@ test "ion-tests" {
   let mut passed = 0
   let mut excluded = 0
   for path in files_under(root) {
-    let relative = path.view(start_offset=root.length() + 1).to_owned()
+    let relative = path.exact_view(start=root.length() + 1).to_owned()
     if relative.has_suffix(".md") {
       continue
     }

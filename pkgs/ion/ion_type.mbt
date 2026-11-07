@@ -7,6 +7,7 @@
 ///
 /// `Null` is the untyped `null`; every other type also has a typed null value
 /// (`null.int`, `null.list`, ...), whose Ion type is the type itself.
+#derive(Eq, Hash, Debug)
 pub(all) enum IonType {
   Null
   Bool
@@ -21,7 +22,7 @@ pub(all) enum IonType {
   List
   Sexp
   Struct
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// Every Ion type, in the order used throughout the specification.

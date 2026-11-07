@@ -597,7 +597,7 @@ async fn load_schema(
 fn directory_of(path : String) -> String {
   match path.rev_find("/") {
     Some(0) => "/"
-    Some(index) => path.view(end_offset=index).to_owned()
+    Some(index) => path.exact_view(end=index).to_owned()
     None => "."
   }
 }

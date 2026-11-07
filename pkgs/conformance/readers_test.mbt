@@ -269,7 +269,7 @@ async test "ion-tests through every reader and writer" {
   let mut passed = 0
   let mut excluded = 0
   for path in files_under(root) {
-    let relative = path.view(start_offset=root.length() + 1).to_owned()
+    let relative = path.exact_view(start=root.length() + 1).to_owned()
     if relative.has_suffix(".md") || skipped.contains(relative) {
       continue
     }

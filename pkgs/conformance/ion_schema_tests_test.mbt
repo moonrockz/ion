@@ -459,7 +459,7 @@ fn Suite::run(self : Suite) -> Unit raise {
     if !path.has_suffix(".isl") {
       continue
     }
-    let relative = path.view(start_offset=schema_root.length() + 1).to_owned()
+    let relative = path.exact_view(start=schema_root.length() + 1).to_owned()
     let outcomes : Array[(String, SchemaOutcome)] = []
     let values = try read_file(path) catch {
       error => {

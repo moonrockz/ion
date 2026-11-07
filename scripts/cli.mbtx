@@ -1,20 +1,15 @@
-///|
+----
 import {
   "moonbitlang/async@0.22.4",
   "moonbitlang/async@0.22.4/process",
   "moonbitlang/async@0.22.4/fs",
-  "moonbitlang/x@0.5.5/sys",
+  "moonbitlang/x@0.5.7/sys",
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
-  "moonrockz/moonspec@0.10.0",
-  "moonrockz/expect@0.6.0",
-  // moonspec 0.10.0 pulls older versions of these modules, whose moon.mod.json
-  // manifests the current toolchain rejects. Remove these pins after a moonspec
-  // release that depends on fixed versions.
-  "moonbitlang/regexp@0.3.6",
-  "moonbit-community/prettyprinter@0.4.11",
-  "moonrockz/gherkin@0.5.1",
+  "moonrockz/moonspec@0.12.0/async" @moonspec,
+  "moonrockz/expect@0.6.1",
 }
+----
 
 ///|
 /// CLI smoke test.
@@ -30,10 +25,11 @@ import {
 let usage : String = "usage: cli.mbtx smoke"
 
 ///|
+#derive(Debug, Eq)
 struct Command {
   program : String
   args : Array[String]
-} derive(Debug, Eq)
+}
 
 ///|
 fn Command::to_string(self : Command) -> String {
@@ -42,10 +38,11 @@ fn Command::to_string(self : Command) -> String {
 
 ///|
 /// What a check expects of the exit code of the tool.
+#derive(Debug, Eq)
 enum Expect {
   Succeeds
   Fails
-} derive(Debug, Eq)
+}
 
 ///|
 fn Expect::name(self : Expect) -> String {
@@ -66,6 +63,7 @@ fn Expect::parse(text : String) -> Expect? {
 
 ///|
 /// One check of the smoke test.
+#derive(Debug, Eq)
 enum Check {
   /// Run the tool with the arguments, optionally with a file as stdin.
   Run(
@@ -77,7 +75,7 @@ enum Check {
   /// Print the fixture as Ion binary, print that binary as text, and compare
   /// it with the text print of the fixture.
   RoundTrip(title~ : String, fixture~ : String)
-} derive(Debug, Eq)
+}
 
 ///|
 fn Check::title(self : Check) -> String {
@@ -144,7 +142,7 @@ fn ion_command(args : Array[String]) -> Command {
 fn judge(
   args : Array[String],
   expect : Expect,
-  code : Int,
+  code : Int32,
 ) -> Result[Unit, String] {
   let command = ["ion", ..args].join(" ")
   match (expect, code) {
@@ -171,7 +169,7 @@ fn judge_round_trip(
 
 ///|
 /// Run a command with the console as stdout, and a file as stdin if given.
-async fn run_inherited(command : Command, stdin : String?) -> Int {
+async fn run_inherited(command : Command, stdin : String?) -> Int32 {
   match stdin {
     Some(path) =>
       @process.run(
@@ -226,7 +224,7 @@ async fn run_check(check : Check) -> Result[Unit, String] {
 }
 
 ///|
-async fn smoke() -> Int {
+async fn smoke() -> Int32 {
   for check in smoke_checks() {
     println("==> \{check.title()}")
     if run_check(check) is Err(message) {
@@ -289,7 +287,7 @@ impl @moonspec.World for CliWorld with fn configure(self, setup) {
   setup.when3("the check {string} that {word} exits with {int}", fn(
     args : String,
     expect : String,
-    code : Int,
+    code : Int32,
   ) raise {
     guard Expect::parse(expect) is Some(expect) else {
       fail("unknown expectation \{expect}")
