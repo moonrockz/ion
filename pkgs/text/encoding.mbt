@@ -9,13 +9,14 @@
 
 ///|
 /// A character encoding of Ion text.
+#derive(Eq, Debug)
 pub(all) enum TextEncoding {
   UTF8
   UTF16BE
   UTF16LE
   UTF32BE
   UTF32LE
-} derive(Eq, Debug)
+}
 
 ///|
 /// The encoding of Ion text that starts with `bytes`, and the length of its

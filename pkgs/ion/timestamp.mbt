@@ -10,26 +10,29 @@
 
 ///|
 /// The precision to which an Ion timestamp is specified.
+#derive(Eq, Hash, Debug)
 pub(all) enum TimestampPrecision {
   Year
   Month
   Day
   Minute
   Second
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// The local offset of an Ion timestamp.
+#derive(Eq, Hash, Debug)
 pub(all) enum TimestampOffset {
   /// A known offset from UTC, in minutes east of UTC. `Z` and `+00:00` are
   /// both `Known(0)`.
   Known(Int32)
   /// The "unknown local offset" written `-00:00`.
   Unknown
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// An Ion `timestamp` value.
+#derive(Debug)
 pub struct Timestamp {
   year : Int32
   month : Int32?
@@ -39,7 +42,7 @@ pub struct Timestamp {
   second : Int32?
   fraction : Decimal?
   offset : TimestampOffset?
-} derive(Debug)
+}
 
 ///|
 /// Build a timestamp from its components. Components left as `None` reduce the

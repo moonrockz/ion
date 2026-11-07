@@ -10,6 +10,7 @@
 /// `field` is the struct field name the value has in its parent, or `None`
 /// outside a struct. A typed null of a container type, such as `null.list`,
 /// is a `Scalar`: it has no children.
+#derive(Debug)
 pub(all) enum WalkEvent {
   /// A value with no children.
   Scalar(IonValue, field~ : SymbolToken?)
@@ -17,7 +18,7 @@ pub(all) enum WalkEvent {
   Enter(IonValue, field~ : SymbolToken?)
   /// The same container, after its children.
   Exit(IonValue, field~ : SymbolToken?)
-} derive(Debug)
+}
 
 ///|
 pub extend WalkEvent with @debug.Debug::{to_repr}

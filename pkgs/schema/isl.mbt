@@ -8,10 +8,11 @@
 ///|
 /// An occurrence range: how many times a matching element or field must (or may)
 /// appear.
+#derive(Debug)
 pub struct Occurs {
   lower : Int32
   upper : Int32?
-} derive(Debug)
+}
 
 ///|
 /// An occurrence range with an optional upper bound (`None` is unbounded).
@@ -45,14 +46,16 @@ pub fn Occurs::allows(self : Occurs, count : Int32) -> Bool {
 
 ///|
 /// A named field within a `fields` constraint.
+#derive(Debug)
 pub struct FieldConstraint {
   name : String
   ty : Constraint
   occurs : Occurs
-} derive(Debug)
+}
 
 ///|
 /// A constraint over a value.
+#derive(Debug)
 pub(all) enum Constraint {
   /// A built-in type: a value of one of these Ion types, not null. `int` is
   /// `IsType([Int])`, and `number` is `IsType([Int, Float, Decimal])`.
@@ -124,15 +127,16 @@ pub(all) enum Constraint {
   OrderedElements(Array[(Constraint, Occurs)])
   /// `contains: [ ... ]`: the container holds every listed value.
   Contains(Array[@ion.IonValue])
-} derive(Debug)
+}
 
 ///|
 /// An IEEE 754 binary interchange format.
+#derive(Eq, Debug)
 pub(all) enum FloatFormat {
   Binary16
   Binary32
   Binary64
-} derive(Eq, Debug)
+}
 
 ///|
 /// A constraint that always holds, used for `$any`.

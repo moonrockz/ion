@@ -7,6 +7,7 @@
 
 ///|
 /// A single event in an Ion document.
+#derive(Debug)
 pub(all) enum IonEvent {
   DocumentStart
   DocumentEnd
@@ -23,7 +24,7 @@ pub(all) enum IonEvent {
   /// A non-container value. Its annotations were emitted as `Annotation`
   /// events, so the carried value has none.
   Scalar(@ion.IonValue)
-} derive(Debug)
+}
 
 ///|
 /// A short human-readable name for the event.

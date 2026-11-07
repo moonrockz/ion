@@ -7,6 +7,7 @@
 
 ///|
 /// The core kind of an Ion value, without annotations.
+#derive(Debug)
 pub(all) enum IonValueKind {
   /// A null of the given type; `Null(IonType::Null)` is untyped `null`.
   Null(IonType)
@@ -22,23 +23,25 @@ pub(all) enum IonValueKind {
   List(Array[IonValue])
   Sexp(Array[IonValue])
   Struct(Array[Field])
-} derive(Debug)
+}
 
 ///|
 /// A field of an Ion struct: a symbol *token* name and a value.
 ///
 /// The name is a token, not a value, so it cannot carry annotations.
+#derive(Debug)
 pub struct Field {
   name : SymbolToken
   value : IonValue
-} derive(Debug)
+}
 
 ///|
 /// An Ion value: zero or more annotations followed by the core value.
+#derive(Debug)
 pub struct Ion {
   annotations : Array[SymbolToken]
   kind : IonValueKind
-} derive(Debug)
+}
 
 ///|
 /// The core kind of this value.

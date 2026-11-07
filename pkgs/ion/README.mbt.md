@@ -250,10 +250,11 @@ JSON rules, so annotations are dropped and symbols become strings. A
 
 ```mbt check
 ///|
+#derive(ToJson, FromJson, Eq, Debug)
 struct ExampleEvent {
   id : Int32
   reason : String
-} derive(ToJson, FromJson, Eq, Debug)
+}
 
 ///|
 impl @ion.ToIon for ExampleEvent with fn to_ion(self) {

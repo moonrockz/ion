@@ -3,12 +3,13 @@
 
 ///|
 /// An actor event payload whose JSON form is derived.
+#derive(ToJson, FromJson, Eq, Debug)
 struct DeadLetter {
   id : Int32
   reason : String
   tags : Array[String]
   retry : Int32?
-} derive(ToJson, FromJson, Eq, Debug)
+}
 
 ///|
 /// A bridge impl: the type gains `ToIon` and `FromIon` in one line each.

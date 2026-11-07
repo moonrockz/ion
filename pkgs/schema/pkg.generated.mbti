@@ -11,13 +11,15 @@ import {
 // Errors
 
 // Types and methods
+#derive(@debug.Debug)
 pub(all) enum Bound {
   Unbounded
   Inclusive(@ion.Ion)
   Exclusive(@ion.Ion)
-} derive(@debug.Debug)
+}
 pub fn Bound::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub(all) enum Constraint {
   IsType(Array[@ion.IonType])
   NullOr(Constraint)
@@ -26,8 +28,8 @@ pub(all) enum Constraint {
   Fields(Array[FieldConstraint])
   ValidValues(Array[@ion.Ion])
   InRange(ValueRange)
-  ContainerLength(Int, Int?)
-  CodepointLength(Int, Int?)
+  ContainerLength(Int32, Int32?)
+  CodepointLength(Int32, Int32?)
   AllOf(Array[Constraint])
   AnyOf(Array[Constraint])
   OneOf(Array[Constraint])
@@ -35,11 +37,11 @@ pub(all) enum Constraint {
   Nothing
   IsDocument
   Matches(Regex)
-  ByteLength(Int, Int?)
-  Utf8ByteLength(Int, Int?)
-  Precision(Int, Int?)
-  Exponent(Int, Int?)
-  TimestampPrecision(Int, Int?)
+  ByteLength(Int32, Int32?)
+  Utf8ByteLength(Int32, Int32?)
+  Precision(Int32, Int32?)
+  Exponent(Int32, Int32?)
+  TimestampPrecision(Int32, Int32?)
   TimestampOffsets(Array[@ion.TimestampOffset])
   Ieee754Float(FloatFormat)
   FieldNames(Constraint)
@@ -49,42 +51,46 @@ pub(all) enum Constraint {
   Annotations(Constraint)
   OrderedElements(Array[(Constraint, Occurs)])
   Contains(Array[@ion.Ion])
-} derive(@debug.Debug)
+}
 pub fn Constraint::any() -> Self
 pub fn Constraint::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct FieldConstraint {
   name : String
   ty : Constraint
   occurs : Occurs
-} derive(@debug.Debug)
+}
 pub fn FieldConstraint::to_repr(Self) -> @debug.Repr
 
+#derive(Eq, @debug.Debug)
 pub(all) enum FloatFormat {
   Binary16
   Binary32
   Binary64
-} derive(Eq, @debug.Debug)
+}
 pub fn FloatFormat::equal(Self, Self) -> Bool
 pub fn FloatFormat::not_equal(Self, Self) -> Bool
 pub fn FloatFormat::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct Occurs {
-  lower : Int
-  upper : Int?
-} derive(@debug.Debug)
-pub fn Occurs::allows(Self, Int) -> Bool
-pub fn Occurs::new(Int, Int?) -> Self
+  lower : Int32
+  upper : Int32?
+}
+pub fn Occurs::allows(Self, Int32) -> Bool
+pub fn Occurs::new(Int32, Int32?) -> Self
 pub fn Occurs::optional() -> Self
 pub fn Occurs::required() -> Self
 pub fn Occurs::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct Regex {
   source : String
   ignore_case : Bool
   multiline : Bool
   // private fields
-} derive(@debug.Debug)
+}
 pub fn Regex::ignore_case(Self) -> Bool
 pub fn Regex::matches(Self, String) -> Bool
 pub fn Regex::multiline(Self) -> Bool
@@ -92,9 +98,10 @@ pub fn Regex::new(String, ignore_case? : Bool, multiline? : Bool, fuel? : @ion.F
 pub fn Regex::source(Self) -> String
 pub fn Regex::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct Schema {
   types : Array[TypeDefinition]
-} derive(@debug.Debug)
+}
 pub fn Schema::empty() -> Self
 pub fn Schema::find(Self, String) -> TypeDefinition?
 pub fn Schema::from_types(Array[TypeDefinition]) -> Self
@@ -107,28 +114,31 @@ pub fn Schema::types(Self) -> Array[TypeDefinition]
 pub fn Schema::validate(Self, String, @ion.Ion, fuel? : @ion.Fuel) -> Array[Violation] raise @ion.IonError
 pub fn Schema::validate_document(Self, String, Array[@ion.Ion], fuel? : @ion.Fuel) -> Array[Violation] raise @ion.IonError
 
+#derive(@debug.Debug)
 pub struct TypeDefinition {
   name : String
   constraints : Array[Constraint]
-} derive(@debug.Debug)
+}
 pub fn TypeDefinition::constraints(Self) -> Array[Constraint]
 pub fn TypeDefinition::name(Self) -> String
 pub fn TypeDefinition::to_repr(Self) -> @debug.Repr
 
+#derive(@debug.Debug)
 pub struct ValueRange {
   lower : Bound
   upper : Bound
-} derive(@debug.Debug)
+}
 pub fn ValueRange::contains(Self, @ion.Ion) -> Bool
 pub fn ValueRange::lower(Self) -> Bound
 pub fn ValueRange::new(Bound, Bound) -> Self
 pub fn ValueRange::to_repr(Self) -> @debug.Repr
 pub fn ValueRange::upper(Self) -> Bound
 
+#derive(@debug.Debug)
 pub struct Violation {
   path : String
   message : String
-} derive(@debug.Debug)
+}
 pub fn Violation::message(Self) -> String
 pub fn Violation::path(Self) -> String
 pub fn Violation::to_repr(Self) -> @debug.Repr

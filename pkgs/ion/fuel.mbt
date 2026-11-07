@@ -1,8 +1,9 @@
 ///|
 /// A positive number of simultaneously open nested operations.
+#derive(Debug, Eq)
 pub struct Budget {
   priv units : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Create a positive fuel budget, or raise `DataModel` for zero or less.
@@ -23,13 +24,15 @@ pub fn Budget::units(self : Budget) -> Int32 {
 /// Optional scoped fuel. Nesting is unrestricted unless the caller supplies
 /// `Limited(Budget(...))`. Siblings reuse their enclosing operation's fuel.
 /// Fuel bounds open operations, not total work, memory, or elapsed time.
+#derive(Debug, Eq)
 pub(all) enum Fuel {
   Unlimited
   Limited(Budget)
-} derive(Debug, Eq)
+}
 
 ///|
 /// The operation that tried to enter a nested scope after fuel ran out.
+#derive(Debug, Eq)
 pub(all) enum FuelOperation {
   TextRead
   BinaryRead
@@ -40,11 +43,12 @@ pub(all) enum FuelOperation {
   SchemaValidate
   RegexParse
   RegexCompile
-} derive(Debug, Eq)
+}
 
 ///|
 /// Where fuel ran out. Text offsets count UTF-16 code units; binary offsets
 /// count octets. Value paths use the schema validator's `$` notation.
+#derive(Debug, Eq)
 pub(all) enum FuelLocation {
   TextOffset(Int32)
   /// Code-point offset within a regular expression.
@@ -54,7 +58,7 @@ pub(all) enum FuelLocation {
   BinaryOffset(Int32)
   ValuePath(String)
   SchemaId(String)
-} derive(Debug, Eq)
+}
 
 ///|
 /// An immutable scoped fuel cursor used by the library's implementations.

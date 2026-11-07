@@ -121,7 +121,7 @@ test "a prefix read reports a system value and updates the table" {
     Some((None, consumed)) =>
       match
         @text.read_ion_prefix(
-          text.view(start_offset=consumed),
+          text.exact_view(start=consumed),
           symbols~,
           end_of_input=true,
         ) {

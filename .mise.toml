@@ -7,3 +7,18 @@ node = "24.14.1"
 "npm:@fission-ai/openspec" = "1.14.3"
 "cargo:git-cliff" = "2.7.0"
 lefthook = "2.1.1"
+
+# The Mission Control tools CLI: installs and checks the shared html-design
+# OpenSpec schema (openspec:check, openspec:setup).
+[tools."github:moonrockz/mission-control"]
+version = "0.1.0"
+version_prefix = "tools-v"
+
+[tools."github:moonrockz/mission-control".platforms]
+linux-x64 = { asset_pattern = "mission-control-tools-linux-x64.tar.gz" }
+linux-arm64 = { asset_pattern = "mission-control-tools-linux-arm64.tar.gz" }
+macos-arm64 = { asset_pattern = "mission-control-tools-darwin-arm64.tar.gz" }
+macos-x64 = { asset_pattern = "mission-control-tools-darwin-x64.tar.gz" }
+windows-x64 = { asset_pattern = "mission-control-tools-windows-x64.zip" }
+# No Windows arm64 build; Windows on Arm runs the x64 build under emulation.
+windows-arm64 = { asset_pattern = "mission-control-tools-windows-x64.zip" }

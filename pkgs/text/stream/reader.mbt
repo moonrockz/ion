@@ -113,12 +113,12 @@ fn TextReader::take(self : TextReader) -> @ion.IonValue? raise @ion.IonError {
 /// The decoded text not yet parsed, joining the text that has arrived.
 fn TextReader::pending(self : TextReader) -> StringView {
   if !self.arrived.is_empty() {
-    self.text = self.text.view(start_offset=self.start).to_owned() +
+    self.text = self.text.exact_view(start=self.start).to_owned() +
       self.arrived.to_string()
     self.start = 0
     self.arrived.reset()
   }
-  self.text.view(start_offset=self.start)
+  self.text.exact_view(start=self.start)
 }
 
 ///|
@@ -127,7 +127,7 @@ fn TextReader::append(self : TextReader, decoded : String) -> Unit {
   self.arrived.write_string(decoded)
   let text = self.unscanned + decoded
   let stop = self.framer.scan(text, 0)
-  self.unscanned = text.view(start_offset=stop).to_owned()
+  self.unscanned = text.exact_view(start=stop).to_owned()
 }
 
 ///|

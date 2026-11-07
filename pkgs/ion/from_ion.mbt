@@ -18,12 +18,13 @@ pub(open) trait FromIon {
 
 ///|
 /// One step of the path from a decoded root to a nested value.
+#derive(Debug, Eq)
 pub(all) enum PathSegment {
   /// A struct field, by name.
   Name(String)
   /// A list element, by index.
   Index(Int32)
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend PathSegment with @debug.Debug::{to_repr}
@@ -33,12 +34,13 @@ pub extend PathSegment with Eq::{equal, not_equal}
 
 ///|
 /// The values a numeric target can hold.
+#derive(Debug, Eq)
 pub(all) enum ValueRange {
   /// The integers from `min` to `max`, inclusive.
   Integers(min~ : BigInt, max~ : BigInt)
   /// The finite values of a 32-bit `Float`, and NaN and the infinities.
   Float32
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend ValueRange with @debug.Debug::{to_repr}
@@ -50,6 +52,7 @@ pub extend ValueRange with Eq::{equal, not_equal}
 /// Why an Ion value does not decode as the requested type. Every case names
 /// the `path` from the decoded root to the value that failed, outermost step
 /// first; an empty path is the root.
+#derive(Debug)
 pub(all) suberror FromIonError {
   /// The value, or a null of any type, is not the Ion type the target reads.
   TypeMismatch(
@@ -77,7 +80,7 @@ pub(all) suberror FromIonError {
   /// The JSON form of the value does not decode as the target. `message` is
   /// the JSON decoder's own message.
   JsonDecode(path~ : Array[PathSegment], message~ : String)
-} derive(Debug)
+}
 
 ///|
 pub extend FromIonError with @debug.Debug::{to_repr}

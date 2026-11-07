@@ -23,6 +23,6 @@ description = "A MoonBit implementation of the Amazon Ion data format and Ion Sc
 source = "pkgs"
 
 import {
-  "moonbitlang/x@0.5.5",
+  "moonbitlang/x@0.5.7",
   "moonbitlang/async@0.22.4",
 }

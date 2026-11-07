@@ -7,6 +7,7 @@
 
 ///|
 /// The high nibble of an Ion binary type descriptor.
+#derive(Eq, Hash, Debug)
 pub(all) enum IonTypeCode {
   Null
   Bool
@@ -27,7 +28,7 @@ pub(all) enum IonTypeCode {
   Annotation
   /// Reserved for future use.
   Reserved
-} derive(Eq, Hash, Debug)
+}
 
 ///|
 /// The length nibble that means a VarUInt length follows the descriptor.

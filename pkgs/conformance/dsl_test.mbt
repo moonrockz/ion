@@ -352,7 +352,7 @@ fn reserved_sid(text : String) -> Int32? {
   if !text.has_prefix("#$") || text.length() == 2 {
     return None
   }
-  let digits = text.view(start_offset=2)
+  let digits = text.exact_view(start=2)
   if !digits.iter().all(c => c >= '0' && c <= '9') {
     return None
   }
@@ -399,7 +399,7 @@ fn write_toplevel(values : Array[@ion.IonValue]) -> String? raise {
       value.kind() is Symbol(token) &&
       token.text() is Some(text) &&
       text.has_prefix("#$ion_") {
-      lines.push(text.view(start_offset=1).to_owned())
+      lines.push(text.exact_view(start=1).to_owned())
       continue
     }
     let mut unsupported = false
@@ -430,18 +430,18 @@ fn write_toplevel(values : Array[@ion.IonValue]) -> String? raise {
 /// Swap each `$__sid<digits>__` placeholder for the literal `$<digits>`.
 fn replace_placeholders(text : String) -> String {
   let result = StringBuilder()
-  let mut rest = text.view()
+  let mut rest = text.exact_view()
   while rest.find("$__sid") is Some(start) {
-    result.write_view(rest.view(end_offset=start))
-    let after = rest.view(start_offset=start + 6)
+    result.write_view(rest.exact_view(end=start))
+    let after = rest.exact_view(start=start + 6)
     match after.find("__") {
       Some(end) => {
         result.write_string("$")
-        result.write_view(after.view(end_offset=end))
-        rest = after.view(start_offset=end + 2)
+        result.write_view(after.exact_view(end~))
+        rest = after.exact_view(start=end + 2)
       }
       None => {
-        result.write_view(rest.view(start_offset=start))
+        result.write_view(rest.exact_view(start~))
         rest = ""
       }
     }
@@ -593,7 +593,7 @@ fn produced_value(value : @ion.IonValue) -> @ion.IonValue raise {
         if split <= 2 {
           fail("invalid reserved symbol: \{text}")
         }
-        let digits = text.view(start_offset=split + 1)
+        let digits = text.exact_view(start=split + 1)
         if digits.is_empty() || !digits.iter().all(c => c >= '0' && c <= '9') {
           fail("invalid reserved symbol: \{text}")
         }
@@ -752,7 +752,7 @@ test "ion-tests conformance DSL" {
     if !path.has_suffix(".ion") {
       continue
     }
-    let file = path.view(start_offset=conformance_root.length() + 1).to_owned()
+    let file = path.exact_view(start=conformance_root.length() + 1).to_owned()
     let tests = @text.read_ion_datagram(@fs.read_file_to_string(path)) catch {
       error => {
         report.outcomes.push(
