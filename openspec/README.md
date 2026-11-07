@@ -13,7 +13,7 @@ version that wrote them. Keep repository overrides in `openspec/config.yaml` and
 - Run `mise run openspec:setup` to regenerate the six core agent skills with
   isolated global preferences.
 - Run `mise run openspec:verify` before review. It runs `openspec:check` and
-  `openspec:validate` (`openspec schema validate html-design` and
+  `openspec:validate` (`openspec schema validate html-design`, then
   `openspec validate --all --strict`).
 - New designs are offline `design.html` with inline CSS. Existing changes keep
   their schema metadata and original designs, including Markdown designs.
